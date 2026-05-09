@@ -1,0 +1,3754 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0204008,
+          51.5316871
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0001",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.35448,
+        "zscore": 0.829594
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0870125,
+          51.4909755
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0002",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.213745,
+        "zscore": -0.16637
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0253127,
+          51.503141
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0003",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.110885,
+        "zscore": -0.8943
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2308772,
+          51.5447076
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0004",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.237353,
+        "zscore": 0.000696
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2643496,
+          51.4530062
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0005",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.205818,
+        "zscore": -0.222468
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0938963,
+          51.5392099
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0006",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.221973,
+        "zscore": -0.108147
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0215146,
+          51.5042412
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0007",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.246718,
+        "zscore": 0.066976
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2783868,
+          51.5482555
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0008",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.146652,
+        "zscore": -0.64118
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1905322,
+          51.4645828
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0009",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.193995,
+        "zscore": -0.306138
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0352003,
+          51.5763374
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0010",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.726678,
+        "zscore": 3.46359
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3022567,
+          51.449518
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0011",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.101941,
+        "zscore": -0.957598
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1439839,
+          51.4636915
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0012",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.144976,
+        "zscore": -0.653044
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0807043,
+          51.4552632
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0013",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.1216,
+        "zscore": -0.818473
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1516192,
+          51.5503508
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0014",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.241443,
+        "zscore": 0.029644
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0112931,
+          51.5061121
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0015",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.163745,
+        "zscore": -0.520218
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.219929,
+          51.4330682
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0016",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.253971,
+        "zscore": 0.118304
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0047285,
+          51.5733225
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0017",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.427638,
+        "zscore": 1.347319
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0918504,
+          51.5435814
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0018",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.220308,
+        "zscore": -0.119927
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0467534,
+          51.5633127
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0019",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.148336,
+        "zscore": -0.629262
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2774328,
+          51.4995571
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0020",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.139621,
+        "zscore": -0.690936
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0561443,
+          51.4528526
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0021",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.233184,
+        "zscore": -0.028809
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3027751,
+          51.495019
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0022",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.23059,
+        "zscore": -0.047164
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0028285,
+          51.4754743
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0023",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.495626,
+        "zscore": 1.828469
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.091177,
+          51.5793702
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0024",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.084435,
+        "zscore": -1.081483
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0209051,
+          51.4516237
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0025",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.714813,
+        "zscore": 3.379628
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0602321,
+          51.5757436
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0026",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.240983,
+        "zscore": 0.026388
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1168564,
+          51.4833623
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0027",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.196742,
+        "zscore": -0.286702
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0492629,
+          51.5745817
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0028",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.111907,
+        "zscore": -0.887071
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1917409,
+          51.5415136
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0029",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.223476,
+        "zscore": -0.097505
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2108928,
+          51.465193
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0030",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.150267,
+        "zscore": -0.615598
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.128097,
+          51.5253217
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0031",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.364903,
+        "zscore": 0.903354
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0670915,
+          51.4833378
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0032",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.184887,
+        "zscore": -0.370595
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0417209,
+          51.4241532
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0033",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.213728,
+        "zscore": -0.166495
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.215456,
+          51.4470655
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0034",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.214173,
+        "zscore": -0.163345
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.240157,
+          51.5733839
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0035",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.085323,
+        "zscore": -1.075202
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0919637,
+          51.5281499
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0036",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.2202,
+        "zscore": -0.120693
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0322451,
+          51.5343045
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0037",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.191559,
+        "zscore": -0.323379
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0088047,
+          51.5750941
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0038",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.403727,
+        "zscore": 1.178104
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2253892,
+          51.4897246
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0039",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.216647,
+        "zscore": -0.145838
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2214427,
+          51.4254069
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0040",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.252736,
+        "zscore": 0.109564
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0989275,
+          51.5794664
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0041",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.207773,
+        "zscore": -0.208633
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2773474,
+          51.5020782
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0042",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.237519,
+        "zscore": 0.001871
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0329379,
+          51.4463166
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0043",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.376217,
+        "zscore": 0.983425
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2411577,
+          51.5365596
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0044",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.13068,
+        "zscore": -0.754211
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0255463,
+          51.5001626
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0045",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.114631,
+        "zscore": -0.867794
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2504367,
+          51.43323
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0046",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.187359,
+        "zscore": -0.353101
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0757713,
+          51.5645067
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0047",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.229089,
+        "zscore": -0.057788
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.089137,
+          51.5331432
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0048",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.088994,
+        "zscore": -1.049221
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0827606,
+          51.5274192
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0049",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.180813,
+        "zscore": -0.399432
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1823968,
+          51.4357202
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0050",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.159262,
+        "zscore": -0.551943
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0355255,
+          51.4454792
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0051",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.529118,
+        "zscore": 2.065483
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1194354,
+          51.5750377
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0052",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.179391,
+        "zscore": -0.409492
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0304272,
+          51.4401751
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0053",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.522763,
+        "zscore": 2.020512
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2605035,
+          51.5076585
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0054",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.187471,
+        "zscore": -0.35231
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.16659,
+          51.473232
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0055",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.248558,
+        "zscore": 0.079997
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0593738,
+          51.4999063
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0056",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.087927,
+        "zscore": -1.056769
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1377458,
+          51.4821261
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0057",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.217462,
+        "zscore": -0.140065
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0286783,
+          51.4858385
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0058",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.323587,
+        "zscore": 0.610966
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2343776,
+          51.4513869
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0059",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.120887,
+        "zscore": -0.823521
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1188443,
+          51.5076187
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0060",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.301519,
+        "zscore": 0.45479
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1561524,
+          51.4372612
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0061",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.224955,
+        "zscore": -0.087041
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2047839,
+          51.4806097
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0062",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.116812,
+        "zscore": -0.852358
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.003527,
+          51.4865483
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0063",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.349476,
+        "zscore": 0.794177
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2378608,
+          51.4456178
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0064",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.142625,
+        "zscore": -0.669678
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2674437,
+          51.4613792
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0065",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.231169,
+        "zscore": -0.043067
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1678148,
+          51.5156831
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0066",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.535189,
+        "zscore": 2.108449
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2885938,
+          51.4230859
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0067",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.094018,
+        "zscore": -1.013668
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2485428,
+          51.5300759
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0068",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.08882,
+        "zscore": -1.05045
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0366819,
+          51.4321427
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0069",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.186404,
+        "zscore": -0.359863
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2631607,
+          51.575442
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0070",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.187905,
+        "zscore": -0.349239
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0771558,
+          51.4254931
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0071",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.250098,
+        "zscore": 0.090893
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0385941,
+          51.5207502
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0072",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.159576,
+        "zscore": -0.549723
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2636542,
+          51.5224104
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0073",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.136557,
+        "zscore": -0.712624
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0677072,
+          51.4572803
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0074",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.18227,
+        "zscore": -0.389116
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1470709,
+          51.5050363
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0075",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.553468,
+        "zscore": 2.237804
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.03362,
+          51.4994418
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0076",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.161258,
+        "zscore": -0.53782
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.02478,
+          51.4573221
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0077",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.784002,
+        "zscore": 3.86927
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1177852,
+          51.4503212
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0078",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.20166,
+        "zscore": -0.251896
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1675562,
+          51.4907072
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0079",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.239349,
+        "zscore": 0.014822
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.264232,
+          51.568515
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0080",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.110711,
+        "zscore": -0.895531
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.102842,
+          51.5171079
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0081",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.273925,
+        "zscore": 0.259516
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0047177,
+          51.5536984
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0082",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.67147,
+        "zscore": 3.072894
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1661696,
+          51.5475923
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0083",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.204417,
+        "zscore": -0.232384
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2216169,
+          51.5124704
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0084",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.160904,
+        "zscore": -0.540323
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1518559,
+          51.5688644
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0085",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.128027,
+        "zscore": -0.772987
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2855511,
+          51.4225072
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0086",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.201438,
+        "zscore": -0.253471
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.044265,
+          51.5779041
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0087",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.27402,
+        "zscore": 0.260183
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1826196,
+          51.4647136
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0088",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.107761,
+        "zscore": -0.916409
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1517086,
+          51.4488329
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0089",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.245657,
+        "zscore": 0.059463
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0192503,
+          51.4648174
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0090",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.668989,
+        "zscore": 3.055333
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1362128,
+          51.4618015
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0091",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.114818,
+        "zscore": -0.866464
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0470152,
+          51.5509906
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0092",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.267388,
+        "zscore": 0.213249
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1243465,
+          51.4537573
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0093",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.229188,
+        "zscore": -0.057085
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0684629,
+          51.4338156
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0094",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.195732,
+        "zscore": -0.293848
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2360683,
+          51.4777438
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0095",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.226729,
+        "zscore": -0.074486
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1618423,
+          51.4311189
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0096",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.233842,
+        "zscore": -0.024152
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.054544,
+          51.5133729
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0097",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.123247,
+        "zscore": -0.806815
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2871878,
+          51.5713643
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0098",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.203223,
+        "zscore": -0.240839
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1397162,
+          51.54454
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0099",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.155826,
+        "zscore": -0.57626
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2592363,
+          51.4927011
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0100",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.186085,
+        "zscore": -0.362117
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1626549,
+          51.4739103
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0101",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.091845,
+        "zscore": -1.029041
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0327062,
+          51.4263731
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0102",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.337381,
+        "zscore": 0.708582
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0016832,
+          51.4364116
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0103",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.469788,
+        "zscore": 1.645616
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1812918,
+          51.5509682
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0104",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.103708,
+        "zscore": -0.94509
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2195183,
+          51.5557167
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0105",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.109007,
+        "zscore": -0.90759
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1299092,
+          51.4222066
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0106",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.171799,
+        "zscore": -0.463222
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1894243,
+          51.5467525
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0107",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.138841,
+        "zscore": -0.696458
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0888512,
+          51.5449753
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0108",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.111155,
+        "zscore": -0.892389
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2005617,
+          51.4662985
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0109",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.147096,
+        "zscore": -0.638042
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0362566,
+          51.4581595
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0110",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.52119,
+        "zscore": 2.009381
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0036268,
+          51.4845148
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0111",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.362361,
+        "zscore": 0.885365
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1778735,
+          51.4262647
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0112",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.14527,
+        "zscore": -0.650963
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1019758,
+          51.4496684
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0113",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.171812,
+        "zscore": -0.463129
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2149134,
+          51.5231152
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0114",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.166009,
+        "zscore": -0.504197
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.214983,
+          51.4397748
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0115",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.093604,
+        "zscore": -1.016595
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1249386,
+          51.5706616
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0116",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.227364,
+        "zscore": -0.069995
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0034585,
+          51.4272264
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0117",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.337124,
+        "zscore": 0.706767
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0133076,
+          51.5247716
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0118",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.12515,
+        "zscore": -0.793349
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3088221,
+          51.5188064
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0119",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.122329,
+        "zscore": -0.813311
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0504566,
+          51.5134481
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0120",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.111021,
+        "zscore": -0.893338
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0571565,
+          51.5781718
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0121",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.250396,
+        "zscore": 0.093004
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0204259,
+          51.4895957
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0122",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.198859,
+        "zscore": -0.27172
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2508507,
+          51.5706386
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0123",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.130703,
+        "zscore": -0.754051
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0487477,
+          51.4670907
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0124",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.31021,
+        "zscore": 0.5163
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2417514,
+          51.5337204
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0125",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.257931,
+        "zscore": 0.146329
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0854371,
+          51.4697808
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0126",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.148988,
+        "zscore": -0.624649
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0199048,
+          51.4236339
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0127",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.288127,
+        "zscore": 0.360022
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1248205,
+          51.5400171
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0128",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.269112,
+        "zscore": 0.225455
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1943013,
+          51.539691
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0129",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.24245,
+        "zscore": 0.036772
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2990333,
+          51.5209461
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0130",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.211313,
+        "zscore": -0.183585
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0440176,
+          51.4379098
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0131",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.267877,
+        "zscore": 0.216716
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.292479,
+          51.4886619
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0132",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.198185,
+        "zscore": -0.276491
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0151242,
+          51.4322177
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0133",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.433024,
+        "zscore": 1.385435
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1410828,
+          51.4577539
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0134",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.203062,
+        "zscore": -0.241972
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1365154,
+          51.5008627
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0135",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.320543,
+        "zscore": 0.589423
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1406086,
+          51.5579828
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0136",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.222341,
+        "zscore": -0.105537
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1873083,
+          51.486515
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0137",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.174126,
+        "zscore": -0.446755
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0112278,
+          51.466005
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0138",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.690771,
+        "zscore": 3.209481
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2518152,
+          51.5775701
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0139",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.153088,
+        "zscore": -0.595635
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1848831,
+          51.5304189
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0140",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.206559,
+        "zscore": -0.217229
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0859709,
+          51.5047723
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0141",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.196731,
+        "zscore": -0.286779
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1628211,
+          51.5681313
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0142",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.234338,
+        "zscore": -0.020638
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0670104,
+          51.4437109
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0143",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.121916,
+        "zscore": -0.816235
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1526471,
+          51.5288986
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0144",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.444358,
+        "zscore": 1.465646
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0591151,
+          51.5101666
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0145",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.123344,
+        "zscore": -0.806133
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1165085,
+          51.5798338
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0146",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.096788,
+        "zscore": -0.994062
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0413335,
+          51.5568829
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0147",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.805295,
+        "zscore": 4.019958
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0657836,
+          51.4342934
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0148",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.184485,
+        "zscore": -0.373442
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2199927,
+          51.4853524
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0149",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.226315,
+        "zscore": -0.077416
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0150201,
+          51.5238978
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0150",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.240642,
+        "zscore": 0.023977
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0398615,
+          51.5196245
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0151",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.141823,
+        "zscore": -0.675359
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2166464,
+          51.4913027
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0152",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.196085,
+        "zscore": -0.291347
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2787042,
+          51.5214239
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0153",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.221457,
+        "zscore": -0.111796
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1340642,
+          51.5234394
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0154",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.481752,
+        "zscore": 1.730278
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0072006,
+          51.5033362
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0155",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.109439,
+        "zscore": -0.904537
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.163997,
+          51.460782
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0156",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.150757,
+        "zscore": -0.612132
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.013714,
+          51.434265
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0157",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.488456,
+        "zscore": 1.777725
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0092613,
+          51.5315581
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0158",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.278757,
+        "zscore": 0.29371
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3037149,
+          51.5476378
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0159",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.111276,
+        "zscore": -0.891534
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1072083,
+          51.5238442
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0160",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.128815,
+        "zscore": -0.767414
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2738711,
+          51.4863776
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0161",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.239271,
+        "zscore": 0.014269
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1396249,
+          51.5481585
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0162",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.192699,
+        "zscore": -0.315311
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2588142,
+          51.5779975
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0163",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.200497,
+        "zscore": -0.26013
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1912318,
+          51.5061689
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0164",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.265007,
+        "zscore": 0.1964
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.076116,
+          51.421014
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0165",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.2419,
+        "zscore": 0.032876
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1150689,
+          51.4526116
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0166",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.130291,
+        "zscore": -0.75697
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2293134,
+          51.5686625
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0167",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.083487,
+        "zscore": -1.088195
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2617045,
+          51.4387073
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0168",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.145642,
+        "zscore": -0.648331
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0440583,
+          51.423521
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0169",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.337023,
+        "zscore": 0.706049
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0989814,
+          51.5104143
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0170",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.155423,
+        "zscore": -0.57911
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2457855,
+          51.5687846
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0171",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.205962,
+        "zscore": -0.221449
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2249015,
+          51.4611425
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0172",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.131423,
+        "zscore": -0.748954
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.146176,
+          51.4569404
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0173",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.226566,
+        "zscore": -0.075639
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2830055,
+          51.4605938
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0174",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.128607,
+        "zscore": -0.768881
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0234409,
+          51.5282125
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0175",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.359327,
+        "zscore": 0.863895
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2529907,
+          51.5035765
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0176",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.094147,
+        "zscore": -1.012753
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0296861,
+          51.5453121
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0177",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.229955,
+        "zscore": -0.051657
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2631062,
+          51.5473568
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0178",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.141415,
+        "zscore": -0.678243
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1969859,
+          51.4485175
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0179",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.118285,
+        "zscore": -0.841929
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0953125,
+          51.5485106
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0180",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.186588,
+        "zscore": -0.35856
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0436396,
+          51.572502
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0181",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.684198,
+        "zscore": 3.162965
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1051093,
+          51.5672379
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0182",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.232973,
+        "zscore": -0.0303
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2606068,
+          51.5000353
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0183",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.143782,
+        "zscore": -0.661491
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2911966,
+          51.4849599
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0184",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.104147,
+        "zscore": -0.941984
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2265938,
+          51.570021
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0185",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.144204,
+        "zscore": -0.658507
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2760717,
+          51.4789923
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0186",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.182834,
+        "zscore": -0.385124
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0689357,
+          51.5667144
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0187",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.171358,
+        "zscore": -0.466339
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0123155,
+          51.5397894
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0188",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.284503,
+        "zscore": 0.334372
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0742237,
+          51.5728031
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0189",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.214461,
+        "zscore": -0.161303
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1035014,
+          51.536865
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0190",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.09783,
+        "zscore": -0.986693
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2160005,
+          51.5579535
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0191",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.221243,
+        "zscore": -0.11331
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0549474,
+          51.4950868
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0192",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.250001,
+        "zscore": 0.09021
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2987603,
+          51.4338461
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0193",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.152969,
+        "zscore": -0.596481
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2817456,
+          51.4776672
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0194",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.208259,
+        "zscore": -0.205196
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0315137,
+          51.4638844
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0195",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.380556,
+        "zscore": 1.014129
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1688356,
+          51.5513261
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0196",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.183141,
+        "zscore": -0.382957
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1924041,
+          51.5426714
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0197",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.161835,
+        "zscore": -0.533733
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0864737,
+          51.4317742
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0198",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.251428,
+        "zscore": 0.100303
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0353558,
+          51.4582457
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0199",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.345954,
+        "zscore": 0.769254
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1081329,
+          51.4666552
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0200",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.252501,
+        "zscore": 0.107899
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.017981,
+          51.4862675
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0201",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.371048,
+        "zscore": 0.94684
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2217088,
+          51.5499234
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0202",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.185357,
+        "zscore": -0.367272
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0479529,
+          51.5617849
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0203",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.639196,
+        "zscore": 2.84449
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0606108,
+          51.4781873
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0204",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.277467,
+        "zscore": 0.284578
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0146962,
+          51.4728713
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0205",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.582958,
+        "zscore": 2.446504
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2529939,
+          51.4332041
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0206",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.165887,
+        "zscore": -0.50506
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.131406,
+          51.4288595
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0207",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.161765,
+        "zscore": -0.534227
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0359954,
+          51.562346
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0208",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.313276,
+        "zscore": 0.537999
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0005755,
+          51.4236851
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0209",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.402136,
+        "zscore": 1.166844
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0194471,
+          51.5416352
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0210",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.344754,
+        "zscore": 0.760764
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0709765,
+          51.5279868
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0211",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.122859,
+        "zscore": -0.80956
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.04938,
+          51.4854326
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0212",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.304813,
+        "zscore": 0.478103
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2624731,
+          51.5007988
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0213",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.130788,
+        "zscore": -0.75345
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2149383,
+          51.5780872
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0214",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.214984,
+        "zscore": -0.157607
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0018082,
+          51.5452559
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0215",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.500791,
+        "zscore": 1.86502
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0304949,
+          51.5337043
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0216",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.132156,
+        "zscore": -0.743767
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2114825,
+          51.4263207
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0217",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.127385,
+        "zscore": -0.777535
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1119444,
+          51.4452482
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0218",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.104766,
+        "zscore": -0.937603
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0206569,
+          51.4943365
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0219",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.203874,
+        "zscore": -0.236226
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2151785,
+          51.5390789
+        ]
+      },
+      "properties": {
+        "id": "2222_2_0220",
+        "layer_id": "2222_2",
+        "prompt": "2222",
+        "score": 0.111845,
+        "zscore": -0.887503
+      }
+    }
+  ],
+  "metadata": {
+    "layer_id": "2222_2",
+    "prompt": "2222",
+    "mock": true,
+    "center": [
+      -0.1276,
+      51.5072
+    ]
+  }
+}

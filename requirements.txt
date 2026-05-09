@@ -1,0 +1,4 @@
+fastapi>=0.115
+gradio>=4.44
+numpy>=1.26
+uvicorn>=0.30

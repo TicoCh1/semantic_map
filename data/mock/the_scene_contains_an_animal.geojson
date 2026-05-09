@@ -1,0 +1,3754 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0105394,
+          51.5008719
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0001",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.260556,
+        "zscore": -0.094815
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1217853,
+          51.4838853
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0002",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.135297,
+        "zscore": -0.847265
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.086488,
+          51.5770026
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0003",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.431595,
+        "zscore": 0.932643
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1703832,
+          51.4351474
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0004",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.11865,
+        "zscore": -0.947262
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2548447,
+          51.4788146
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0005",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.175705,
+        "zscore": -0.604525
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0454418,
+          51.4486582
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0006",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.089871,
+        "zscore": -1.120147
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2538823,
+          51.5413686
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0007",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.422314,
+        "zscore": 0.876894
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3026194,
+          51.5222813
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0008",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.865956,
+        "zscore": 3.541917
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0064593,
+          51.4749779
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0009",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.103351,
+        "zscore": -1.039165
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3005453,
+          51.4908317
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0010",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.353465,
+        "zscore": 0.463307
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0005813,
+          51.5278173
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0011",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.148616,
+        "zscore": -0.767255
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2488666,
+          51.4391353
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0012",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.226923,
+        "zscore": -0.296848
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0720056,
+          51.5301097
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0013",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.357437,
+        "zscore": 0.487169
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1754306,
+          51.4881522
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0014",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.250658,
+        "zscore": -0.154272
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3055105,
+          51.5570818
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0015",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.453277,
+        "zscore": 1.062893
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1451049,
+          51.425555
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0016",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.162955,
+        "zscore": -0.681114
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0362287,
+          51.5797171
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0017",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.251107,
+        "zscore": -0.151573
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0944569,
+          51.5235714
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0018",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.492361,
+        "zscore": 1.297676
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1977195,
+          51.5594678
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0019",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.262127,
+        "zscore": -0.085376
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.288933,
+          51.4500259
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0020",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.250682,
+        "zscore": -0.154128
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.161513,
+          51.4477035
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0021",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.149585,
+        "zscore": -0.76143
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0328977,
+          51.4258939
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0022",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.158798,
+        "zscore": -0.706086
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0807371,
+          51.4540393
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0023",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.352002,
+        "zscore": 0.454518
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0136012,
+          51.4249863
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0024",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.256208,
+        "zscore": -0.120932
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2022748,
+          51.4985038
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0025",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.244353,
+        "zscore": -0.192144
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0112843,
+          51.5366244
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0026",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.141295,
+        "zscore": -0.811231
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2537878,
+          51.4743741
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0027",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.296119,
+        "zscore": 0.118819
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.026515,
+          51.4468494
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0028",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.175177,
+        "zscore": -0.607699
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0006952,
+          51.5586655
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0029",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.129951,
+        "zscore": -0.879377
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1723865,
+          51.4750831
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0030",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.176627,
+        "zscore": -0.598986
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1524223,
+          51.4459559
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0031",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.097459,
+        "zscore": -1.074562
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0420059,
+          51.5409054
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0032",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.226085,
+        "zscore": -0.301883
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1362069,
+          51.5013318
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0033",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.179177,
+        "zscore": -0.583672
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0114772,
+          51.5127793
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0034",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.238754,
+        "zscore": -0.225781
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0420801,
+          51.5564264
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0035",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.406319,
+        "zscore": 0.780806
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.04425,
+          51.4882117
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0036",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.169452,
+        "zscore": -0.642086
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0320548,
+          51.4890703
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0037",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.119208,
+        "zscore": -0.94391
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2829159,
+          51.4556457
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0038",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.107636,
+        "zscore": -1.013425
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0908254,
+          51.4347661
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0039",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.163905,
+        "zscore": -0.675412
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1995297,
+          51.4384851
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0040",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.245236,
+        "zscore": -0.186841
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2489523,
+          51.4636731
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0041",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.173241,
+        "zscore": -0.619329
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0314881,
+          51.4977652
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0042",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.148983,
+        "zscore": -0.765049
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1674493,
+          51.5352249
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0043",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.329649,
+        "zscore": 0.320242
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2892674,
+          51.5227276
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0044",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.848889,
+        "zscore": 3.439393
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1417412,
+          51.5290814
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0045",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.404797,
+        "zscore": 0.771664
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.082935,
+          51.5572539
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0046",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.614477,
+        "zscore": 2.031246
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1595968,
+          51.5414392
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0047",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.358596,
+        "zscore": 0.494129
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3003073,
+          51.4522103
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0048",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.231239,
+        "zscore": -0.270927
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0108955,
+          51.5320321
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0049",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.247523,
+        "zscore": -0.173106
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0424502,
+          51.5304541
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0050",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.148903,
+        "zscore": -0.765528
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2387556,
+          51.5509007
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0051",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.427343,
+        "zscore": 0.9071
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0615416,
+          51.4519432
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0052",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.498704,
+        "zscore": 1.335779
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2815638,
+          51.4572512
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0053",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.251265,
+        "zscore": -0.150623
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0953102,
+          51.4280668
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0054",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.1933,
+        "zscore": -0.498829
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1885787,
+          51.4259913
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0055",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.08255,
+        "zscore": -1.164122
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.019043,
+          51.4720792
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0056",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.180864,
+        "zscore": -0.573534
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3063935,
+          51.4864708
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0057",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.400134,
+        "zscore": 0.743654
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.147607,
+          51.5618462
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0058",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.427738,
+        "zscore": 0.909474
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0782046,
+          51.5265632
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0059",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.381031,
+        "zscore": 0.628902
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2794273,
+          51.4358821
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0060",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.106278,
+        "zscore": -1.021583
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0939287,
+          51.4429074
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0061",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.238232,
+        "zscore": -0.228916
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0350392,
+          51.4976357
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0062",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.138139,
+        "zscore": -0.830193
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.158445,
+          51.4811946
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0063",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.235909,
+        "zscore": -0.24287
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0493952,
+          51.5036059
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0064",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.149951,
+        "zscore": -0.759236
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0041783,
+          51.4698394
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0065",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.160872,
+        "zscore": -0.693632
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2999555,
+          51.5090671
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0066",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.609508,
+        "zscore": 2.001398
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2551929,
+          51.4406628
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0067",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.155848,
+        "zscore": -0.72381
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1179925,
+          51.4702236
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0068",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.188456,
+        "zscore": -0.527927
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2548117,
+          51.4701028
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0069",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.203021,
+        "zscore": -0.440432
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2141933,
+          51.5499248
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0070",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.234305,
+        "zscore": -0.252505
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2820607,
+          51.4527722
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0071",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.141972,
+        "zscore": -0.807163
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1499655,
+          51.5483551
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0072",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.349102,
+        "zscore": 0.437095
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1561039,
+          51.5073259
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0073",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.178495,
+        "zscore": -0.587765
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1556988,
+          51.5764534
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0074",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.198683,
+        "zscore": -0.466496
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1248463,
+          51.4620706
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0075",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.241763,
+        "zscore": -0.207702
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0428148,
+          51.564268
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0076",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.159952,
+        "zscore": -0.699156
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.10374,
+          51.5416914
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0077",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.716345,
+        "zscore": 2.643184
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0098647,
+          51.4289582
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0078",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.202677,
+        "zscore": -0.442498
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1011175,
+          51.4518183
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0079",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.143567,
+        "zscore": -0.797582
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1208311,
+          51.512157
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0080",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.229731,
+        "zscore": -0.279981
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2975793,
+          51.5785345
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0081",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.242128,
+        "zscore": -0.205513
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1955254,
+          51.5293703
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0082",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.19612,
+        "zscore": -0.48189
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0029847,
+          51.438277
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0083",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.164526,
+        "zscore": -0.671681
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1137219,
+          51.4391403
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0084",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.08319,
+        "zscore": -1.160279
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0005546,
+          51.432348
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0085",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.181582,
+        "zscore": -0.569222
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2654205,
+          51.4525837
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0086",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.235244,
+        "zscore": -0.246867
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1018362,
+          51.4459848
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0087",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.140505,
+        "zscore": -0.815979
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0634187,
+          51.5328819
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0088",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.42236,
+        "zscore": 0.87717
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0014203,
+          51.4885112
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0089",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.103444,
+        "zscore": -1.038607
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1729333,
+          51.5661218
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0090",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.26083,
+        "zscore": -0.093166
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2780847,
+          51.5635194
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0091",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.457111,
+        "zscore": 1.085923
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2819725,
+          51.531191
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0092",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.720526,
+        "zscore": 2.6683
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2756076,
+          51.51323
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0093",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.72909,
+        "zscore": 2.719743
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.068741,
+          51.4673174
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0094",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.65645,
+        "zscore": 2.283381
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2104602,
+          51.5614406
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0095",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.141098,
+        "zscore": -0.812412
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0410542,
+          51.577519
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0096",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.20562,
+        "zscore": -0.42482
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2661072,
+          51.5420365
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0097",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.530113,
+        "zscore": 1.524459
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1762088,
+          51.4391936
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0098",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.14577,
+        "zscore": -0.784347
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0435988,
+          51.5010518
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0099",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.245258,
+        "zscore": -0.186711
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0865123,
+          51.5055255
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0100",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.241575,
+        "zscore": -0.208831
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2454001,
+          51.4523239
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0101",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.192479,
+        "zscore": -0.503759
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0598309,
+          51.4936449
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0102",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.239952,
+        "zscore": -0.218585
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0223617,
+          51.4585246
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0103",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.183705,
+        "zscore": -0.55647
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.148313,
+          51.4221467
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0104",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.233663,
+        "zscore": -0.25636
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0016675,
+          51.4901794
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0105",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.09167,
+        "zscore": -1.109334
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2885564,
+          51.5044984
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0106",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.592514,
+        "zscore": 1.899309
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1277539,
+          51.4393261
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0107",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.148782,
+        "zscore": -0.766256
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2943102,
+          51.5462028
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0108",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.593157,
+        "zscore": 1.903171
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.254721,
+          51.4602797
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0109",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.280234,
+        "zscore": 0.023398
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.162668,
+          51.5552295
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0110",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.269569,
+        "zscore": -0.040673
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1378336,
+          51.5263345
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0111",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.385549,
+        "zscore": 0.656038
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1315856,
+          51.4976235
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0112",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.269999,
+        "zscore": -0.038087
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.052131,
+          51.4836814
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0113",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.296697,
+        "zscore": 0.122293
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0537888,
+          51.5427662
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0114",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.357151,
+        "zscore": 0.485451
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2880447,
+          51.5162656
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0115",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.752226,
+        "zscore": 2.858723
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1332483,
+          51.4510147
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0116",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.090665,
+        "zscore": -1.115372
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0363861,
+          51.5286724
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0117",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.214685,
+        "zscore": -0.370369
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3097856,
+          51.467903
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0118",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.185141,
+        "zscore": -0.547839
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2889739,
+          51.4611672
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0119",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.158746,
+        "zscore": -0.706403
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2122479,
+          51.5797812
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0120",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.224545,
+        "zscore": -0.311139
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2188218,
+          51.456198
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0121",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.200119,
+        "zscore": -0.457867
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0405492,
+          51.55111
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0122",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.095652,
+        "zscore": -1.085419
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1891395,
+          51.4294027
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0123",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.160566,
+        "zscore": -0.69547
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2909526,
+          51.4897121
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0124",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.371638,
+        "zscore": 0.572476
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.009609,
+          51.4821237
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0125",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.100084,
+        "zscore": -1.058792
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1905799,
+          51.5476609
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0126",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.225601,
+        "zscore": -0.304793
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2106029,
+          51.5761382
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0127",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.160471,
+        "zscore": -0.696038
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1895809,
+          51.572449
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0128",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.219064,
+        "zscore": -0.344064
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0739601,
+          51.5562956
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0129",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.685969,
+        "zscore": 2.460708
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0483528,
+          51.5117118
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0130",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.251284,
+        "zscore": -0.150513
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1637814,
+          51.4497017
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0131",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.248003,
+        "zscore": -0.17022
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1769691,
+          51.4701629
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0132",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.175704,
+        "zscore": -0.60453
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2596996,
+          51.442747
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0133",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.199811,
+        "zscore": -0.459715
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2103178,
+          51.5013817
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0134",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.291947,
+        "zscore": 0.093759
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1736258,
+          51.5196974
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0135",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.220241,
+        "zscore": -0.336993
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0910395,
+          51.4239454
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0136",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.196214,
+        "zscore": -0.481326
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0206047,
+          51.5611744
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0137",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.164128,
+        "zscore": -0.674071
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1131444,
+          51.4685867
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0138",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.120518,
+        "zscore": -0.936045
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2110058,
+          51.5520923
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0139",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.186963,
+        "zscore": -0.536896
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0184599,
+          51.494621
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0140",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.175516,
+        "zscore": -0.605662
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1027448,
+          51.453252
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0141",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.299177,
+        "zscore": 0.137192
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1474737,
+          51.5488494
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0142",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.466142,
+        "zscore": 1.140172
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0276541,
+          51.5144622
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0143",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.253928,
+        "zscore": -0.134626
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.212083,
+          51.50247
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0144",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.249155,
+        "zscore": -0.1633
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2490936,
+          51.4551046
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0145",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.105049,
+        "zscore": -1.02897
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0014622,
+          51.5458133
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0146",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.198103,
+        "zscore": -0.469979
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1918631,
+          51.5260893
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0147",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.180059,
+        "zscore": -0.578372
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0502919,
+          51.4389886
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0148",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.19639,
+        "zscore": -0.480268
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0924382,
+          51.4461716
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0149",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.15893,
+        "zscore": -0.705298
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1693349,
+          51.5776174
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0150",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.271978,
+        "zscore": -0.026201
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1789481,
+          51.4281091
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0151",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.136387,
+        "zscore": -0.840717
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0297735,
+          51.4464088
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0152",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.179712,
+        "zscore": -0.580457
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3087371,
+          51.5774352
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0153",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.263515,
+        "zscore": -0.077036
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1113216,
+          51.4514104
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0154",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.243384,
+        "zscore": -0.197965
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1266214,
+          51.4223602
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0155",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.246885,
+        "zscore": -0.176938
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.306516,
+          51.5719298
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0156",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.311158,
+        "zscore": 0.209158
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1832696,
+          51.5610461
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0157",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.250923,
+        "zscore": -0.152683
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2617055,
+          51.4838813
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0158",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.287802,
+        "zscore": 0.068859
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2575156,
+          51.4267894
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0159",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.171646,
+        "zscore": -0.628908
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1752387,
+          51.4910186
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0160",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.240018,
+        "zscore": -0.218185
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0300518,
+          51.4347927
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0161",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.233344,
+        "zscore": -0.258281
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1196867,
+          51.4876482
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0162",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.14107,
+        "zscore": -0.812581
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0828753,
+          51.5002623
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0163",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.258355,
+        "zscore": -0.108032
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0107033,
+          51.532443
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0164",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.129774,
+        "zscore": -0.880441
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0207282,
+          51.4958737
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0165",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.126522,
+        "zscore": -0.899977
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0787907,
+          51.5259063
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0166",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.479704,
+        "zscore": 1.221641
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2214519,
+          51.5512218
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0167",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.33773,
+        "zscore": 0.368783
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0026699,
+          51.5160738
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0168",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.101254,
+        "zscore": -1.051762
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1030755,
+          51.5620123
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0169",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.802505,
+        "zscore": 3.160758
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1365359,
+          51.446221
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0170",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.136781,
+        "zscore": -0.838345
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2875571,
+          51.5429513
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0171",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.630245,
+        "zscore": 2.125964
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0226553,
+          51.4587781
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0172",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.250219,
+        "zscore": -0.15691
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0978888,
+          51.5641193
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0173",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.735315,
+        "zscore": 2.75714
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0548298,
+          51.5589561
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0174",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.409311,
+        "zscore": 0.798784
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1200267,
+          51.4348376
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0175",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.260241,
+        "zscore": -0.096704
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0241366,
+          51.4236742
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0176",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.151045,
+        "zscore": -0.75266
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0426552,
+          51.4677988
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0177",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.476008,
+        "zscore": 1.199442
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.236883,
+          51.4429195
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0178",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.182175,
+        "zscore": -0.565659
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.186291,
+          51.5312191
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0179",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.284456,
+        "zscore": 0.048758
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2396882,
+          51.5644209
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0180",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.212875,
+        "zscore": -0.381239
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2144759,
+          51.4743196
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0181",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.190564,
+        "zscore": -0.515264
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0232245,
+          51.4203225
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0182",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.111664,
+        "zscore": -0.989231
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2487135,
+          51.5359673
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0183",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.421565,
+        "zscore": 0.872393
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1186967,
+          51.4854962
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0184",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.130534,
+        "zscore": -0.875873
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0345996,
+          51.5781298
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0185",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.174079,
+        "zscore": -0.614295
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.157178,
+          51.4255122
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0186",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.163537,
+        "zscore": -0.677621
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0646481,
+          51.4764044
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0187",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.418584,
+        "zscore": 0.854488
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0238497,
+          51.5568853
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0188",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.183801,
+        "zscore": -0.555894
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2972133,
+          51.5055144
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0189",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.548394,
+        "zscore": 1.634272
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2708293,
+          51.4563692
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0190",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.20942,
+        "zscore": -0.401992
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1950937,
+          51.4970944
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0191",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.134156,
+        "zscore": -0.854117
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2272979,
+          51.4890598
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0192",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.189739,
+        "zscore": -0.520219
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2832675,
+          51.5285775
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0193",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.770178,
+        "zscore": 2.966565
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.200645,
+          51.4996081
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0194",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.285053,
+        "zscore": 0.052344
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0289639,
+          51.4595385
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0195",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.398328,
+        "zscore": 0.732807
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0758379,
+          51.4745546
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0196",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.393129,
+        "zscore": 0.701576
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1043694,
+          51.4863502
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0197",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.186117,
+        "zscore": -0.54198
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0587032,
+          51.5243322
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0198",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.342135,
+        "zscore": 0.395247
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1774321,
+          51.4914992
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0199",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.248147,
+        "zscore": -0.169356
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0128528,
+          51.4691722
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0200",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.240251,
+        "zscore": -0.21679
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0665578,
+          51.4947894
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0201",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.201632,
+        "zscore": -0.448777
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0094114,
+          51.4773758
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0202",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.253917,
+        "zscore": -0.134693
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2357459,
+          51.5626195
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0203",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.220002,
+        "zscore": -0.338424
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0854887,
+          51.4813757
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0204",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.304739,
+        "zscore": 0.1706
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1668854,
+          51.4554191
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0205",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.175938,
+        "zscore": -0.603127
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0381488,
+          51.4260825
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0206",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.252976,
+        "zscore": -0.140349
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1191981,
+          51.539149
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0207",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.618815,
+        "zscore": 2.057305
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0932878,
+          51.5421515
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0208",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.680877,
+        "zscore": 2.430121
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2256407,
+          51.4410216
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0209",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.135211,
+        "zscore": -0.847781
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.3013578,
+          51.5649347
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0210",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.343721,
+        "zscore": 0.404773
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0847674,
+          51.5542245
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0211",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.632878,
+        "zscore": 2.141784
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0226931,
+          51.4364242
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0212",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.138572,
+        "zscore": -0.827587
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.010239,
+          51.4748336
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0213",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.112899,
+        "zscore": -0.981812
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1127382,
+          51.5691604
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0214",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.635005,
+        "zscore": 2.154562
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2826287,
+          51.4383911
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0215",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.252082,
+        "zscore": -0.14572
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          0.0196141,
+          51.5194389
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0216",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.100553,
+        "zscore": -1.055973
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.247594,
+          51.5231587
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0217",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.534049,
+        "zscore": 1.548099
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.2279189,
+          51.5213844
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0218",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.412338,
+        "zscore": 0.816967
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.1493993,
+          51.5042617
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0219",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.243541,
+        "zscore": -0.197025
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -0.0234119,
+          51.5165977
+        ]
+      },
+      "properties": {
+        "id": "the_scene_contains_an_animal_0220",
+        "layer_id": "the_scene_contains_an_animal",
+        "prompt": "The scene contains an animal",
+        "score": 0.264806,
+        "zscore": -0.069281
+      }
+    }
+  ],
+  "metadata": {
+    "layer_id": "the_scene_contains_an_animal",
+    "prompt": "The scene contains an animal",
+    "mock": true,
+    "center": [
+      -0.1276,
+      51.5072
+    ]
+  }
+}

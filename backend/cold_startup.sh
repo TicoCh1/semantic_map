@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [ -z "${WORKSPACE_ROOT:-}" ]; then
+  if [ -d /workspace/embedding/london_224_8_45 ] || [ -d /workspace/Qwen3-VL-Embedding ]; then
+    WORKSPACE_ROOT=/workspace
+  else
+    WORKSPACE_ROOT="${HOME}/workspace"
+  fi
+fi
+
+BACKEND_DIR="${BACKEND_DIR:-${WORKSPACE_ROOT}/backend}"
+QWEN_SOURCE_DIR="${QWEN_SOURCE_DIR:-${WORKSPACE_ROOT}/Qwen3-VL-Embedding}"
+QWEN_RUNTIME_DIR="${QWEN_RUNTIME_DIR:-/tmp/Qwen3-VL-Embedding}"
+MODEL_DIR="${MODEL_DIR:-${WORKSPACE_ROOT}/models/Qwen3-VL-Embedding-2B}"
+DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/embedding}"
+DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID:-london_224_8_45}"
+DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS:-london_224_8_45,shanghai_224_8_45_2B}"
+DEFAULT_DATASET_GROUP_ID="${DEFAULT_DATASET_GROUP_ID:-london_shanghai}"
+RESULT_ROOT="${RESULT_ROOT:-${WORKSPACE_ROOT}/semantic_backend/results}"
+TILE_INDEX_ROOT="${TILE_INDEX_ROOT:-${WORKSPACE_ROOT}/semantic_backend/tile_index}"
+LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
+PANO_TAR_DIR="${PANO_TAR_DIR:-${WORKSPACE_ROOT}/pano}"
+PANO_CACHE_ROOT="${PANO_CACHE_ROOT:-${WORKSPACE_ROOT}/semantic_backend/pano_cache}"
+PANO_INDEX_PATH="${PANO_INDEX_PATH:-${WORKSPACE_ROOT}/semantic_backend/pano_index/pano_index.sqlite}"
+PANO_TAR_RANGES="${PANO_TAR_RANGES:-01:10002:100005,02:100006:200001,03:200002:300001,04:300002:400001,05:400002:500001,06:500002:}"
+PANO_TAR_RANGES_SHANGHAI_224_8_45_2B="${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B:-shanghai_rootless}"
+PORT="${PORT:-8000}"
+
+echo "Workspace root: ${WORKSPACE_ROOT}"
+echo "Backend dir:    ${BACKEND_DIR}"
+echo "Data root:      ${DATA_ROOT}"
+echo "Dataset id:     ${DEFAULT_DATASET_ID}"
+echo "Dataset group:  ${DEFAULT_DATASET_IDS}"
+echo "Group id:       ${DEFAULT_DATASET_GROUP_ID:-<auto>}"
+
+if command -v apt-get >/dev/null 2>&1; then
+  apt-get update
+  apt-get install -y unzip wget rsync
+fi
+
+if [ ! -d "${QWEN_SOURCE_DIR}" ]; then
+  echo "ERROR: Qwen repo not found: ${QWEN_SOURCE_DIR}" >&2
+  exit 1
+fi
+
+rm -rf "${QWEN_RUNTIME_DIR}"
+mkdir -p "$(dirname "${QWEN_RUNTIME_DIR}")"
+cp -a "${QWEN_SOURCE_DIR}" "${QWEN_RUNTIME_DIR}"
+
+cd "${QWEN_RUNTIME_DIR}"
+
+python -m pip install --upgrade pip
+python -m pip install uv
+
+bash scripts/setup_environment.sh
+
+source .venv/bin/activate
+uv pip install huggingface-hub
+uv pip install modelscope
+uv pip install -U ipywidgets jupyterlab_widgets
+uv pip install ipykernel
+uv pip install geopandas pyogrio shapely
+uv pip install scikit-learn
+
+if [ -f "${BACKEND_DIR}/requirements-runpod.txt" ]; then
+  uv pip install -r "${BACKEND_DIR}/requirements-runpod.txt"
+elif [ -f "${WORKSPACE_ROOT}/requirements.txt" ]; then
+  uv pip install -r "${WORKSPACE_ROOT}/requirements.txt"
+else
+  uv pip install "fastapi>=0.115" "uvicorn>=0.30" "numpy>=1.26"
+fi
+
+python -m ipykernel install --user --name qwen --display-name "Python (qwen)"
+
+mkdir -p "${RESULT_ROOT}" "${TILE_INDEX_ROOT}" "${LOG_ROOT}" "${PANO_CACHE_ROOT}" "$(dirname "${PANO_INDEX_PATH}")"
+
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-${RUNPOD_PROXY_BASE_URL:-}}"
+if [ -z "${PUBLIC_BASE_URL}" ] && [ -n "${RUNPOD_POD_ID:-}" ]; then
+  PUBLIC_BASE_URL="https://${RUNPOD_POD_ID}-${PORT}.proxy.runpod.net"
+fi
+
+TILE_INDEX_VERSION="${TILE_INDEX_VERSION:-xyz-z13-area-v1}"
+TILE_ZOOMS="${TILE_ZOOMS:-10,11,12,13}"
+if [ "${TILE_ZOOMS}" != "10,11,12,13" ]; then
+  echo "Ignoring TILE_ZOOMS=${TILE_ZOOMS}; this backend build serves z=10,11,12,13."
+  TILE_ZOOMS="10,11,12,13"
+fi
+TEMPORARY_SCORER_ENABLED="${TEMPORARY_SCORER_ENABLED:-false}"
+if [ "${TEMPORARY_SCORER_ENABLED}" = "true" ] && [ "${ALLOW_TEMPORARY_SCORER:-}" != "1" ]; then
+  echo "Ignoring TEMPORARY_SCORER_ENABLED=true; real TextCorT scoring is the default. Set ALLOW_TEMPORARY_SCORER=1 to override."
+  TEMPORARY_SCORER_ENABLED="false"
+fi
+DEMO_ALERT_ENABLED="${DEMO_ALERT_ENABLED:-false}"
+DEMO_ALERT_CHANNEL="${DEMO_ALERT_CHANNEL:-${ALERT_CHANNEL:-auto}}"
+DEMO_ALERT_EMAIL_TO="${DEMO_ALERT_EMAIL_TO:-${ALERT_EMAIL_TO:-}}"
+DEMO_ALERT_EMAIL_FROM="${DEMO_ALERT_EMAIL_FROM:-${ALERT_EMAIL_FROM:-}}"
+DEMO_ALERT_GMAIL_CLIENT_ID="${DEMO_ALERT_GMAIL_CLIENT_ID:-${GMAIL_CLIENT_ID:-}}"
+DEMO_ALERT_GMAIL_CLIENT_SECRET="${DEMO_ALERT_GMAIL_CLIENT_SECRET:-${GMAIL_CLIENT_SECRET:-}}"
+DEMO_ALERT_GMAIL_REFRESH_TOKEN="${DEMO_ALERT_GMAIL_REFRESH_TOKEN:-${GMAIL_REFRESH_TOKEN:-}}"
+DEMO_ALERT_GMAIL_USER_ID="${DEMO_ALERT_GMAIL_USER_ID:-me}"
+DEMO_ALERT_SMTP_HOST="${DEMO_ALERT_SMTP_HOST:-${ALERT_SMTP_HOST:-}}"
+DEMO_ALERT_SMTP_PORT="${DEMO_ALERT_SMTP_PORT:-${ALERT_SMTP_PORT:-587}}"
+DEMO_ALERT_SMTP_USER="${DEMO_ALERT_SMTP_USER:-${ALERT_SMTP_USER:-}}"
+DEMO_ALERT_SMTP_PASSWORD="${DEMO_ALERT_SMTP_PASSWORD:-${ALERT_SMTP_PASSWORD:-}}"
+DEMO_ALERT_SMTP_STARTTLS="${DEMO_ALERT_SMTP_STARTTLS:-${ALERT_SMTP_STARTTLS:-true}}"
+DEMO_ALERT_COOLDOWN_SECONDS="${DEMO_ALERT_COOLDOWN_SECONDS:-600}"
+
+cat > "${BACKEND_DIR}/.runpod_backend.env" <<EOF
+export WORKSPACE_ROOT="${WORKSPACE_ROOT}"
+export BACKEND_DIR="${BACKEND_DIR}"
+export QWEN_REPO_DIR="${QWEN_RUNTIME_DIR}"
+export MODEL_DIR="${MODEL_DIR}"
+export DATA_ROOT="${DATA_ROOT}"
+export DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID}"
+export DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS}"
+export DEFAULT_DATASET_GROUP_ID="${DEFAULT_DATASET_GROUP_ID}"
+export RESULT_ROOT="${RESULT_ROOT}"
+export TILE_INDEX_ROOT="${TILE_INDEX_ROOT}"
+export LOG_ROOT="${LOG_ROOT}"
+export PANO_TAR_DIR="${PANO_TAR_DIR}"
+export PANO_CACHE_ROOT="${PANO_CACHE_ROOT}"
+export PANO_INDEX_PATH="${PANO_INDEX_PATH}"
+export PANO_TAR_RANGES="${PANO_TAR_RANGES}"
+export PANO_TAR_RANGES_SHANGHAI_224_8_45_2B="${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B}"
+export PORT="${PORT}"
+export PUBLIC_BASE_URL="${PUBLIC_BASE_URL}"
+export SCORING_VERSION="${SCORING_VERSION:-text-cor-t-qwen-cred-v1}"
+export TILE_INDEX_VERSION="${TILE_INDEX_VERSION}"
+export TEXT_INSTRUCTION="${TEXT_INSTRUCTION:-Find images matching this description.}"
+export SELECTED_VIEWS="${SELECTED_VIEWS:-0,1,2,3,4,5,6,7}"
+export SCORING_CHUNK_SIZE="${SCORING_CHUNK_SIZE:-32768}"
+export DENSITY_TRIGGER_POINTS="${DENSITY_TRIGGER_POINTS:-10000}"
+export DENSITY_KEEP_POINTS="${DENSITY_KEEP_POINTS:-5000}"
+export PROMPT_BATCH_WINDOW_MS="${PROMPT_BATCH_WINDOW_MS:-250}"
+export PROMPT_BATCH_MAX_SIZE="${PROMPT_BATCH_MAX_SIZE:-32}"
+export WARMUP_ON_STARTUP="${WARMUP_ON_STARTUP:-true}"
+export EMBEDDING_DEVICE="${EMBEDDING_DEVICE:-cuda}"
+export TILE_ZOOMS="${TILE_ZOOMS}"
+export TEMPORARY_SCORER_ENABLED="${TEMPORARY_SCORER_ENABLED}"
+export DEMO_ALERT_ENABLED="${DEMO_ALERT_ENABLED}"
+export DEMO_ALERT_CHANNEL="${DEMO_ALERT_CHANNEL}"
+export DEMO_ALERT_EMAIL_TO="${DEMO_ALERT_EMAIL_TO}"
+export DEMO_ALERT_EMAIL_FROM="${DEMO_ALERT_EMAIL_FROM}"
+export DEMO_ALERT_GMAIL_CLIENT_ID="${DEMO_ALERT_GMAIL_CLIENT_ID}"
+export DEMO_ALERT_GMAIL_CLIENT_SECRET="${DEMO_ALERT_GMAIL_CLIENT_SECRET}"
+export DEMO_ALERT_GMAIL_REFRESH_TOKEN="${DEMO_ALERT_GMAIL_REFRESH_TOKEN}"
+export DEMO_ALERT_GMAIL_USER_ID="${DEMO_ALERT_GMAIL_USER_ID}"
+export DEMO_ALERT_SMTP_HOST="${DEMO_ALERT_SMTP_HOST}"
+export DEMO_ALERT_SMTP_PORT="${DEMO_ALERT_SMTP_PORT}"
+export DEMO_ALERT_SMTP_USER="${DEMO_ALERT_SMTP_USER}"
+export DEMO_ALERT_SMTP_PASSWORD="${DEMO_ALERT_SMTP_PASSWORD}"
+export DEMO_ALERT_SMTP_STARTTLS="${DEMO_ALERT_SMTP_STARTTLS}"
+export DEMO_ALERT_COOLDOWN_SECONDS="${DEMO_ALERT_COOLDOWN_SECONDS}"
+EOF
+
+echo "Environment ready."
+echo "Runtime env written to: ${BACKEND_DIR}/.runpod_backend.env"
+echo "Start backend with: bash ${BACKEND_DIR}/start_runpod_backend.sh"

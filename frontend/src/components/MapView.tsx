@@ -1,0 +1,1010 @@
+import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
+import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
+import { getLayerGeojson, getLayerSourcePath, getRemoteTileGeojson, isRemoteTileTemplate, mergeFeatureCollections } from "../api/client";
+import { StreetViewPanel } from "./StreetViewPanel";
+import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
+import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
+import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
+
+type MapViewProps = {
+  layers: SemanticLayer[];
+  gradients: GradientPreset[];
+  selectedLayerId: string | null;
+  basemapId: BasemapId;
+  onBasemapChange: (basemapId: BasemapId) => void;
+  onSelectLayer: (layerId: string) => void;
+  onPriorityTileChange?: (cityId: CityId, tile: TileCoord | null) => void;
+  markedPanos: MarkedPano[];
+  selectedPanoKey: string | null;
+  onMarkPano: (pano: PanoMapPoint) => void;
+  onSelectPano: (panoKey: string) => void;
+  onRemovePano: (panoKey: string) => void;
+  scoreField: "score" | "zscore";
+  progressEntries: RemoteLogEntry[];
+};
+
+type CityConfig = {
+  id: CityId;
+  name: string;
+  datasetId: string;
+  center: [number, number];
+  initialZoom: number;
+  bounds: {
+    west: number;
+    east: number;
+    south: number;
+    north: number;
+  };
+};
+
+type CityVisibility = Record<CityId, boolean>;
+
+const REMOTE_MAX_DETAIL_ZOOM = 13;
+const MAX_LAYER_GEOJSON_CACHE_ENTRIES = 80;
+const MAX_REMOTE_TILE_CACHE_ENTRIES = 192;
+const CITY_VISIBILITY_KEY = "semantic-map-visible-cities-v1";
+const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
+const MIN_CITY_SPLIT = 28;
+const MAX_CITY_SPLIT = 72;
+
+const CITY_CONFIGS: CityConfig[] = [
+  {
+    id: "london",
+    name: "London",
+    datasetId: "london_224_8_45",
+    center: [-0.1276, 51.5072],
+    initialZoom: 10.45,
+    bounds: {
+      west: -1.05,
+      east: 0.7,
+      south: 50.85,
+      north: 52.05
+    }
+  },
+  {
+    id: "shanghai",
+    name: "Shanghai",
+    datasetId: "shanghai_224_8_45_2B",
+    center: [121.4737, 31.2304],
+    initialZoom: 10.45,
+    bounds: {
+      west: 120.85,
+      east: 122.25,
+      south: 30.65,
+      north: 31.85
+    }
+  }
+];
+
+export const MapView = memo(function MapView({
+  layers,
+  gradients,
+  selectedLayerId,
+  basemapId,
+  onBasemapChange,
+  onSelectLayer,
+  onPriorityTileChange,
+  markedPanos,
+  selectedPanoKey,
+  onMarkPano,
+  onSelectPano,
+  onRemovePano,
+  scoreField,
+  progressEntries
+}: MapViewProps) {
+  const [cityVisibility, setCityVisibility] = useState<CityVisibility>(loadCityVisibility);
+  const [citySplit, setCitySplit] = useState(loadCitySplit);
+  const [draggingCitySplit, setDraggingCitySplit] = useState(false);
+  const [forceMaxDetail, setForceMaxDetail] = useState(() => window.localStorage.getItem("semantic-map-force-max-detail") === "true");
+  const [sharedGroundScale, setSharedGroundScale] = useState(() =>
+    groundScaleForZoom(CITY_CONFIGS[0].initialZoom, CITY_CONFIGS[0].center[1])
+  );
+  const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
+  const activeCities = CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
+  const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
+  const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
+  const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
+
+  useEffect(() => {
+    window.localStorage.setItem(CITY_VISIBILITY_KEY, JSON.stringify(cityVisibility));
+  }, [cityVisibility]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CITY_SPLIT_KEY, String(citySplit));
+  }, [citySplit]);
+
+  useEffect(() => {
+    window.localStorage.setItem("semantic-map-force-max-detail", forceMaxDetail ? "true" : "false");
+  }, [forceMaxDetail]);
+
+  const toggleCity = useCallback((cityId: CityId, visible: boolean) => {
+    setCityVisibility((current) => {
+      if (!visible) {
+        const otherVisible = CITY_CONFIGS.some((city) => city.id !== cityId && current[city.id]);
+        if (!otherVisible) return current;
+      }
+      return { ...current, [cityId]: visible };
+    });
+  }, []);
+
+  const startCitySplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDraggingCitySplit(true);
+    const shell = event.currentTarget.closest(".city-map-layout") as HTMLElement | null;
+    if (!shell) return;
+    const rect = shell.getBoundingClientRect();
+
+    const onMove = (moveEvent: globalThis.PointerEvent) => {
+      const raw = ((moveEvent.clientX - rect.left) / Math.max(rect.width, 1)) * 100;
+      setCitySplit(clampNumber(raw, MIN_CITY_SPLIT, MAX_CITY_SPLIT));
+    };
+    const onUp = () => {
+      setDraggingCitySplit(false);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  }, []);
+
+  const handleCityRemoteTileZoomChange = useCallback((cityId: CityId, zoom: number) => {
+    setCityRemoteTileZooms((current) => {
+      const nextZoom = clampInteger(zoom, 10, REMOTE_MAX_DETAIL_ZOOM);
+      return current[cityId] === nextZoom ? current : { ...current, [cityId]: nextZoom };
+    });
+  }, []);
+
+  return (
+    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}`} data-tour-target="map">
+      <div className="map-toolbar">
+        <div>
+          <span>Semantic Map</span>
+          <strong>{title}</strong>
+        </div>
+        <div className="city-toggle-group">
+          <span>Cities</span>
+          <div>
+            {CITY_CONFIGS.map((city) => (
+              <label className="city-toggle" key={city.id}>
+                <input type="checkbox" checked={cityVisibility[city.id]} onChange={(event) => toggleCity(city.id, event.target.checked)} />
+                <span>{city.name}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+        <label className="basemap-select">
+          <span>Basemap</span>
+          <select value={basemapId} onChange={(event) => onBasemapChange(event.target.value as BasemapId)}>
+            {BASEMAPS.map((basemap) => (
+              <option key={basemap.id} value={basemap.id}>
+                {basemap.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="map-detail-toggle" title="when enabled, map render time might be significantly delayed if viewing a large region">
+          <input type="checkbox" checked={forceMaxDetail} onChange={(event) => setForceMaxDetail(event.target.checked)} />
+          <span title="when enabled, map render time might be significantly delayed if viewing a large region">Max detail</span>
+        </label>
+        <div className="map-status">{statusLabel}</div>
+      </div>
+
+      <div
+        className={`city-map-layout${activeCities.length === 2 ? " has-two-cities" : ""}`}
+        style={{ "--city-split": `${citySplit}%` } as CSSProperties}
+      >
+        {activeCities.map((city, index) => (
+          <CityMapPane
+            key={city.id}
+            city={city}
+            layers={layers}
+            gradients={gradients}
+            basemapId={basemapId}
+            selectedLayerId={selectedLayerId}
+            onSelectLayer={onSelectLayer}
+            onPriorityTileChange={onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
+            markedPanos={markedPanos}
+            selectedPanoKey={selectedPanoKey}
+            onMarkPano={onMarkPano}
+            onSelectPano={onSelectPano}
+            forceMaxDetail={forceMaxDetail}
+            sharedGroundScale={sharedGroundScale}
+            onSharedGroundScaleChange={setSharedGroundScale}
+            sharedRemoteTileZoom={sharedRemoteTileZoom}
+            onRemoteTileZoomChange={(zoom) => handleCityRemoteTileZoomChange(city.id, zoom)}
+            splitIndex={index}
+          />
+        ))}
+        {activeCities.length === 2 ? (
+          <div className="city-split-resizer" onPointerDown={startCitySplitDrag} title="Resize city maps" aria-label="Resize city maps" />
+        ) : null}
+      </div>
+
+      <MapProgressOverlay entries={progressEntries} />
+      <StreetViewPanel
+        panos={markedPanos}
+        selectedPanoKey={selectedPanoKey}
+        scoreField={scoreField}
+        onSelectPano={onSelectPano}
+        onRemovePano={onRemovePano}
+      />
+    </div>
+  );
+});
+
+type CityMapPaneProps = {
+  city: CityConfig;
+  layers: SemanticLayer[];
+  gradients: GradientPreset[];
+  basemapId: BasemapId;
+  selectedLayerId: string | null;
+  onSelectLayer: (layerId: string) => void;
+  onPriorityTileChange?: (tile: TileCoord | null) => void;
+  markedPanos: MarkedPano[];
+  selectedPanoKey: string | null;
+  onMarkPano: (pano: PanoMapPoint) => void;
+  onSelectPano: (panoKey: string) => void;
+  forceMaxDetail: boolean;
+  sharedGroundScale: number;
+  onSharedGroundScaleChange: (scale: number) => void;
+  sharedRemoteTileZoom: number;
+  onRemoteTileZoomChange: (zoom: number) => void;
+  splitIndex: number;
+};
+
+function CityMapPane({
+  city,
+  layers,
+  gradients,
+  basemapId,
+  selectedLayerId,
+  onSelectLayer,
+  onPriorityTileChange,
+  markedPanos,
+  selectedPanoKey,
+  onMarkPano,
+  onSelectPano,
+  forceMaxDetail,
+  sharedGroundScale,
+  onSharedGroundScaleChange,
+  sharedRemoteTileZoom,
+  onRemoteTileZoomChange,
+  splitIndex
+}: CityMapPaneProps) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<MapLibreMap | null>(null);
+  const basemapRef = useRef<BasemapId>(basemapId);
+  const forceMaxDetailRef = useRef(forceMaxDetail);
+  const sharedGroundScaleRef = useRef(sharedGroundScale);
+  const sharedRemoteTileZoomRef = useRef(sharedRemoteTileZoom);
+  const priorityTileChangeRef = useRef(onPriorityTileChange);
+  const remoteTileZoomChangeRef = useRef(onRemoteTileZoomChange);
+  const selectLayerRef = useRef(onSelectLayer);
+  const markPanoRef = useRef(onMarkPano);
+  const selectPanoRef = useRef(onSelectPano);
+  const panoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const styleGenerationRef = useRef(0);
+  const drawnLayerIds = useRef<Set<string>>(new Set());
+  const handlerCleanups = useRef<Map<string, Array<() => void>>>(new Map());
+  const geojsonCache = useRef<Map<string, FeatureCollection>>(new Map());
+  const remoteTileCache = useRef<Map<string, FeatureCollection>>(new Map());
+  const applyingScaleSyncRef = useRef(false);
+  const semanticRedrawTimerRef = useRef<number | undefined>(undefined);
+  const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
+  const [status, setStatus] = useState("Loading map");
+  const [showMaxDetailWarning, setShowMaxDetailWarning] = useState(false);
+  const selectedLayerName = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
+
+  function clearSemanticLayers(map: MapLibreMap) {
+    for (const layerId of drawnLayerIds.current) {
+      handlerCleanups.current.get(layerId)?.forEach((cleanup) => cleanup());
+      handlerCleanups.current.delete(layerId);
+      if (map.getLayer(layerId)) map.removeLayer(layerId);
+      if (map.getSource(layerId)) map.removeSource(layerId);
+    }
+    drawnLayerIds.current.clear();
+  }
+
+  function requestSemanticRedraw(generation: number, message?: string) {
+    if (styleGenerationRef.current !== generation) return;
+    if (message) setStatus(message);
+    if (semanticRedrawTimerRef.current !== undefined) {
+      window.clearTimeout(semanticRedrawTimerRef.current);
+      semanticRedrawTimerRef.current = undefined;
+    }
+    setRedrawRequest((current) => ({
+      generation,
+      nonce: current.nonce + 1
+    }));
+  }
+
+  function scheduleSemanticRedraw(generation: number, delayMs = 160) {
+    if (styleGenerationRef.current !== generation) return;
+    if (semanticRedrawTimerRef.current !== undefined) {
+      window.clearTimeout(semanticRedrawTimerRef.current);
+    }
+    semanticRedrawTimerRef.current = window.setTimeout(() => {
+      semanticRedrawTimerRef.current = undefined;
+      requestSemanticRedraw(generation);
+    }, delayMs);
+  }
+
+  useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
+
+    const initialBasemap = basemapById(basemapId);
+    const generation = styleGenerationRef.current + 1;
+    styleGenerationRef.current = generation;
+    basemapRef.current = initialBasemap.id;
+
+    const map = new maplibregl.Map({
+      container: containerRef.current,
+      style: basemapStyle(initialBasemap),
+      center: city.center,
+      zoom: zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
+      minZoom: 2,
+      maxZoom: 18
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
+    map.on("load", () => {
+      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      requestSemanticRedraw(generation, `${city.name} ${initialBasemap.name} ready`);
+    });
+    map.on("error", (event) => setStatus(event.error?.message ?? "Map error"));
+    mapRef.current = map;
+    requestSemanticRedraw(generation, `Loading ${city.name}`);
+    reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+
+    return () => {
+      if (semanticRedrawTimerRef.current !== undefined) {
+        window.clearTimeout(semanticRedrawTimerRef.current);
+        semanticRedrawTimerRef.current = undefined;
+      }
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [city.center, city.name]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const map = mapRef.current;
+    if (!container || !map || !("ResizeObserver" in window)) return;
+    const observer = new ResizeObserver(() => {
+      map.resize();
+      scheduleSemanticRedraw(styleGenerationRef.current);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    forceMaxDetailRef.current = forceMaxDetail;
+    const map = mapRef.current;
+    if (!map) return;
+    remoteTileCache.current.clear();
+    geojsonCache.current.clear();
+    reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
+    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    requestSemanticRedraw(styleGenerationRef.current);
+  }, [forceMaxDetail]);
+
+  useEffect(() => {
+    priorityTileChangeRef.current = onPriorityTileChange;
+    const map = mapRef.current;
+    if (map) reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+  }, [onPriorityTileChange]);
+
+  useEffect(() => {
+    remoteTileZoomChangeRef.current = onRemoteTileZoomChange;
+  }, [onRemoteTileZoomChange]);
+
+  useEffect(() => {
+    sharedRemoteTileZoomRef.current = sharedRemoteTileZoom;
+    const map = mapRef.current;
+    if (!map) return;
+    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoom, priorityTileChangeRef.current);
+    scheduleSemanticRedraw(styleGenerationRef.current);
+  }, [sharedRemoteTileZoom]);
+
+  useEffect(() => {
+    selectLayerRef.current = onSelectLayer;
+  }, [onSelectLayer]);
+
+  useEffect(() => {
+    markPanoRef.current = onMarkPano;
+  }, [onMarkPano]);
+
+  useEffect(() => {
+    selectPanoRef.current = onSelectPano;
+  }, [onSelectPano]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const cityPanos = markedPanos.filter((pano) => panoBelongsToCity(pano, city));
+    const currentKeys = new Set(cityPanos.map((pano) => panoKey(pano)));
+    for (const [key, marker] of panoMarkersRef.current) {
+      if (!currentKeys.has(key)) {
+        marker.remove();
+        panoMarkersRef.current.delete(key);
+      }
+    }
+
+    for (const pano of cityPanos) {
+      const key = panoKey(pano);
+      let marker = panoMarkersRef.current.get(key);
+      if (!marker) {
+        const element = document.createElement("button");
+        element.type = "button";
+        element.classList.add("pano-map-marker");
+        element.title = `Pano ${pano.pano_id}`;
+        element.addEventListener("click", (event) => {
+          event.stopPropagation();
+          selectPanoRef.current(key);
+        });
+        marker = new maplibregl.Marker({ element, anchor: "center" }).setLngLat([pano.lon, pano.lat]).addTo(map);
+        panoMarkersRef.current.set(key, marker);
+      } else {
+        marker.setLngLat([pano.lon, pano.lat]);
+      }
+      const element = marker.getElement();
+      element.classList.add("pano-map-marker");
+      element.classList.toggle("is-selected", key === selectedPanoKey);
+      element.classList.toggle("is-failed", pano.status === "failed");
+      element.classList.toggle("is-loading", pano.status === "loading");
+    }
+  }, [city, markedPanos, selectedPanoKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedPanoKey) return;
+    const selected = markedPanos.find((pano) => panoKey(pano) === selectedPanoKey && panoBelongsToCity(pano, city));
+    if (!selected) return;
+    if (!map.getBounds().contains([selected.lon, selected.lat])) {
+      map.easeTo({
+        center: [selected.lon, selected.lat],
+        duration: 500,
+        essential: true
+      });
+    }
+  }, [city, markedPanos, selectedPanoKey]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || basemapRef.current === basemapId) return;
+
+    const nextBasemap = basemapById(basemapId);
+    const generation = styleGenerationRef.current + 1;
+    styleGenerationRef.current = generation;
+    basemapRef.current = nextBasemap.id;
+    setStatus(`Loading ${nextBasemap.name}`);
+    clearSemanticLayers(map);
+
+    const onStyleReady = () => {
+      requestSemanticRedraw(generation, `${city.name} ${nextBasemap.name} ready`);
+    };
+
+    map.once("style.load", onStyleReady);
+    map.once("idle", onStyleReady);
+    map.setStyle(basemapStyle(nextBasemap));
+    requestSemanticRedraw(generation);
+
+    return () => {
+      map.off("style.load", onStyleReady);
+      map.off("idle", onStyleReady);
+    };
+  }, [basemapId, city.name]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    const onViewportSettled = () => {
+      if (!applyingScaleSyncRef.current) {
+        const nextScale = groundScaleForZoom(map.getZoom(), map.getCenter().lat);
+        sharedGroundScaleRef.current = nextScale;
+        onSharedGroundScaleChange(nextScale);
+      }
+      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      scheduleSemanticRedraw(styleGenerationRef.current);
+    };
+    map.on("zoomend", onViewportSettled);
+    map.on("moveend", onViewportSettled);
+    return () => {
+      map.off("zoomend", onViewportSettled);
+      map.off("moveend", onViewportSettled);
+    };
+  }, [onSharedGroundScaleChange]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+    sharedGroundScaleRef.current = sharedGroundScale;
+    const nextZoom = zoomForGroundScale(sharedGroundScale, map.getCenter().lat);
+    if (Math.abs(map.getZoom() - nextZoom) < 0.01) return;
+    applyingScaleSyncRef.current = true;
+    map.jumpTo({ zoom: nextZoom });
+    window.setTimeout(() => {
+      applyingScaleSyncRef.current = false;
+      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      scheduleSemanticRedraw(styleGenerationRef.current);
+    }, 0);
+  }, [sharedGroundScale]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    const generation = redrawRequest.generation;
+    if (!map || generation === 0 || generation !== styleGenerationRef.current) return;
+
+    const currentMap = map;
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let maxDetailWarningTimer: number | undefined;
+
+    async function draw(attempt = 0) {
+      if (cancelled || generation !== styleGenerationRef.current) return;
+
+      try {
+        if (forceMaxDetailRef.current && maxDetailWarningTimer === undefined) {
+          setShowMaxDetailWarning(false);
+          maxDetailWarningTimer = window.setTimeout(() => {
+            if (!cancelled && generation === styleGenerationRef.current && forceMaxDetailRef.current) {
+              setShowMaxDetailWarning(true);
+            }
+          }, 1200);
+        }
+
+        if (!currentMap.getStyle()?.layers) {
+          throw new Error("Map style is not ready");
+        }
+
+        clearSemanticLayers(currentMap);
+
+        const visibleTopToBottom = layers.filter((layer) => layer.visible);
+        const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
+        const layersToDraw = renderableTopToBottom.slice().reverse();
+        for (const layer of layersToDraw) {
+          const geojson = await loadLayerGeojsonForMap(
+            layer,
+            currentMap,
+            geojsonCache.current,
+            remoteTileCache.current,
+            forceMaxDetailRef.current,
+            sharedRemoteTileZoomRef.current,
+            city.id
+          );
+          if (cancelled || generation !== styleGenerationRef.current) return;
+
+          const sourceId = sourceIdForCityLayer(city.id, layer.id);
+          const gradient = layerGradient(layer, gradients);
+          if (currentMap.getLayer(sourceId)) currentMap.removeLayer(sourceId);
+          if (currentMap.getSource(sourceId)) currentMap.removeSource(sourceId);
+          currentMap.addSource(sourceId, { type: "geojson", data: geojson });
+          currentMap.addLayer({
+            id: sourceId,
+            type: "circle",
+            source: sourceId,
+            paint: {
+              "circle-radius": circleRadiusExpression(layer),
+              "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
+              "circle-opacity": layer.style.opacity,
+              "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
+              "circle-stroke-width": 0,
+              "circle-stroke-opacity": 0
+            }
+          });
+
+          const onMouseEnter = () => {
+            currentMap.getCanvas().style.cursor = "pointer";
+          };
+          const onMouseLeave = () => {
+            currentMap.getCanvas().style.cursor = "";
+          };
+          const onClick = (event: MapLayerMouseEvent) => {
+            selectLayerRef.current(layer.id);
+            const feature = event.features?.[0];
+            if (!feature) return;
+            const props = feature.properties ?? {};
+            const pano = panoPointFromFeature(feature, event, layer, city);
+            if (pano) {
+              markPanoRef.current(pano);
+              void collectPanoLayerValues(
+                pano.pano_id,
+                pano.dataset_id ?? city.datasetId,
+                layers,
+                currentMap,
+                geojsonCache.current,
+                remoteTileCache.current,
+                forceMaxDetailRef.current,
+                sharedRemoteTileZoomRef.current,
+                city.id
+              ).then((layerValues) => {
+                if (!cancelled && layerValues.length) {
+                  markPanoRef.current({ ...pano, layer_values: layerValues });
+                }
+              });
+            }
+            const score = Number(props.score);
+            const zscore = Number(props.zscore);
+            new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+              .setLngLat(pano ? [pano.lon, pano.lat] : event.lngLat)
+              .setHTML(
+                `<div class="popup-title">${layer.name}</div>
+                 <div class="popup-row"><span>ID</span><span>${props.id ?? ""}</span></div>
+                 <div class="popup-row"><span>score</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
+                 <div class="popup-row"><span>zscore</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
+              )
+              .addTo(currentMap);
+          };
+
+          currentMap.on("mouseenter", sourceId, onMouseEnter);
+          currentMap.on("mouseleave", sourceId, onMouseLeave);
+          currentMap.on("click", sourceId, onClick);
+          handlerCleanups.current.set(sourceId, [
+            () => currentMap.off("mouseenter", sourceId, onMouseEnter),
+            () => currentMap.off("mouseleave", sourceId, onMouseLeave),
+            () => currentMap.off("click", sourceId, onClick)
+          ]);
+
+          drawnLayerIds.current.add(sourceId);
+        }
+
+        const missingLayer = layersToDraw.some((layer) => !currentMap.getLayer(sourceIdForCityLayer(city.id, layer.id)));
+        if (missingLayer) {
+          throw new Error("Semantic layers were not attached");
+        }
+
+        if (!cancelled && generation === styleGenerationRef.current) {
+          if (maxDetailWarningTimer !== undefined) {
+            window.clearTimeout(maxDetailWarningTimer);
+            maxDetailWarningTimer = undefined;
+          }
+          setShowMaxDetailWarning(false);
+          setStatus(`${layersToDraw.length} rendered / ${visibleTopToBottom.length} visible / ${layers.length} total`);
+        }
+      } catch (error) {
+        if (cancelled || generation !== styleGenerationRef.current) return;
+        if (attempt < 80) {
+          if (attempt === 0) setStatus(`Restoring semantic layers`);
+          retryTimer = window.setTimeout(() => {
+            void draw(attempt + 1);
+          }, 100);
+          return;
+        }
+        if (maxDetailWarningTimer !== undefined) {
+          window.clearTimeout(maxDetailWarningTimer);
+          maxDetailWarningTimer = undefined;
+        }
+        setShowMaxDetailWarning(false);
+        setStatus(error instanceof Error ? error.message : "Layer draw failed");
+      }
+    }
+
+    void draw();
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+      if (maxDetailWarningTimer !== undefined) window.clearTimeout(maxDetailWarningTimer);
+      setShowMaxDetailWarning(false);
+    };
+  }, [city.id, redrawRequest, layers, gradients]);
+
+  return (
+    <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex}>
+      <div ref={containerRef} className="map-container" />
+      <div className="city-map-label">
+        <span>{city.name}</span>
+        <strong>{selectedLayerName}</strong>
+        <small>{status}</small>
+      </div>
+      {showMaxDetailWarning ? (
+        <div className="map-max-detail-warning">When max detailed is enable, map render time might be significantly delayed when viewing a large area</div>
+      ) : null}
+    </section>
+  );
+}
+
+function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
+  if (!entries.length) return null;
+
+  return (
+    <div className="map-progress-overlay" role="status" aria-live="polite">
+      <div className="map-progress-title">
+        <span>RunPod progress</span>
+        <strong>{entries.length} active</strong>
+      </div>
+      <div className="map-progress-list">
+        {entries.map((entry) => {
+          const percent = Math.max(0, Math.min(100, Math.round((entry.progress ?? 0) * 100)));
+          return (
+            <div className={`map-progress-card is-${entry.status}`} key={entry.job_id || entry.id}>
+              <div className="map-progress-card-top">
+                <strong>{entry.current_stage || entry.status}</strong>
+                <span>{percent}%</span>
+              </div>
+              <div className="map-progress-prompt">{entry.prompt || "Remote prompt"}</div>
+              <div className="map-progress-bar" aria-hidden="true">
+                <div className="map-progress-bar-fill" style={{ width: `${percent}%` }} />
+              </div>
+              <div className="map-progress-detail">
+                <span>{entry.message}</span>
+                {entry.current_tile ? <span>tile {entry.current_tile.z}/{entry.current_tile.x}/{entry.current_tile.y}</span> : null}
+                {entry.tiles_total ? <span>{entry.tiles_done ?? 0}/{entry.tiles_total} tiles</span> : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function panoPointFromFeature(feature: GeoJSON.Feature, event: MapLayerMouseEvent, layer: SemanticLayer, city: CityConfig): PanoMapPoint | null {
+  const props = feature.properties ?? {};
+  const rawId = props.pano_id ?? props.id;
+  if (rawId === undefined || rawId === null) return null;
+  const panoId = String(rawId);
+  if (!/^\d+$/.test(panoId)) return null;
+
+  let lon = event.lngLat.lng;
+  let lat = event.lngLat.lat;
+  if (feature.geometry.type === "Point") {
+    const coordinates = feature.geometry.coordinates;
+    if (typeof coordinates[0] === "number" && typeof coordinates[1] === "number") {
+      lon = coordinates[0];
+      lat = coordinates[1];
+    }
+  }
+
+  const score = Number(props.score);
+  const zscore = Number(props.zscore);
+  const datasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : city.datasetId;
+  return {
+    pano_id: panoId,
+    pano_key: `${datasetId}:${panoId}`,
+    dataset_id: datasetId,
+    city_id: city.id,
+    lon,
+    lat,
+    date: typeof props.date === "string" || typeof props.date === "number" ? props.date : null,
+    source_layer_id: layer.id,
+    source_layer_name: layer.name,
+    score: Number.isFinite(score) ? score : null,
+    zscore: Number.isFinite(zscore) ? zscore : null
+  };
+}
+
+async function collectPanoLayerValues(
+  panoId: string,
+  datasetId: string,
+  layers: SemanticLayer[],
+  map: MapLibreMap,
+  layerCache: Map<string, FeatureCollection>,
+  remoteTileCache: Map<string, FeatureCollection>,
+  forceMaxDetail: boolean,
+  remoteTileZoom: number,
+  cityId: CityId
+): Promise<PanoLayerValue[]> {
+  const values = await Promise.all(
+    layers
+      .filter((layer) => layer.status === "ready")
+      .map(async (layer) => {
+        const geojson = await loadLayerGeojsonForMap(layer, map, layerCache, remoteTileCache, forceMaxDetail, remoteTileZoom, cityId);
+        const feature = geojson.features.find((item) => {
+          const props = item.properties ?? {};
+          const featureDatasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : datasetId;
+          return featureDatasetId === datasetId && String(props.pano_id ?? props.id ?? "") === panoId;
+        });
+        if (!feature) {
+          return {
+            layer_id: layer.id,
+            layer_name: layer.name,
+            visible: layer.visible,
+            score: null,
+            zscore: null,
+            date: null
+          };
+        }
+
+        const props = feature.properties ?? {};
+        const score = Number(props.score);
+        const zscore = Number(props.zscore);
+        return {
+          layer_id: layer.id,
+          layer_name: layer.name,
+          visible: layer.visible,
+          score: Number.isFinite(score) ? score : null,
+          zscore: Number.isFinite(zscore) ? zscore : null,
+          date: typeof props.date === "string" || typeof props.date === "number" ? props.date : null
+        };
+      })
+  );
+  return values;
+}
+
+async function loadLayerGeojsonForMap(
+  layer: SemanticLayer,
+  map: MapLibreMap,
+  layerCache: Map<string, FeatureCollection>,
+  remoteTileCache: Map<string, FeatureCollection>,
+  forceMaxDetail: boolean,
+  remoteTileZoom: number,
+  cityId: CityId
+): Promise<FeatureCollection> {
+  const sourcePath = getLayerSourcePath(layer, cityId);
+  if (!isRemoteTileTemplate(sourcePath)) {
+    const cacheKey = `${cityId}:${layer.id}:${sourcePath || "empty"}`;
+    let geojson = getCachedFeatureCollection(layerCache, cacheKey);
+    if (!geojson) {
+      geojson = await getLayerGeojson(layer.id, cityId);
+      setCachedFeatureCollection(layerCache, cacheKey, geojson, MAX_LAYER_GEOJSON_CACHE_ENTRIES);
+    }
+    return geojson;
+  }
+
+  const tiles = visibleRemoteTiles(map, remoteTileZoom, forceMaxDetail);
+  const combinedKey = `${cityId}:${layer.id}:${sourcePath}:${tiles.map((tile) => `${tile.z}/${tile.x}/${tile.y}`).join("|")}`;
+  const cached = getCachedFeatureCollection(layerCache, combinedKey);
+  if (cached) return cached;
+
+  const collections = await Promise.all(
+    tiles.map(async (tile) => {
+      const tileUrlKey = `${cityId}:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`;
+      const cachedTile = getCachedFeatureCollection(remoteTileCache, tileUrlKey);
+      if (cachedTile) return cachedTile;
+      const geojson = await getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y);
+      setCachedFeatureCollection(remoteTileCache, tileUrlKey, geojson, MAX_REMOTE_TILE_CACHE_ENTRIES);
+      return geojson;
+    })
+  );
+  const merged = mergeFeatureCollections(collections);
+  setCachedFeatureCollection(layerCache, combinedKey, merged, MAX_LAYER_GEOJSON_CACHE_ENTRIES);
+  return merged;
+}
+
+function getCachedFeatureCollection(cache: Map<string, FeatureCollection>, key: string): FeatureCollection | undefined {
+  const value = cache.get(key);
+  if (!value) return undefined;
+  cache.delete(key);
+  cache.set(key, value);
+  return value;
+}
+
+function setCachedFeatureCollection(cache: Map<string, FeatureCollection>, key: string, value: FeatureCollection, maxEntries: number) {
+  if (cache.has(key)) cache.delete(key);
+  cache.set(key, value);
+  while (cache.size > maxEntries) {
+    const oldest = cache.keys().next().value as string | undefined;
+    if (!oldest) break;
+    cache.delete(oldest);
+  }
+}
+
+function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number, forceMaxDetail = false): Array<{ z: number; x: number; y: number }> {
+  const bounds = map.getBounds();
+  const z = clampInteger(remoteTileZoom, 10, REMOTE_MAX_DETAIL_ZOOM);
+  return tilesForBounds(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth(), z);
+}
+
+function remoteTileZoomForMap(map: MapLibreMap, forceMaxDetail: boolean): number {
+  return forceMaxDetail ? REMOTE_MAX_DETAIL_ZOOM : clampInteger(Math.floor(map.getZoom()), 10, REMOTE_MAX_DETAIL_ZOOM);
+}
+
+function reportRemoteTileZoom(map: MapLibreMap, forceMaxDetail: boolean, onRemoteTileZoomChange?: (zoom: number) => void) {
+  if (!onRemoteTileZoomChange) return;
+  onRemoteTileZoomChange(remoteTileZoomForMap(map, forceMaxDetail));
+}
+
+function reportPriorityTile(map: MapLibreMap, datasetId: string, remoteTileZoom: number, onPriorityTileChange?: (tile: TileCoord | null) => void) {
+  if (!onPriorityTileChange) return;
+  const center = map.getCenter();
+  const z = clampInteger(remoteTileZoom, 10, REMOTE_MAX_DETAIL_ZOOM);
+  const tile = lonLatToTile(center.lat, center.lng, z);
+  onPriorityTileChange({ z, x: tile.x, y: tile.y, dataset_id: datasetId });
+}
+
+function tilesForBounds(west: number, south: number, east: number, north: number, z: number): Array<{ z: number; x: number; y: number }> {
+  const northWest = lonLatToTile(north, west, z);
+  const southEast = lonLatToTile(south, east, z);
+  const minX = Math.min(northWest.x, southEast.x);
+  const maxX = Math.max(northWest.x, southEast.x);
+  const minY = Math.min(northWest.y, southEast.y);
+  const maxY = Math.max(northWest.y, southEast.y);
+  const tiles = [];
+  for (let x = minX; x <= maxX; x += 1) {
+    for (let y = minY; y <= maxY; y += 1) {
+      tiles.push({ z, x, y });
+    }
+  }
+  return tiles;
+}
+
+function lonLatToTile(lat: number, lon: number, z: number): { x: number; y: number } {
+  const clampedLat = Math.max(-85.05112878, Math.min(85.05112878, lat));
+  const wrappedLon = ((lon + 180) % 360) - 180;
+  const latRad = (clampedLat * Math.PI) / 180;
+  const n = 2 ** z;
+  return {
+    x: clampInteger(Math.floor(((wrappedLon + 180) / 360) * n), 0, n - 1),
+    y: clampInteger(Math.floor(((1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2) * n), 0, n - 1)
+  };
+}
+
+function groundScaleForZoom(zoom: number, lat: number): number {
+  return 2 ** zoom / latitudeCos(lat);
+}
+
+function zoomForGroundScale(scale: number, lat: number): number {
+  const scaledWorld = scale * latitudeCos(lat);
+  if (!Number.isFinite(scaledWorld) || scaledWorld <= 0) return CITY_CONFIGS[0].initialZoom;
+  return clampNumber(Math.log(scaledWorld) / Math.LN2, 2, 18);
+}
+
+function latitudeCos(lat: number): number {
+  const clampedLat = clampNumber(lat, -85.05112878, 85.05112878);
+  return Math.max(0.001, Math.cos((clampedLat * Math.PI) / 180));
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+function renderableSemanticLayers(topToBottom: SemanticLayer[]): SemanticLayer[] {
+  const renderable: SemanticLayer[] = [];
+  let largestRadiusAbove = -Infinity;
+
+  for (const layer of topToBottom) {
+    const radius = Number(layer.style.point_radius ?? DEFAULT_POINT_RADIUS);
+    const comparableRadius = Number.isFinite(radius) ? radius : DEFAULT_POINT_RADIUS;
+    if (renderable.length === 0 || comparableRadius > largestRadiusAbove) {
+      renderable.push(layer);
+      largestRadiusAbove = Math.max(largestRadiusAbove, comparableRadius);
+    }
+  }
+
+  return renderable;
+}
+
+function loadCityVisibility(): CityVisibility {
+  const fallback = { london: true, shanghai: true };
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CITY_VISIBILITY_KEY) || "") as Partial<CityVisibility>;
+    const london = parsed.london ?? fallback.london;
+    const shanghai = parsed.shanghai ?? fallback.shanghai;
+    return london || shanghai ? { london, shanghai } : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function loadCitySplit(): number {
+  const parsed = Number(window.localStorage.getItem(CITY_SPLIT_KEY));
+  return Number.isFinite(parsed) ? clampNumber(parsed, MIN_CITY_SPLIT, MAX_CITY_SPLIT) : 50;
+}
+
+function sourceIdForCityLayer(cityId: CityId, layerId: string): string {
+  return `${cityId}__${layerId}`;
+}
+
+function panoKey(pano: Pick<MarkedPano | PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "city_id">): string {
+  if (pano.pano_key) return pano.pano_key;
+  const scope = pano.dataset_id || pano.city_id || "default";
+  return `${scope}:${pano.pano_id}`;
+}
+
+function panoBelongsToCity(pano: MarkedPano, city: CityConfig): boolean {
+  if (pano.city_id) return pano.city_id === city.id;
+  if (pano.dataset_id) return pano.dataset_id === city.datasetId;
+  return pano.lon >= city.bounds.west && pano.lon <= city.bounds.east && pano.lat >= city.bounds.south && pano.lat <= city.bounds.north;
+}

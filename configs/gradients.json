@@ -1,0 +1,284 @@
+[
+  {
+    "id": "violet_gold",
+    "name": "Violet gold",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#2d3142"
+      },
+      {
+        "value": 0.45,
+        "color": "#8d99ae"
+      },
+      {
+        "value": 1.0,
+        "color": "#f6c85f"
+      }
+    ],
+    "opacity": 0.7,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": false
+  },
+  {
+    "id": "default_heat",
+    "name": "Default heat",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#b60003"
+      },
+      {
+        "value": 0.4643378778316048,
+        "color": "#ff0600"
+      },
+      {
+        "value": 1.0,
+        "color": "#d7191c"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T20:54:20Z",
+    "is_default": true
+  },
+  {
+    "id": "viridis",
+    "name": "Viridis",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#440154"
+      },
+      {
+        "value": 0.25,
+        "color": "#3b528b"
+      },
+      {
+        "value": 0.5,
+        "color": "#21918c"
+      },
+      {
+        "value": 0.75,
+        "color": "#5ec962"
+      },
+      {
+        "value": 1.0,
+        "color": "#fde725"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "turbo",
+    "name": "Turbo",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#30123b"
+      },
+      {
+        "value": 0.125,
+        "color": "#4663d7"
+      },
+      {
+        "value": 0.25,
+        "color": "#37a9e6"
+      },
+      {
+        "value": 0.375,
+        "color": "#1ae4b6"
+      },
+      {
+        "value": 0.5,
+        "color": "#71fe5f"
+      },
+      {
+        "value": 0.625,
+        "color": "#c8ef34"
+      },
+      {
+        "value": 0.75,
+        "color": "#faba39"
+      },
+      {
+        "value": 0.875,
+        "color": "#ef5a11"
+      },
+      {
+        "value": 1.0,
+        "color": "#a71401"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "magma",
+    "name": "Magma",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#000004"
+      },
+      {
+        "value": 0.2,
+        "color": "#3b0f70"
+      },
+      {
+        "value": 0.4,
+        "color": "#8c2981"
+      },
+      {
+        "value": 0.6,
+        "color": "#de4968"
+      },
+      {
+        "value": 0.8,
+        "color": "#fe9f6d"
+      },
+      {
+        "value": 1.0,
+        "color": "#fcfdbf"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "spectral",
+    "name": "Spectral",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#9e0142"
+      },
+      {
+        "value": 0.125,
+        "color": "#d53e4f"
+      },
+      {
+        "value": 0.25,
+        "color": "#f46d43"
+      },
+      {
+        "value": 0.375,
+        "color": "#fdae61"
+      },
+      {
+        "value": 0.5,
+        "color": "#ffffbf"
+      },
+      {
+        "value": 0.625,
+        "color": "#abdda4"
+      },
+      {
+        "value": 0.75,
+        "color": "#66c2a5"
+      },
+      {
+        "value": 0.875,
+        "color": "#3288bd"
+      },
+      {
+        "value": 1.0,
+        "color": "#5e4fa2"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "red",
+    "name": "Red",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#000000"
+      },
+      {
+        "value": 1.0,
+        "color": "#ff0000"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "green",
+    "name": "Green",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#000000"
+      },
+      {
+        "value": 1.0,
+        "color": "#00ff00"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "blue",
+    "name": "Blue",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#000000"
+      },
+      {
+        "value": 1.0,
+        "color": "#0000ff"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  },
+  {
+    "id": "white",
+    "name": "White",
+    "stops": [
+      {
+        "value": 0.0,
+        "color": "#000000"
+      },
+      {
+        "value": 1.0,
+        "color": "#ffffff"
+      }
+    ],
+    "opacity": 0.75,
+    "score_min": 0.0,
+    "score_max": 1.0,
+    "updated_at": "2026-04-27T00:00:00Z",
+    "is_default": true
+  }
+]
