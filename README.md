@@ -147,4 +147,4 @@ If a credential was ever committed or shared, rotate or revoke it instead of rel
 
 ## License
 
-No license has been selected yet. Add a `LICENSE` file before publishing if you want others to have explicit permission to use, modify, or redistribute the project.
+This project is licensed under the Apache License 2.0. See `LICENSE` for details.
