@@ -12,15 +12,17 @@ The current product direction is:
 
 ```text
 frontend/        Vite + React + TypeScript frontend
+frontend_pcatsne Dedicated binary WebGL PCA/t-SNE scale viewer
 backend/         FastAPI RunPod backend and semantic scoring service
 configs/         Default local layer and gradient configuration
 data/mock/       Small mock GeoJSON data for local/demo behavior
 src/semantic_map Legacy local Gradio prototype code
 start_demo.bat   Windows development demo launcher
 start_full.bat   Windows development full-mode launcher
+start_screensaver.bat Windows development screensaver-mode launcher
 ```
 
-Notebooks, private handoff documents, agent notes, logs, local runtime config, virtual environments, Node dependencies, and the portable packaged frontend are intentionally excluded from version control.
+Notebooks, private handoff documents, agent notes, logs, local runtime config, virtual environments, Node dependencies, generated screensaver panorama payloads, and the portable packaged frontend are intentionally excluded from version control.
 
 ## Frontend
 
@@ -52,6 +54,18 @@ Build check:
 cd frontend
 npm.cmd run build
 ```
+
+Development launchers:
+
+```powershell
+.\start_full.bat
+.\start_demo.bat
+.\start_screensaver.bat
+```
+
+`start_screensaver.bat` starts the full frontend in screensaver runtime mode. The top-right icon button opens the special 8 by 5 street-view screensaver without clearing project data.
+
+The portable Windows package lives in `SemanticMapFrontendApp/` and now has matching `start_full.bat`, `start_demo.bat`, and `start_screensaver.bat` launchers. It can be copied to a USB drive and run on another Windows device without Node.js, Python, npm, or absolute path edits.
 
 ## Backend
 
@@ -121,6 +135,7 @@ Demo alerting can also be configured on the backend with Gmail API or SMTP envir
 - Result styling remains local even when result tiles are remote.
 - GeoJSON z/x/y tiles are the current output format. MVT or PMTiles may be considered later.
 - The backend batches compatible prompt jobs to make GPU scoring more efficient.
+- The dedicated PCA/t-SNE scale viewer is documented in `docs/pcatsne-scale-viewer.md`.
 
 ## Security
 
@@ -139,6 +154,7 @@ client_secret*.json
 *token*.txt
 refreshtoken.txt
 frontend/public/runtime-config.js
+frontend/public/screensaver-panos/
 SemanticMapFrontendApp/config/last-runtime-config.json
 SemanticMapFrontendApp/www/runtime-config.js
 ```

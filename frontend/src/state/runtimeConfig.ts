@@ -1,4 +1,4 @@
-export type RuntimeMode = "demo" | "full";
+export type RuntimeMode = "demo" | "full" | "screensaver";
 
 export type SemanticMapRuntimeConfig = {
   mode: RuntimeMode;
@@ -83,7 +83,7 @@ const defaultDatasetId = asString(rawRuntimeConfig.defaultDatasetId, "london_224
 const configuredRunpodUrl = normalizeRunpodProxyUrl(asString(rawRuntimeConfig.runpodUrl, envRunpodUrl));
 
 export const runtimeConfig: SemanticMapRuntimeConfig = {
-  mode: rawRuntimeConfig.mode === "demo" ? "demo" : "full",
+  mode: rawRuntimeConfig.mode === "demo" ? "demo" : rawRuntimeConfig.mode === "screensaver" ? "screensaver" : "full",
   runpodUrl: configuredRunpodUrl,
   runpodToken: asString(rawRuntimeConfig.runpodToken, envString("VITE_EXHIBIT_RUNPOD_TOKEN")),
   lockRunpodUrl: asBoolean(rawRuntimeConfig.lockRunpodUrl, envBoolean("VITE_EXHIBIT_LOCK_RUNPOD_URL")),

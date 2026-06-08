@@ -1,5 +1,5 @@
 param(
-  [ValidateSet("Demo", "Full")]
+  [ValidateSet("Demo", "Full", "Screensaver")]
   [string]$Mode = "Full",
   [int]$PreferredPort = 5173,
   [int]$WatchdogPort = 51973,
@@ -127,7 +127,7 @@ function Find-WatchdogPort {
 
 function Write-RuntimeConfig {
   param(
-    [ValidateSet("Demo", "Full")]
+    [ValidateSet("Demo", "Full", "Screensaver")]
     [string]$Mode,
     [string]$RunpodUrl = "",
     [int]$TimeoutSeconds = 180,
@@ -135,9 +135,10 @@ function Write-RuntimeConfig {
   )
 
   $isDemo = $Mode -eq "Demo"
+  $isScreensaver = $Mode -eq "Screensaver"
   $idleMs = if ($isDemo) { $TimeoutSeconds * 1000 } else { 180000 }
   $config = [ordered]@{
-    mode = if ($isDemo) { "demo" } else { "full" }
+    mode = if ($isDemo) { "demo" } elseif ($isScreensaver) { "screensaver" } else { "full" }
     runpodUrl = if ($isDemo) { $RunpodUrl } else { "" }
     runpodToken = ""
     lockRunpodUrl = $isDemo
@@ -181,6 +182,11 @@ if ($Mode -eq "Demo") {
   if (-not $NoStart) {
     Start-DemoWatchdog -BackendUrl $settings.RunpodUrl -FrontendPort $PreferredPort -LocalMonitorPort $selectedWatchdogPort
   }
+} elseif ($Mode -eq "Screensaver") {
+  Write-RuntimeConfig -Mode Screensaver
+  Write-Host ""
+  Write-Host "Screensaver mode: full editing behavior with idle reset disabled."
+  Write-Host "The top icon button starts the street-view screensaver."
 } else {
   Write-RuntimeConfig -Mode Full
   Write-Host ""

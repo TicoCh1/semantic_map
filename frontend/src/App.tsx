@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Info, RefreshCw, X } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
   REMOTE_LOG_EVENT,
   createPanoReferenceScoringJob,
@@ -38,10 +38,12 @@ import { LayerPanel } from "./components/LayerPanel";
 import { LogPanel } from "./components/LogPanel";
 import { MapView } from "./components/MapView";
 import { PromptBar } from "./components/PromptBar";
+import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
 import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
 import { exhibitConfig } from "./state/exhibitConfig";
+import { runtimeConfig } from "./state/runtimeConfig";
 import { TUTORIAL_PAGES } from "./state/tutorialContent";
 
 function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "city_id">): string {
@@ -96,6 +98,7 @@ export function App() {
   const [markedPanos, setMarkedPanos] = useState<MarkedPano[]>([]);
   const [selectedPanoKey, setSelectedPanoKey] = useState<string | null>(null);
   const [showExhibitIntro, setShowExhibitIntro] = useState(false);
+  const [showScreensaver, setShowScreensaver] = useState(false);
   const [introVersion, setIntroVersion] = useState(0);
   const [idleResetCountdown, setIdleResetCountdown] = useState<number | null>(null);
   const markedPanosRef = useRef<MarkedPano[]>([]);
@@ -124,7 +127,9 @@ export function App() {
   }, [refresh]);
 
   useEffect(() => {
-    setShowExhibitIntro(true);
+    if (runtimeConfig.mode !== "screensaver") {
+      setShowExhibitIntro(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -662,10 +667,16 @@ export function App() {
   const sidebar = (
     <div className="sidebar-content">
       <div className="sidebar-top-bar">
-        <button className="secondary-button intro-button" onClick={() => setShowExhibitIntro(true)}>
-          <Info size={16} />
-          Project intro
-        </button>
+        {runtimeConfig.mode === "screensaver" ? (
+          <button className="secondary-button intro-button compact-action" onClick={() => setShowScreensaver(true)} title="Start screensaver" aria-label="Start screensaver">
+            <MonitorPlay size={16} />
+          </button>
+        ) : (
+          <button className="secondary-button intro-button" onClick={() => setShowExhibitIntro(true)}>
+            <Info size={16} />
+            Project intro
+          </button>
+        )}
         <label className="theme-toggle">
           <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
           <span>Dark mode</span>
@@ -743,6 +754,7 @@ export function App() {
         <div className="idle-reset-warning">Long inactivity detected. Resetting in {idleResetCountdown} seconds.</div>
       ) : null}
       {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={() => setShowExhibitIntro(false)} /> : null}
+      {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
     </>
   );
 }

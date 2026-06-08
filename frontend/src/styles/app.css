@@ -1361,6 +1361,42 @@ button:disabled {
   background: #ffffff;
 }
 
+.screensaver-overlay {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  overflow: hidden;
+  background: #000000;
+  cursor: none;
+  opacity: 1;
+  transition: opacity 900ms ease;
+}
+
+.screensaver-overlay.is-closing {
+  opacity: 0;
+}
+
+.screensaver-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.screensaver-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  color: rgba(245, 247, 250, 0.86);
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-align: center;
+  background: #000000;
+  pointer-events: none;
+}
+
 .exhibit-modal-backdrop {
   position: fixed;
   z-index: 20;

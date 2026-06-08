@@ -30,6 +30,7 @@ logs/
 *.err.log
 oom.txt
 semantic_backend/
+frontend/public/screensaver-panos/
 
 # Secrets and local runtime configuration
 .env
