@@ -1,6 +1,6 @@
 # Session Handoff Notes
 
-Updated: 2026-05-04
+Updated: 2026-06-17
 
 This file is a short memory aid for future sessions. It intentionally avoids repeating the main development spec in `semantic-map-frontend-dev.md`.
 
@@ -12,6 +12,9 @@ This file is a short memory aid for future sessions. It intentionally avoids rep
 - Local backend URL for optional experiments: `http://127.0.0.1:8000/`.
 - On this Windows machine, `node` works directly, but PowerShell blocks `npm.ps1`; use `npm.cmd install`, `npm.cmd run build`, and `npm.cmd run dev`.
 - The frontend is now local-first: layer state, gradient presets, layer metadata, and mock score GeoJSON are handled in the browser. The Vite dev server no longer proxies `/api`.
+- GitHub Pages static output is generated with `cd frontend; npm.cmd run build:pages` and served from `docs/index.html`.
+- Static GitHub Pages deployments can select a RunPod backend with `?backend=https://POD-8000.proxy.runpod.net`; bare RunPod proxy hosts are normalized to HTTPS.
+- If no backend is configured, prompt creation falls back to deterministic local mock layers. If a configured backend fails during prompt submission, all-layer refresh, or tile fetch, the affected layer falls back to deterministic local mock GeoJSON. Street-view image loading does not call `/api/...` on the static host; it fails with a clear "configured backend or packaged static pano dataset required" message until a curated static pano/data package is added.
 - Backend/scoring code should not be run on the local Windows machine. Make backend changes by reading code and static inspection; run the real service only on RunPod.
 - A hidden local Vite server was started during the 2026-04-30 work session for UI verification and later stopped at the user's request. In future Codex sessions, if the frontend needs to be started, use a visible `.bat`/`cmd.exe` window with a clear title so the running command is visible, for example:
 
@@ -47,6 +50,21 @@ Start-Process -FilePath "cmd.exe" -ArgumentList "/k title UrbanFabric Frontend D
   - Cache hits relink the layer to the current manifest/tile template; misses queue normal backend scoring.
   - The UI button lives beside `Layers / Display Order` in `frontend/src/components/LayerPanel.tsx`, not beside the prompt input.
   - `frontend/src/components/PromptBar.tsx` is back to prompt input plus create button only.
+
+## 2026-06-17 GitHub Pages Mobile Update
+
+- Mobile compact breakpoint is `max-width: 700px`.
+- On compact mobile startup, the app follows `prefers-color-scheme` for dark mode and default basemap until the user manually changes them. Manual markers are `semantic-map-theme-source=manual` and `semantic-map-basemap-source=manual`.
+- The tutorial no longer auto-opens on compact mobile. Closing it on compact mobile scrolls back to the top.
+- The first mobile viewport remains map-first, but `.split-main` uses a clamped height so the sidebar controls are visible below the map.
+- The mobile map prompt/search input is a Google-Maps-style floating bubble at the top of the map. Other top-of-map controls are independent floating bubbles, not a full-width banner.
+- Compact mobile does not render London and Shanghai side by side. It renders one city at a time and switches with a floating London/Shanghai segmented bubble.
+- Compact mobile initializes each city close to a 500 m scale-bar view. MapLibre navigation/attribution controls are hidden, and the scale remains as a dark pill.
+- On startup, when a backend URL is configured, `App.tsx` automatically attempts the same all-layer RunPod refresh as the manual layer refresh button. Failure is treated as fallback, not as a blocking UI error.
+- `frontend/src/state/mobileDiagnostics.ts` starts from `main.tsx`, records mobile/browser/map failure signals, stores them under `semantic-map-mobile-diagnostics-v1`, exposes `window.__SEMANTIC_MAP_DIAGNOSTICS__`, and shows an in-page panel on `?diag=1` or `?debugDiagnostics=1`.
+- `frontend/src/components/MapView.tsx` attaches diagnostics for MapLibre errors, move/zoom/idle snapshots, WebGL context loss/restoration, canvas size, and pixel ratio.
+- `frontend/src/components/DemoErrorBoundary.tsx` now also records React crashes into mobile diagnostics.
+- `frontend/src/state/localProject.ts` keeps no-backend prompt fallback as deterministic mock data and blocks backend-less pano image fetches with a clear static fallback message.
 
 ## Tablet Exhibit Mode
 

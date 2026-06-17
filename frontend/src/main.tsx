@@ -5,7 +5,9 @@ import "./styles/app.css";
 import { App } from "./App";
 import { DemoErrorBoundary } from "./components/DemoErrorBoundary";
 import { startDemoFrontendMonitor } from "./state/demoMonitor";
+import { startMobileDiagnostics } from "./state/mobileDiagnostics";
 
+startMobileDiagnostics();
 startDemoFrontendMonitor();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

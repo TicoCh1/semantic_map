@@ -8,6 +8,7 @@ export {
   deleteLayer,
   ensureExhibitDefaultRemoteLayers,
   getAppState,
+  getLayerFallbackGeojson,
   getLayerGeojson,
   getLayerSourcePath,
   loadPanoImage,

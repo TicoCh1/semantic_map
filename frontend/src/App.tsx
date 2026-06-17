@@ -84,12 +84,39 @@ function isIdleResetActivity(event: Event): boolean {
   return Number.isFinite(totalDelta) && totalDelta > 0;
 }
 
+const THEME_SOURCE_KEY = "semantic-map-theme-source";
+const BASEMAP_SOURCE_KEY = "semantic-map-basemap-source";
+
+function isCompactViewport(): boolean {
+  return window.matchMedia("(max-width: 700px)").matches;
+}
+
+function prefersDarkColorScheme(): boolean {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function loadInitialDarkMode(): boolean {
+  if (window.localStorage.getItem(THEME_SOURCE_KEY) === "manual") {
+    return window.localStorage.getItem("semantic-map-theme") === "dark";
+  }
+  if (isCompactViewport()) return prefersDarkColorScheme();
+  return window.localStorage.getItem("semantic-map-theme") === "dark";
+}
+
+function loadInitialBasemapId(): BasemapId {
+  if (window.localStorage.getItem(BASEMAP_SOURCE_KEY) === "manual") {
+    return normalizeBasemapId(window.localStorage.getItem("semantic-map-basemap"));
+  }
+  if (isCompactViewport()) return prefersDarkColorScheme() ? "openfreemap_dark" : "osm";
+  return normalizeBasemapId(window.localStorage.getItem("semantic-map-basemap"));
+}
+
 export function App() {
   const [data, setData] = useState<AppStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("semantic-map-theme") === "dark");
-  const [basemapId, setBasemapId] = useState<BasemapId>(() => normalizeBasemapId(window.localStorage.getItem("semantic-map-basemap")));
+  const [darkMode, setDarkMode] = useState(loadInitialDarkMode);
+  const [basemapId, setBasemapId] = useState<BasemapId>(loadInitialBasemapId);
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
   const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
   const [remoteLogs, setRemoteLogs] = useState<RemoteLogEntry[]>([]);
@@ -107,6 +134,8 @@ export function App() {
   const mapProgressDismissTimersRef = useRef<Map<string, number>>(new Map());
   const exhibitInitialResetRef = useRef(false);
   const exhibitDefaultRequestRef = useRef(false);
+  const startupRefreshAttemptedRef = useRef(false);
+  const priorityTilesRef = useRef<CityPriorityTiles>({});
   const lastAutoReferenceRef = useRef<string | null>(null);
   const idleResetDebugRef = useRef<IdleResetDebugState>({});
 
@@ -127,9 +156,25 @@ export function App() {
   }, [refresh]);
 
   useEffect(() => {
-    if (runtimeConfig.mode !== "screensaver") {
+    if (runtimeConfig.mode !== "screensaver" && !isCompactViewport()) {
       setShowExhibitIntro(true);
     }
+  }, []);
+
+  useEffect(() => {
+    if (!isCompactViewport()) return;
+    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncWithSystem = () => {
+      const prefersDark = colorScheme.matches;
+      if (window.localStorage.getItem(THEME_SOURCE_KEY) !== "manual") {
+        setDarkMode(prefersDark);
+      }
+      if (window.localStorage.getItem(BASEMAP_SOURCE_KEY) !== "manual") {
+        setBasemapId(prefersDark ? "openfreemap_dark" : "osm");
+      }
+    };
+    colorScheme.addEventListener("change", syncWithSystem);
+    return () => colorScheme.removeEventListener("change", syncWithSystem);
   }, []);
 
   useEffect(() => {
@@ -138,6 +183,36 @@ export function App() {
       return resumeRemoteScoringJobs();
     });
   }, []);
+
+  useEffect(() => {
+    priorityTilesRef.current = priorityTiles;
+  }, [priorityTiles]);
+
+  useEffect(() => {
+    if (startupRefreshAttemptedRef.current || !data || !backendConfig) return;
+    startupRefreshAttemptedRef.current = true;
+    if (!backendConfig.enabled || !backendConfig.baseUrl) return;
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setRefreshingLayers(true);
+      void refreshAllScoringLayers(priorityTilesRef.current)
+        .then(() => {
+          if (!cancelled) void refresh();
+        })
+        .catch(() => {
+          if (!cancelled) setError(null);
+        })
+        .finally(() => {
+          if (!cancelled) setRefreshingLayers(false);
+        });
+    }, 900);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [backendConfig, data, refresh]);
 
   useEffect(() => {
     const onLocalStateUpdated = () => void refresh();
@@ -165,6 +240,23 @@ export function App() {
   useEffect(() => {
     window.localStorage.setItem("semantic-map-basemap", basemapId);
   }, [basemapId]);
+
+  const handleDarkModeChange = useCallback((enabled: boolean) => {
+    window.localStorage.setItem(THEME_SOURCE_KEY, "manual");
+    setDarkMode(enabled);
+  }, []);
+
+  const handleBasemapChange = useCallback((nextBasemapId: BasemapId) => {
+    window.localStorage.setItem(BASEMAP_SOURCE_KEY, "manual");
+    setBasemapId(nextBasemapId);
+  }, []);
+
+  const handleCloseExhibitIntro = useCallback(() => {
+    setShowExhibitIntro(false);
+    if (isCompactViewport()) {
+      window.requestAnimationFrame(() => window.scrollTo({ top: 0, left: 0, behavior: "auto" }));
+    }
+  }, []);
 
   useEffect(() => {
     markedPanosRef.current = markedPanos;
@@ -678,7 +770,7 @@ export function App() {
           </button>
         )}
         <label className="theme-toggle">
-          <input type="checkbox" checked={darkMode} onChange={(event) => setDarkMode(event.target.checked)} />
+          <input type="checkbox" checked={darkMode} onChange={(event) => handleDarkModeChange(event.target.checked)} />
           <span>Dark mode</span>
         </label>
       </div>
@@ -736,7 +828,7 @@ export function App() {
             gradients={data.gradients}
             selectedLayerId={data.state.selected_layer_id}
             basemapId={basemapId}
-            onBasemapChange={setBasemapId}
+            onBasemapChange={handleBasemapChange}
             onSelectLayer={handleMapSelectLayer}
             onPriorityTileChange={handlePriorityTileChange}
             markedPanos={markedPanos}
@@ -746,6 +838,8 @@ export function App() {
             onRemovePano={handleRemovePano}
             scoreField={scoreField}
             progressEntries={mapProgressEntries}
+            onCreatePrompt={handleCreate}
+            promptDisabled={loading}
           />
         }
         right={sidebar}
@@ -753,7 +847,7 @@ export function App() {
       {idleResetCountdown !== null ? (
         <div className="idle-reset-warning">Long inactivity detected. Resetting in {idleResetCountdown} seconds.</div>
       ) : null}
-      {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={() => setShowExhibitIntro(false)} /> : null}
+      {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={handleCloseExhibitIntro} /> : null}
       {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
     </>
   );

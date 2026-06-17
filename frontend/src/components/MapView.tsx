@@ -1,11 +1,13 @@
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
+import { Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
-import { getLayerGeojson, getLayerSourcePath, getRemoteTileGeojson, isRemoteTileTemplate, mergeFeatureCollections } from "../api/client";
+import { getLayerFallbackGeojson, getLayerGeojson, getLayerSourcePath, getRemoteTileGeojson, isRemoteTileTemplate, mergeFeatureCollections } from "../api/client";
 import { StreetViewPanel } from "./StreetViewPanel";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
+import { attachMapDiagnostics, recordMobileDiagnostic } from "../state/mobileDiagnostics";
 
 type MapViewProps = {
   layers: SemanticLayer[];
@@ -22,6 +24,8 @@ type MapViewProps = {
   onRemovePano: (panoKey: string) => void;
   scoreField: "score" | "zscore";
   progressEntries: RemoteLogEntry[];
+  onCreatePrompt?: (prompt: string) => Promise<void>;
+  promptDisabled?: boolean;
 };
 
 type CityConfig = {
@@ -44,9 +48,16 @@ const REMOTE_MAX_DETAIL_ZOOM = 13;
 const MAX_LAYER_GEOJSON_CACHE_ENTRIES = 80;
 const MAX_REMOTE_TILE_CACHE_ENTRIES = 192;
 const CITY_VISIBILITY_KEY = "semantic-map-visible-cities-v1";
+const MOBILE_CITY_KEY = "semantic-map-mobile-city-v1";
 const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
 const MIN_CITY_SPLIT = 28;
 const MAX_CITY_SPLIT = 72;
+const MOBILE_SCALE_BAR_METERS = 500;
+const SCALE_CONTROL_MAX_WIDTH = 120;
+
+function isCompactMapViewport(): boolean {
+  return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
+}
 
 const CITY_CONFIGS: CityConfig[] = [
   {
@@ -91,24 +102,47 @@ export const MapView = memo(function MapView({
   onSelectPano,
   onRemovePano,
   scoreField,
-  progressEntries
+  progressEntries,
+  onCreatePrompt,
+  promptDisabled = false
 }: MapViewProps) {
   const [cityVisibility, setCityVisibility] = useState<CityVisibility>(loadCityVisibility);
+  const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
   const [citySplit, setCitySplit] = useState(loadCitySplit);
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
+  const [compactViewport, setCompactViewport] = useState(isCompactMapViewport);
   const [forceMaxDetail, setForceMaxDetail] = useState(() => window.localStorage.getItem("semantic-map-force-max-detail") === "true");
   const [sharedGroundScale, setSharedGroundScale] = useState(() =>
     groundScaleForZoom(CITY_CONFIGS[0].initialZoom, CITY_CONFIGS[0].center[1])
   );
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
-  const activeCities = CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
+  const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
+  const reduceMobileMapResolution = compactViewport && activeCities.length === 2;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
   const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
 
   useEffect(() => {
+    const media = window.matchMedia("(max-width: 700px)");
+    const update = () => setCompactViewport(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
+
+  useEffect(() => {
     window.localStorage.setItem(CITY_VISIBILITY_KEY, JSON.stringify(cityVisibility));
   }, [cityVisibility]);
+
+  useEffect(() => {
+    window.localStorage.setItem(MOBILE_CITY_KEY, mobileCityId);
+  }, [mobileCityId]);
+
+  useEffect(() => {
+    if (!compactViewport || !onPriorityTileChange) return;
+    for (const city of CITY_CONFIGS) {
+      if (city.id !== mobileCityId) onPriorityTileChange(city.id, null);
+    }
+  }, [compactViewport, mobileCityId, onPriorityTileChange]);
 
   useEffect(() => {
     window.localStorage.setItem(CITY_SPLIT_KEY, String(citySplit));
@@ -130,6 +164,7 @@ export const MapView = memo(function MapView({
 
   const startCitySplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
+    if (compactViewport) return;
     setDraggingCitySplit(true);
     const shell = event.currentTarget.closest(".city-map-layout") as HTMLElement | null;
     if (!shell) return;
@@ -147,7 +182,7 @@ export const MapView = memo(function MapView({
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
-  }, []);
+  }, [compactViewport]);
 
   const handleCityRemoteTileZoomChange = useCallback((cityId: CityId, zoom: number) => {
     setCityRemoteTileZooms((current) => {
@@ -158,10 +193,23 @@ export const MapView = memo(function MapView({
 
   return (
     <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}`} data-tour-target="map">
+      <MobileMapSearch disabled={promptDisabled} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
           <span>Semantic Map</span>
           <strong>{title}</strong>
+        </div>
+        <div className="mobile-city-switch" aria-label="City">
+          {CITY_CONFIGS.map((city) => (
+            <button
+              key={city.id}
+              type="button"
+              className={city.id === mobileCityId ? "is-active" : ""}
+              onClick={() => setMobileCityId(city.id)}
+            >
+              {city.name}
+            </button>
+          ))}
         </div>
         <div className="city-toggle-group">
           <span>Cities</span>
@@ -215,6 +263,8 @@ export const MapView = memo(function MapView({
             sharedRemoteTileZoom={sharedRemoteTileZoom}
             onRemoteTileZoomChange={(zoom) => handleCityRemoteTileZoomChange(city.id, zoom)}
             splitIndex={index}
+            compactControls={compactViewport}
+            reduceMobileMapResolution={reduceMobileMapResolution}
           />
         ))}
         {activeCities.length === 2 ? (
@@ -252,7 +302,53 @@ type CityMapPaneProps = {
   sharedRemoteTileZoom: number;
   onRemoteTileZoomChange: (zoom: number) => void;
   splitIndex: number;
+  compactControls: boolean;
+  reduceMobileMapResolution: boolean;
 };
+
+function MobileMapSearch({
+  disabled,
+  onCreatePrompt
+}: {
+  disabled: boolean;
+  onCreatePrompt?: (prompt: string) => Promise<void>;
+}) {
+  const [prompt, setPrompt] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit() {
+    const trimmed = prompt.trim();
+    if (!trimmed || disabled || submitting || !onCreatePrompt) return;
+    setSubmitting(true);
+    try {
+      await onCreatePrompt(trimmed);
+      setPrompt("");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <form
+      className="mobile-map-search"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
+      <Search size={17} />
+      <input
+        value={prompt}
+        placeholder="Search semantic prompt"
+        aria-label="Search semantic prompt"
+        onChange={(event) => setPrompt(event.target.value)}
+      />
+      <button type="submit" disabled={disabled || submitting || !prompt.trim() || !onCreatePrompt} title="Create layer" aria-label="Create layer">
+        <SendHorizontal size={17} />
+      </button>
+    </form>
+  );
+}
 
 function CityMapPane({
   city,
@@ -271,7 +367,9 @@ function CityMapPane({
   onSharedGroundScaleChange,
   sharedRemoteTileZoom,
   onRemoteTileZoomChange,
-  splitIndex
+  splitIndex,
+  compactControls,
+  reduceMobileMapResolution
 }: CityMapPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -339,17 +437,38 @@ function CityMapPane({
     styleGenerationRef.current = generation;
     basemapRef.current = initialBasemap.id;
 
-    const map = new maplibregl.Map({
+    const mapOptions = {
       container: containerRef.current,
       style: basemapStyle(initialBasemap),
       center: city.center,
-      zoom: zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
+      zoom: compactControls ? zoomForScaleBarMeters(MOBILE_SCALE_BAR_METERS, city.center[1]) : zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
       minZoom: 2,
       maxZoom: 18
-    });
+    };
+    if (reduceMobileMapResolution) {
+      Object.assign(mapOptions, {
+        pixelRatio: 1,
+        maxTileCacheSize: 32,
+        maxTileCacheZoomLevels: 1,
+        fadeDuration: 0
+      });
+    }
 
-    map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    const map = new maplibregl.Map(mapOptions);
+
+    if (!compactControls) {
+      map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
+    }
     map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
+    if (reduceMobileMapResolution && typeof (map as unknown as { setPixelRatio?: (ratio: number) => void }).setPixelRatio === "function") {
+      (map as unknown as { setPixelRatio: (ratio: number) => void }).setPixelRatio(1);
+      recordMobileDiagnostic("map_pixel_ratio_set", { city_id: city.id, pixel_ratio: 1 });
+    }
+    const detachDiagnostics = attachMapDiagnostics(map, {
+      cityId: city.id,
+      container: containerRef.current,
+      reducedPixelRatio: reduceMobileMapResolution
+    });
     map.on("load", () => {
       reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
@@ -366,10 +485,11 @@ function CityMapPane({
         window.clearTimeout(semanticRedrawTimerRef.current);
         semanticRedrawTimerRef.current = undefined;
       }
+      detachDiagnostics();
       map.remove();
       mapRef.current = null;
     };
-  }, [city.center, city.name]);
+  }, [city.center, city.datasetId, city.id, city.name, compactControls, reduceMobileMapResolution]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -854,16 +974,21 @@ async function loadLayerGeojsonForMap(
   const cached = getCachedFeatureCollection(layerCache, combinedKey);
   if (cached) return cached;
 
-  const collections = await Promise.all(
-    tiles.map(async (tile) => {
-      const tileUrlKey = `${cityId}:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`;
-      const cachedTile = getCachedFeatureCollection(remoteTileCache, tileUrlKey);
-      if (cachedTile) return cachedTile;
-      const geojson = await getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y);
-      setCachedFeatureCollection(remoteTileCache, tileUrlKey, geojson, MAX_REMOTE_TILE_CACHE_ENTRIES);
-      return geojson;
-    })
-  );
+  let collections: FeatureCollection[];
+  try {
+    collections = await Promise.all(
+      tiles.map(async (tile) => {
+        const tileUrlKey = `${cityId}:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`;
+        const cachedTile = getCachedFeatureCollection(remoteTileCache, tileUrlKey);
+        if (cachedTile) return cachedTile;
+        const geojson = await getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y);
+        setCachedFeatureCollection(remoteTileCache, tileUrlKey, geojson, MAX_REMOTE_TILE_CACHE_ENTRIES);
+        return geojson;
+      })
+    );
+  } catch {
+    return getLayerFallbackGeojson(layer.id, cityId);
+  }
   const merged = mergeFeatureCollections(collections);
   setCachedFeatureCollection(layerCache, combinedKey, merged, MAX_LAYER_GEOJSON_CACHE_ENTRIES);
   return merged;
@@ -947,6 +1072,13 @@ function zoomForGroundScale(scale: number, lat: number): number {
   return clampNumber(Math.log(scaledWorld) / Math.LN2, 2, 18);
 }
 
+function zoomForScaleBarMeters(targetMeters: number, lat: number): number {
+  const targetMaxDistance = targetMeters * 1.1;
+  const metersPerPixel = targetMaxDistance / SCALE_CONTROL_MAX_WIDTH;
+  const worldMetersAtLat = 156543.03392 * latitudeCos(lat);
+  return clampNumber(Math.log2(worldMetersAtLat / metersPerPixel), 2, 18);
+}
+
 function latitudeCos(lat: number): number {
   const clampedLat = clampNumber(lat, -85.05112878, 85.05112878);
   return Math.max(0.001, Math.cos((clampedLat * Math.PI) / 180));
@@ -988,8 +1120,15 @@ function loadCityVisibility(): CityVisibility {
   }
 }
 
+function loadMobileCityId(): CityId {
+  const stored = window.localStorage.getItem(MOBILE_CITY_KEY);
+  return CITY_CONFIGS.some((city) => city.id === stored) ? (stored as CityId) : "london";
+}
+
 function loadCitySplit(): number {
-  const parsed = Number(window.localStorage.getItem(CITY_SPLIT_KEY));
+  const raw = window.localStorage.getItem(CITY_SPLIT_KEY);
+  if (raw === null) return 50;
+  const parsed = Number(raw);
   return Number.isFinite(parsed) ? clampNumber(parsed, MIN_CITY_SPLIT, MAX_CITY_SPLIT) : 50;
 }
 

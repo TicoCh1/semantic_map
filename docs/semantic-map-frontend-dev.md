@@ -1,6 +1,6 @@
 # Semantic Map Frontend Development Notes
 
-Updated: 2026-05-04
+Updated: 2026-06-17
 
 This document tracks the frontend and local-app architecture. The backend details live in `docs/backend-development-runpod.md`; short restart context lives in `docs/session-handoff-notes.md`.
 
@@ -38,6 +38,43 @@ npm.cmd run build
 ```
 
 PowerShell may block `npm.ps1`, so prefer `npm.cmd`.
+
+## GitHub Pages, Mobile, And Static Fallback
+
+The GitHub Pages build is a static frontend generated into `docs/`:
+
+```powershell
+cd frontend
+npm.cmd run build:pages
+```
+
+Deployment assumptions:
+
+- GitHub Pages can serve the project from `/docs/index.html` with `.nojekyll` and generated assets under `docs/assets/`.
+- `runtime-config.js` is loaded as a normal static script and can provide defaults, but the URL query string can override the backend at runtime.
+- `?backend=https://POD-8000.proxy.runpod.net` selects the RunPod backend for that browser session. Bare RunPod proxy hosts are normalized to HTTPS by the frontend.
+- When no backend is configured or RunPod is disabled, prompt creation uses deterministic local mock GeoJSON. This is a presentation fallback, not real scoring.
+- Without backend, arbitrary street-view pano image loading is disabled and returns a clear "configured backend or packaged static pano dataset required" message. This avoids broken relative `/api/...` requests on GitHub Pages.
+- The static data strategy is intentionally not to copy the full dataset into Git yet. If real static data is needed later, package only curated GeoJSON/tiles/panos or host larger tiles on CDN/object storage such as R2/S3/Supabase Storage/Mapbox tilesets, then point the static frontend at those URLs.
+
+Mobile behavior uses a `max-width: 700px` breakpoint:
+
+- The first screen remains map-first, but `.split-main` uses a clamped height so the sidebar/control area is visible below the map on phones.
+- The tutorial modal does not auto-open on compact mobile startup. If opened manually, closing it scrolls the page back to top.
+- Mobile startup follows `prefers-color-scheme` for theme and default basemap until the user manually changes either setting. Manual changes are marked in local storage with `semantic-map-theme-source=manual` and `semantic-map-basemap-source=manual`.
+- The map toolbar is condensed into independent floating bubbles rather than a fixed banner. The prompt/search input is a Google-Maps-style floating search bubble at the top of the map.
+- Compact mobile does not render London and Shanghai side by side. It renders one city at a time and exposes a floating London/Shanghai switch bubble.
+- Compact mobile initializes each city map close to a 500 m scale-bar view so phones do not start at a heavy, wide-area dual-city extent.
+- MapLibre navigation and attribution controls are hidden on compact mobile; the scale control remains visible as a dark pill.
+- On startup, the frontend automatically attempts the same all-layer RunPod refresh as the manual layer refresh button when a backend URL is configured. If the backend is unavailable, the app keeps running with local fallback layers instead of blocking the UI.
+
+Mobile diagnostics:
+
+- `frontend/src/state/mobileDiagnostics.ts` starts from `main.tsx`.
+- It records JS errors, unhandled rejections, resource failures, WebGL context lost/restored, MapLibre errors, pinch starts, map move/zoom/idle snapshots, canvas sizes, DPR, viewport, color scheme, heap samples when available, main-thread stalls, pagehide/beforeunload, and previous unclean exits.
+- Diagnostics are stored in `localStorage` under `semantic-map-mobile-diagnostics-v1`.
+- Open the static or dev app with `?diag=1` or `?debugDiagnostics=1` to show the in-page diagnostics panel.
+- The console API is exposed as `window.__SEMANTIC_MAP_DIAGNOSTICS__` with `export()`, `clear()`, and `record()`.
 
 ## Local Storage
 
@@ -270,6 +307,8 @@ Current behavior:
 - The frontend reports the current center tile to App so remote jobs can request priority tile output.
 - The reported priority tile is sampled at prompt-submit time; map movement after submission does not rewrite the running job's requested priority tile.
 - `Max detail` forces remote tile reads to the highest backend-available zoom. The backend currently outputs z10-z13, so this uses z13, not true z14.
+- On compact mobile, MapView renders a single city at a time and switches between London and Shanghai through a floating segmented bubble. The desktop dual-city comparison remains available outside the compact breakpoint.
+- Compact mobile map initialization targets an approximately 500 m scale-bar view using the city's latitude to choose the starting zoom.
 - MapView should avoid rebuilding semantic sources/layers for unrelated side-panel UI changes. Dark-mode toggles, runtime log changes, and sidebar resizing should not clear and re-add semantic point layers; actual map container size changes can still require a MapLibre canvas repaint.
 - Semantic point clicks can mark pano locations. Marked locations are displayed as map markers independent of the semantic layers, and clicking a marker selects the associated pano.
 - Before submitting semantic layers to MapLibre, MapView removes visually hidden duplicate overlays under a shared-coordinate assumption: scanning from top to bottom, it renders the topmost visible layer and then only lower layers whose point size is larger than all layers above them. If point sizes are equal, only the top layer is rendered because lower layers are completely covered.
@@ -291,6 +330,8 @@ Current implementation:
 - `frontend/src/components/StreetViewPanel.tsx` uses `@photo-sphere-viewer/core` for drag/zoom pano viewing.
 - `frontend/src/App.tsx` stores marked pano state, selected pano key, in-flight request keys, and object URLs.
 - `frontend/src/state/localProject.ts` requests pano metadata and image bytes from the RunPod backend with the configured bearer token.
+- If no backend is configured, pano image loading fails locally with a static fallback message instead of requesting `/api/...` from the static host. A future packaged static pano dataset can extend this path without requiring GitHub Pages to run a backend.
+- When backend prompt submission, all-layer refresh, or remote semantic tile fetch fails, the frontend falls back to deterministic local mock GeoJSON for the affected layer so the portfolio/static page remains usable.
 - Every newly marked pano starts a backend request immediately; only the selected ready pano is mounted in the viewer.
 - Removing a marked pano revokes its object URL and removes its map marker.
 - Marked pano state is keyed by `dataset_id:pano_id`, not by layer id. When multiple visible score layers share the same dataset pano, clicking the same pano selects/updates the existing marker instead of creating duplicates; London and Shanghai pano ids do not collide.
@@ -362,6 +403,7 @@ Removed:
 - `frontend/src/state/tutorialContent.ts`
 - `frontend/src/state/localProject.ts`
 - `frontend/src/state/demoMonitor.ts`
+- `frontend/src/state/mobileDiagnostics.ts`
 - `frontend/src/state/color.ts`
 - `frontend/src/state/mapStyle.ts`
 - `frontend/src/state/basemaps.ts`

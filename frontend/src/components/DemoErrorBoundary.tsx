@@ -1,5 +1,6 @@
 import { Component, type ErrorInfo, type ReactNode } from "react";
 import { reportDemoMonitorEvent } from "../state/demoMonitor";
+import { recordMobileDiagnostic } from "../state/mobileDiagnostics";
 
 type Props = {
   children: ReactNode;
@@ -24,6 +25,12 @@ export class DemoErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
+    recordMobileDiagnostic("react_error_boundary", {
+      message: error.message || "React render failed.",
+      name: error.name,
+      stack: error.stack?.slice(0, 4000),
+      component_stack: info.componentStack?.slice(0, 4000)
+    });
     reportDemoMonitorEvent({
       severity: "critical",
       code: "frontend_react_error_boundary",

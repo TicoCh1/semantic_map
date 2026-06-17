@@ -647,6 +647,40 @@ function createReferenceLayerRecord(reference: PanoReference, existingIds: Set<s
   };
 }
 
+function localMockSourcePathForLayer(layer: Pick<SemanticLayer, "id" | "prompt" | "query_type" | "reference_pano">): string {
+  const hashInput =
+    layer.query_type === "pano_reference" && layer.reference_pano
+      ? `${layer.reference_pano.dataset_id}:${layer.reference_pano.pano_id}`
+      : layer.prompt;
+  return `local://mock/${layer.id}-${hashString(hashInput)}.geojson`;
+}
+
+function restoreLayerLocalFallbackSync(layer: SemanticLayer): SemanticLayer | null {
+  const sourcePath = localMockSourcePathForLayer(layer);
+  return updateLayerSync(layer.id, {
+    status: "ready",
+    source_path: sourcePath,
+    source_paths: {
+      london: sourcePath,
+      shanghai: sourcePath
+    }
+  });
+}
+
+function localFallbackJob(layer: SemanticLayer, message: string): ScoringJob {
+  const now = utcNow();
+  return {
+    job_id: `local_fallback_${hashString(`${layer.id}-${now}`)}`,
+    prompt: layer.prompt,
+    status: "ready",
+    progress: 1,
+    layer_id: layer.id,
+    message,
+    created_at: now,
+    updated_at: now
+  };
+}
+
 function normalizePanoReference(reference: PanoReference): PanoReference {
   const panoId = String(reference.pano_id || "").trim();
   const datasetId = String(reference.dataset_id || "").trim();
@@ -1022,7 +1056,13 @@ export async function createScoringJob(prompt: string, priorityTiles?: CityPrior
   }
 
   const layer = await createLayer({ prompt });
-  return submitRemoteScoringForLayer(config, layer, priorityTiles);
+  try {
+    return await submitRemoteScoringForLayer(config, layer, priorityTiles);
+  } catch {
+    const fallbackLayer = restoreLayerLocalFallbackSync(layer) ?? layer;
+    emitRemoteInfoLog(layer.id, prompt, "RunPod submission failed. Using local fallback layer.", "info");
+    return localFallbackJob(fallbackLayer, "Local fallback scoring completed after RunPod submission failed.");
+  }
 }
 
 export async function createPanoReferenceScoringJob(reference: PanoReference, priorityTiles?: CityPriorityTiles | null): Promise<ScoringJob> {
@@ -1033,7 +1073,13 @@ export async function createPanoReferenceScoringJob(reference: PanoReference, pr
   }
 
   const layer = await createReferenceLayer(normalizedReference);
-  return submitRemoteScoringForLayer(config, layer, priorityTiles);
+  try {
+    return await submitRemoteScoringForLayer(config, layer, priorityTiles);
+  } catch {
+    const fallbackLayer = restoreLayerLocalFallbackSync(layer) ?? layer;
+    emitRemoteInfoLog(layer.id, layer.prompt, "RunPod reference submission failed. Using local fallback layer.", "info");
+    return localFallbackJob(fallbackLayer, "Local fallback reference scoring completed after RunPod submission failed.");
+  }
 }
 
 export async function refreshAllScoringLayers(priorityTiles?: CityPriorityTiles | null): Promise<{ submitted: number; skipped: number; failed: number }> {
@@ -1057,6 +1103,7 @@ export async function refreshAllScoringLayers(priorityTiles?: CityPriorityTiles 
         await submitRemoteScoringForLayer(config, layer, priorityTiles);
         return "submitted" as const;
       } catch {
+        restoreLayerLocalFallbackSync(layer);
         return "failed" as const;
       }
     })
@@ -1370,6 +1417,16 @@ function sourcePathsFromManifests(config: RemoteBackendConfig, manifests: Remote
 
 export async function loadPanoImage(panoId: string, datasetId?: string | null): Promise<PanoImageResponse & { object_url?: string }> {
   const config = loadRemoteBackendConfigSync();
+  if (!config.enabled || !config.baseUrl) {
+    const message = "Street-view image loading requires a configured backend or a packaged static pano dataset.";
+    reportRemoteRequestFailure("static_pano_unavailable", message, {
+      pano_id: panoId,
+      dataset_id: datasetId ?? null,
+      backend_enabled: config.enabled,
+      backend_base_url: config.baseUrl || null
+    });
+    throw new Error(message);
+  }
   const metadataPath = datasetId
     ? `/api/datasets/${encodeURIComponent(datasetId)}/panos/${encodeURIComponent(panoId)}`
     : `/api/panos/${encodeURIComponent(panoId)}`;
@@ -1738,6 +1795,13 @@ export async function getLayerGeojson(layerId: string, cityId: MockCityId = "lon
   if (!sourcePath || isLegacyPendingSource(sourcePath) || parsePendingJobSource(sourcePath) || layer.status !== "ready") {
     return emptyFeatureCollection();
   }
+  return makeMockGeojson(layer.prompt, layer.id, MOCK_POINT_COUNT, cityId);
+}
+
+export async function getLayerFallbackGeojson(layerId: string, cityId: MockCityId = "london"): Promise<FeatureCollection> {
+  const state = loadStateSync();
+  const layer = state.layers.find((item) => item.id === layerId);
+  if (!layer) throw new Error("Layer not found");
   return makeMockGeojson(layer.prompt, layer.id, MOCK_POINT_COUNT, cityId);
 }
 
