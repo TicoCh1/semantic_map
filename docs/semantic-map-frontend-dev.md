@@ -77,7 +77,7 @@ Mobile behavior uses a `max-width: 700px` breakpoint:
 - The mobile search placeholder rotates between `Search semantic prompt with statements`, `The scene contains brick facade`, and `The scene contains abundant vegetation`.
 - MapLibre navigation and attribution controls are hidden on compact mobile; the scale control remains visible as a dark pill.
 - On startup, the frontend automatically attempts the same all-layer RunPod refresh as the manual layer refresh button when a backend URL is configured. If the backend is unavailable, the app keeps running with local fallback layers instead of blocking the UI.
-- During startup refresh or manual all-layer refresh, the map shows a centered `Updating semantic layers...` overlay so users can tell the current layers are being refreshed even before individual RunPod progress entries appear.
+- The centered `Updating semantic layers...` overlay is tied to actual MapLibre semantic-layer drawing, not to RunPod job lifetime. It appears while no semantic layer has attached for the active city view and hides as soon as the active map pane finishes attaching its semantic layers; long-running RunPod jobs continue in the progress cards without blocking the map.
 - The first compact-mobile viewport only exposes the sidebar top bar (`Project intro`, pull-up hint arrow, and `Dark mode`) below the map. The layer list starts below the first viewport.
 
 Mobile diagnostics:

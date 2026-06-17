@@ -125,7 +125,6 @@ export const MapView = memo(function MapView({
   onRemovePano,
   scoreField,
   progressEntries,
-  refreshingLayers = false,
   onCreatePrompt,
   promptDisabled = false,
   liveSearchAvailable = true
@@ -141,9 +140,11 @@ export const MapView = memo(function MapView({
     groundScaleForZoom(zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, CITY_CONFIGS[0].center[1]), CITY_CONFIGS[0].center[1])
   );
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
+  const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
   const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
   const reduceMobileMapResolution = compactViewport;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
+  const semanticLayerOverlayActive = activeCities.length > 0 && activeCities.every((city) => semanticLayerLoadingByCity[city.id] ?? true);
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
   const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
 
@@ -216,6 +217,10 @@ export const MapView = memo(function MapView({
     });
   }, []);
 
+  const handleSemanticLayerLoadingChange = useCallback((cityId: CityId, loading: boolean) => {
+    setSemanticLayerLoadingByCity((current) => (current[cityId] === loading ? current : { ...current, [cityId]: loading }));
+  }, []);
+
   const handleForceMaxDetailChange = useCallback((enabled: boolean, reason: "user" | "scale_limit" = "user") => {
     setForceMaxDetail(enabled);
     if (!enabled && reason === "scale_limit") {
@@ -225,7 +230,7 @@ export const MapView = memo(function MapView({
   }, []);
 
   return (
-    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${refreshingLayers ? " is-refreshing-layers" : ""}`} data-tour-target="map">
+    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}`} data-tour-target="map">
       <MobileMapSearch disabled={promptDisabled || !liveSearchAvailable} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
@@ -299,6 +304,7 @@ export const MapView = memo(function MapView({
             onSharedGroundScaleChange={setSharedGroundScale}
             sharedRemoteTileZoom={sharedRemoteTileZoom}
             onRemoteTileZoomChange={(zoom) => handleCityRemoteTileZoomChange(city.id, zoom)}
+            onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
             splitIndex={index}
             compactControls={compactViewport}
             reduceMobileMapResolution={reduceMobileMapResolution}
@@ -310,7 +316,7 @@ export const MapView = memo(function MapView({
       </div>
 
       <MapProgressOverlay entries={progressEntries} />
-      <MapRefreshOverlay active={refreshingLayers} />
+      <MapRefreshOverlay active={semanticLayerOverlayActive} />
       <StreetViewPanel
         panos={markedPanos}
         selectedPanoKey={selectedPanoKey}
@@ -340,6 +346,7 @@ type CityMapPaneProps = {
   onSharedGroundScaleChange: (scale: number) => void;
   sharedRemoteTileZoom: number;
   onRemoteTileZoomChange: (zoom: number) => void;
+  onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
   splitIndex: number;
   compactControls: boolean;
   reduceMobileMapResolution: boolean;
@@ -424,6 +431,7 @@ function CityMapPane({
   onSharedGroundScaleChange,
   sharedRemoteTileZoom,
   onRemoteTileZoomChange,
+  onSemanticLayerLoadingChange,
   splitIndex,
   compactControls,
   reduceMobileMapResolution
@@ -611,6 +619,8 @@ function CityMapPane({
     selectPanoRef.current = onSelectPano;
   }, [onSelectPano]);
 
+  useEffect(() => () => onSemanticLayerLoadingChange(city.id, false), [city.id, onSemanticLayerLoadingChange]);
+
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -738,6 +748,7 @@ function CityMapPane({
     let cancelled = false;
     let retryTimer: number | undefined;
     let maxDetailWarningTimer: number | undefined;
+    onSemanticLayerLoadingChange(city.id, true);
 
     async function draw(attempt = 0) {
       if (cancelled || generation !== styleGenerationRef.current) return;
@@ -859,6 +870,7 @@ function CityMapPane({
           }
           setShowMaxDetailWarning(false);
           setStatus(`${layersToDraw.length} rendered / ${visibleTopToBottom.length} visible / ${layers.length} total`);
+          onSemanticLayerLoadingChange(city.id, false);
         }
       } catch (error) {
         if (cancelled || generation !== styleGenerationRef.current) return;
@@ -875,6 +887,7 @@ function CityMapPane({
         }
         setShowMaxDetailWarning(false);
         setStatus(error instanceof Error ? error.message : "Layer draw failed");
+        onSemanticLayerLoadingChange(city.id, false);
       }
     }
 
@@ -885,7 +898,7 @@ function CityMapPane({
       if (maxDetailWarningTimer !== undefined) window.clearTimeout(maxDetailWarningTimer);
       setShowMaxDetailWarning(false);
     };
-  }, [city.id, redrawRequest, layers, gradients]);
+  }, [city.id, redrawRequest, layers, gradients, onSemanticLayerLoadingChange]);
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex}>

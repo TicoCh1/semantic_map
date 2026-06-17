@@ -286,6 +286,8 @@ const EXHIBIT_PROMPTS: Set<string> = new Set(EXHIBIT_LAYER_SPECS.map((spec) => s
 const REMOTE_READY_ATTEMPTS = 180;
 const REMOTE_READY_INTERVAL_MS = 2000;
 const REMOTE_READY_TIMEOUT_MS = 5000;
+const REMOTE_REQUEST_TIMEOUT_MS = 12000;
+const REMOTE_SUBMIT_TIMEOUT_MS = 12000;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -406,6 +408,24 @@ function reportRemoteRequestFailure(code: string, message: string, details: Reco
 function resolveRemoteUrl(config: RemoteBackendConfig, pathOrUrl: string): string {
   if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
   return `${normalizeBackendBaseUrl(config.baseUrl)}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
+}
+
+async function fetchRemoteWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = REMOTE_REQUEST_TIMEOUT_MS): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init.signal ?? controller.signal
+    });
+  } catch (error) {
+    if (controller.signal.aborted) {
+      throw new Error(`RunPod request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 function pendingJobSource(jobId: string): string {
@@ -1436,11 +1456,11 @@ async function submitRemoteScoringJob(config: RemoteBackendConfig, prompt: strin
           zooms: DEFAULT_REMOTE_ZOOMS,
           priority_tile: priorityTileList[0] ?? undefined
         };
-  const response = await fetch(resolveRemoteUrl(config, "/api/scoring/jobs"), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs"), {
     method: "POST",
     headers: remoteJsonHeaders(config),
     body: JSON.stringify(body)
-  });
+  }, REMOTE_SUBMIT_TIMEOUT_MS);
   if (!response.ok) {
     reportRemoteRequestFailure("remote_scoring_submit_failed", `RunPod scoring request failed (${response.status})`, {
       status: response.status,
@@ -1484,11 +1504,11 @@ async function submitRemoteReferenceScoringJob(
           zooms: DEFAULT_REMOTE_ZOOMS,
           priority_tile: priorityTileList[0] ?? undefined
         };
-  const response = await fetch(resolveRemoteUrl(config, "/api/scoring/jobs"), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs"), {
     method: "POST",
     headers: remoteJsonHeaders(config),
     body: JSON.stringify(body)
-  });
+  }, REMOTE_SUBMIT_TIMEOUT_MS);
   if (!response.ok) {
     reportRemoteRequestFailure("remote_reference_scoring_submit_failed", `RunPod reference scoring request failed (${response.status})`, {
       status: response.status,
