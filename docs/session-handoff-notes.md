@@ -72,7 +72,8 @@ Start-Process -FilePath "cmd.exe" -ArgumentList "/k title UrbanFabric Frontend D
 - `frontend/src/state/mobileDiagnostics.ts` starts from `main.tsx`, records mobile/browser/map failure signals, stores them under `semantic-map-mobile-diagnostics-v1`, exposes `window.__SEMANTIC_MAP_DIAGNOSTICS__`, and shows an in-page panel on `?diag=1` or `?debugDiagnostics=1`.
 - `frontend/src/components/MapView.tsx` attaches diagnostics for MapLibre errors, move/zoom/idle snapshots, WebGL context loss/restoration, canvas size, and pixel ratio.
 - `frontend/src/components/DemoErrorBoundary.tsx` now also records React crashes into mobile diagnostics.
-- `frontend/src/state/localProject.ts` keeps no-backend prompt fallback as deterministic mock data and blocks backend-less pano image fetches with a clear static fallback message.
+- `frontend/src/state/localProject.ts` uses the older `TicoCh1/semanticmapdemo` GitHub Pages data as the no-backend fallback for default exhibit layers. It rewrites tile templates directly to `https://ticoch1.github.io/semanticmapdemo/static-data/tiles/<data_key>/<city>/{z}/{x}/{y}.geojson` instead of trusting old manifests, which still contain historical RunPod proxy URLs.
+- No-backend live search is disabled in both desktop and mobile prompt boxes; user-created real prompts require `?backend=<RunPod URL>`. Arbitrary street-view pano lookup also requires a backend, except for the packaged static reference pano images in the old fallback dataset.
 
 ## Tablet Exhibit Mode
 

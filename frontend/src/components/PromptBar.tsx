@@ -5,6 +5,7 @@ import { PANO_REFERENCE_DRAG_TYPE, type PanoReference, type RemoteBackendConfig 
 
 type PromptBarProps = {
   disabled?: boolean;
+  liveSearchAvailable?: boolean;
   backendConfig: RemoteBackendConfig | null;
   remoteConfigLocked?: boolean;
   onConfigChange: (config: RemoteBackendConfig) => void;
@@ -12,14 +13,14 @@ type PromptBarProps = {
   onCreateReference?: (reference: PanoReference) => Promise<void>;
 };
 
-export function PromptBar({ disabled, backendConfig, remoteConfigLocked = false, onConfigChange, onCreate, onCreateReference }: PromptBarProps) {
+export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig, remoteConfigLocked = false, onConfigChange, onCreate, onCreateReference }: PromptBarProps) {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [referenceDragOver, setReferenceDragOver] = useState(false);
 
   async function submit() {
     const trimmed = prompt.trim();
-    if (!trimmed || submitting) return;
+    if (!trimmed || !liveSearchAvailable || submitting) return;
     setSubmitting(true);
     try {
       await onCreate(trimmed);
@@ -40,7 +41,7 @@ export function PromptBar({ disabled, backendConfig, remoteConfigLocked = false,
   }
 
   function handleReferenceDragOver(event: DragEvent) {
-    if (!canAcceptReferenceDrag(event) || disabled || submitting) return;
+    if (!canAcceptReferenceDrag(event) || disabled || !liveSearchAvailable || submitting) return;
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setReferenceDragOver(true);
@@ -53,7 +54,7 @@ export function PromptBar({ disabled, backendConfig, remoteConfigLocked = false,
   }
 
   async function handleReferenceDrop(event: DragEvent) {
-    if (!onCreateReference || disabled || submitting) return;
+    if (!onCreateReference || disabled || !liveSearchAvailable || submitting) return;
     event.preventDefault();
     setReferenceDragOver(false);
     const reference = parsePanoReferenceDrop(event.dataTransfer);
@@ -93,13 +94,19 @@ export function PromptBar({ disabled, backendConfig, remoteConfigLocked = false,
         <textarea
           id="prompt-input"
           value={prompt}
-          placeholder="The scene contains an animal"
+          placeholder={liveSearchAvailable ? "The scene contains an animal" : "Static fallback demo. Add ?backend=<RunPod URL> to enable live semantic search."}
+          disabled={disabled || !liveSearchAvailable}
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submit();
           }}
         />
-        <button className="primary-icon-button" disabled={disabled || submitting || !prompt.trim()} onClick={() => void submit()} title="Create layer">
+        <button
+          className="primary-icon-button"
+          disabled={disabled || !liveSearchAvailable || submitting || !prompt.trim()}
+          onClick={() => void submit()}
+          title={liveSearchAvailable ? "Create layer" : "Live search requires a RunPod backend"}
+        >
           <SendHorizontal size={18} />
         </button>
       </div>

@@ -67,6 +67,20 @@ const SHANGHAI_BOUNDS = {
   south: 31.05,
   north: 31.38
 };
+const STATIC_FALLBACK_PANO_IMAGES = [
+  {
+    datasetId: "london_224_8_45",
+    cityId: "london" as const,
+    panoId: "126048",
+    file: "london-126048.jpg"
+  },
+  {
+    datasetId: "shanghai_224_8_45_2B",
+    cityId: "shanghai" as const,
+    panoId: "103110",
+    file: "shanghai-103110.jpg"
+  }
+] as const;
 type MockCityId = "london" | "shanghai";
 
 const DEFAULT_GRADIENTS: GradientPreset[] = [
@@ -245,6 +259,7 @@ const EXHIBIT_LAYER_SPECS = [
   {
     prompt: "the scene contains brick facade",
     name: "the scene contains brick facade",
+    staticDataKey: "text-the-scene-contains-brick-facade",
     gradientId: "magma",
     scoreMin: EXHIBIT_SCORE_MIN,
     scoreMax: EXHIBIT_SCORE_MAX
@@ -252,6 +267,7 @@ const EXHIBIT_LAYER_SPECS = [
   {
     prompt: "the scene contains abundant vegetation",
     name: "the scene contains abundant vegetation",
+    staticDataKey: "text-the-scene-contains-abundant-vegetation",
     gradientId: "vegetation",
     scoreMin: -2.5,
     scoreMax: 1.5
@@ -259,6 +275,7 @@ const EXHIBIT_LAYER_SPECS = [
   {
     prompt: "the scene shows people interacting",
     name: "the scene shows people interacting",
+    staticDataKey: "text-the-scene-contains-social-interaction",
     gradientId: "turbo",
     scoreMin: EXHIBIT_SCORE_MIN,
     scoreMax: EXHIBIT_SCORE_MAX
@@ -406,6 +423,50 @@ function isLegacyPendingSource(sourcePath: string): boolean {
 
 function layerSourcePathCandidates(layer: SemanticLayer): string[] {
   return Array.from(new Set([layer.source_path, ...Object.values(layer.source_paths ?? {})].filter(Boolean)));
+}
+
+function staticFallbackDataBaseUrl(): string {
+  return runtimeConfig.staticFallbackDataBaseUrl.replace(/\/+$/, "");
+}
+
+function staticFallbackTileTemplate(dataKey: string, cityId: CityId): string {
+  return `${staticFallbackDataBaseUrl()}/tiles/${encodeURIComponent(dataKey)}/${cityId}/{z}/{x}/{y}.geojson`;
+}
+
+function staticFallbackSources(dataKey: string): Pick<SemanticLayer, "source_path" | "source_paths" | "score_property" | "status"> {
+  const sourcePaths = Object.fromEntries(
+    (Object.keys(MAP_CITY_DATASETS) as CityId[]).map((cityId) => [cityId, staticFallbackTileTemplate(dataKey, cityId)])
+  ) as Partial<Record<CityId, string>>;
+  return {
+    source_path: sourcePaths.london ?? Object.values(sourcePaths)[0] ?? "",
+    source_paths: sourcePaths,
+    score_property: "zscore",
+    status: "ready"
+  };
+}
+
+function exhibitSpecForLayer(layer: Pick<SemanticLayer, "prompt" | "name">) {
+  return EXHIBIT_LAYER_SPECS.find((spec) => spec.prompt === layer.prompt || spec.name === layer.name) ?? null;
+}
+
+function exhibitSpecForPrompt(prompt: string) {
+  return EXHIBIT_LAYER_SPECS.find((spec) => spec.prompt === prompt) ?? null;
+}
+
+export function isStaticFallbackTileTemplate(sourcePath: string): boolean {
+  if (!isRemoteTileTemplate(sourcePath)) return false;
+  const base = `${staticFallbackDataBaseUrl()}/tiles/`;
+  return sourcePath.startsWith(base);
+}
+
+function staticFallbackPanoImageUrl(panoId: string, datasetId?: string | null): string | null {
+  const normalizedPanoId = String(panoId || "").trim();
+  const normalizedDatasetId = String(datasetId || "").trim();
+  const match = STATIC_FALLBACK_PANO_IMAGES.find((item) => {
+    if (item.panoId !== normalizedPanoId) return false;
+    return !normalizedDatasetId || item.datasetId === normalizedDatasetId || item.cityId === normalizedDatasetId;
+  });
+  return match ? `${staticFallbackDataBaseUrl()}/panos/${match.file}` : null;
 }
 
 export function getLayerSourcePath(layer: SemanticLayer, cityId: CityId): string {
@@ -582,7 +643,9 @@ function createLayerRecord(payload: LayerCreate, existingIds: Set<string>, gradi
     absolute_radius: false
   };
 
-  const sourcePath = `local://mock/${id}-${hashString(prompt)}.geojson`;
+  const staticSpec = exhibitSpecForPrompt(prompt);
+  const fallbackSources = staticSpec ? staticFallbackSources(staticSpec.staticDataKey) : null;
+  const sourcePath = fallbackSources?.source_path ?? `local://mock/${id}-${hashString(prompt)}.geojson`;
   return {
     id,
     name: name || id,
@@ -592,13 +655,13 @@ function createLayerRecord(payload: LayerCreate, existingIds: Set<string>, gradi
     order: 0,
     source_type: "geojson",
     source_path: sourcePath,
-    source_paths: {
+    source_paths: fallbackSources?.source_paths ?? {
       london: sourcePath,
       shanghai: sourcePath
     },
-    score_property: "zscore",
+    score_property: fallbackSources?.score_property ?? "zscore",
     style,
-    status: "ready",
+    status: fallbackSources?.status ?? "ready",
     created_at: utcNow()
   };
 }
@@ -656,6 +719,10 @@ function localMockSourcePathForLayer(layer: Pick<SemanticLayer, "id" | "prompt" 
 }
 
 function restoreLayerLocalFallbackSync(layer: SemanticLayer): SemanticLayer | null {
+  const staticSpec = exhibitSpecForLayer(layer);
+  if (staticSpec) {
+    return updateLayerSync(layer.id, staticFallbackSources(staticSpec.staticDataKey));
+  }
   const sourcePath = localMockSourcePathForLayer(layer);
   return updateLayerSync(layer.id, {
     status: "ready",
@@ -760,14 +827,96 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
   };
 }
 
+function createDefaultExhibitLayers(gradients: GradientPreset[]): SemanticLayer[] {
+  const usedIds = new Set<string>();
+  return EXHIBIT_LAYER_SPECS.map((spec, index) => {
+    const gradient = gradientById(gradients, spec.gradientId);
+    const id = layerIdForPrompt(spec.prompt, usedIds);
+    usedIds.add(id);
+    const style = {
+      ...layerStyleFromGradient(
+        {
+          ...gradient,
+          score_min: spec.scoreMin,
+          score_max: spec.scoreMax
+        },
+        {
+          gradient_id: gradient.id,
+          opacity: gradient.opacity,
+          score_min: spec.scoreMin,
+          score_max: spec.scoreMax,
+          point_radius: EXHIBIT_POINT_RADIUS,
+          absolute_radius: false
+        }
+      ),
+      score_min: spec.scoreMin,
+      score_max: spec.scoreMax,
+      point_radius: EXHIBIT_POINT_RADIUS,
+      absolute_radius: false
+    };
+    const fallbackSources = staticFallbackSources(spec.staticDataKey);
+    return {
+      id,
+      name: spec.name,
+      prompt: spec.prompt,
+      query_type: "text" as const,
+      visible: true,
+      order: index,
+      source_type: "geojson" as const,
+      source_path: fallbackSources.source_path,
+      source_paths: fallbackSources.source_paths,
+      score_property: fallbackSources.score_property,
+      style,
+      status: fallbackSources.status,
+      created_at: utcNow()
+    };
+  });
+}
+
+function createDefaultExhibitState(gradients: GradientPreset[]): LayerState {
+  const layers = createDefaultExhibitLayers(gradients);
+  return {
+    layers,
+    selected_layer_id: layers[0]?.id ?? null,
+    updated_at: utcNow()
+  };
+}
+
+function isLegacyInitialAnimalState(state: LayerState): boolean {
+  return (
+    state.layers.length === 1 &&
+    state.layers[0]?.name === "Animal score" &&
+    state.layers[0]?.source_path.startsWith("local://mock/")
+  );
+}
+
+function applyStaticFallbackToExhibitLayers(state: LayerState): LayerState {
+  let changed = false;
+  const config = loadRemoteBackendConfigSync();
+  const canUseRemoteBackend = Boolean(config.enabled && config.baseUrl.trim());
+  const layers = state.layers.map((layer) => {
+    const spec = exhibitSpecForLayer(layer);
+    if (!spec) return layer;
+    const candidates = layerSourcePathCandidates(layer);
+    if (canUseRemoteBackend && candidates.some((sourcePath) => isRemoteTileTemplate(sourcePath) && !isStaticFallbackTileTemplate(sourcePath))) {
+      return layer;
+    }
+    if (candidates.some((sourcePath) => isStaticFallbackTileTemplate(sourcePath))) {
+      return layer;
+    }
+    changed = true;
+    return {
+      ...layer,
+      ...staticFallbackSources(spec.staticDataKey),
+      query_type: layer.query_type ?? "text"
+    };
+  });
+  return changed ? { ...state, layers, updated_at: utcNow() } : state;
+}
+
 function normalizeState(raw: Partial<LayerState> | null, gradients: GradientPreset[]): LayerState {
   if (!raw) {
-    const layer = createLayerRecord({ prompt: "The scene contains an animal", name: "Animal score" }, new Set(), gradients);
-    return {
-      layers: [layer],
-      selected_layer_id: layer.id,
-      updated_at: utcNow()
-    };
+    return createDefaultExhibitState(gradients);
   }
 
   const layers = (raw.layers ?? [])
@@ -776,11 +925,12 @@ function normalizeState(raw: Partial<LayerState> | null, gradients: GradientPres
   const ids = new Set(layers.map((layer) => layer.id));
   const selected = raw.selected_layer_id && ids.has(raw.selected_layer_id) ? raw.selected_layer_id : layers[0]?.id ?? null;
 
-  return {
+  const state = {
     layers,
     selected_layer_id: selected,
     updated_at: raw.updated_at ?? utcNow()
   };
+  return isLegacyInitialAnimalState(state) ? createDefaultExhibitState(gradients) : applyStaticFallbackToExhibitLayers(state);
 }
 
 function loadStateSync(gradients = loadGradientsSync()): LayerState {
@@ -846,8 +996,9 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       absolute_radius: false
     };
 
-    const sourcePath = reusableRemote ? previousLayer.source_path : `local://mock/${id}-${hashString(spec.prompt)}.geojson`;
-    const sourcePaths = reusableRemote ? previousLayer.source_paths : { london: sourcePath, shanghai: sourcePath };
+    const fallbackSources = staticFallbackSources(spec.staticDataKey);
+    const sourcePath = reusableRemote ? previousLayer.source_path : fallbackSources.source_path;
+    const sourcePaths = reusableRemote ? previousLayer.source_paths : fallbackSources.source_paths;
     return {
       id,
       name: spec.name,
@@ -857,9 +1008,9 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       source_type: "geojson" as const,
       source_path: sourcePath,
       source_paths: sourcePaths,
-      score_property: "zscore",
+      score_property: reusableRemote ? previousLayer.score_property : fallbackSources.score_property,
       style,
-      status: reusableRemote ? previousLayer.status : "ready" as const,
+      status: reusableRemote ? previousLayer.status : fallbackSources.status,
       created_at: previousLayer?.created_at || utcNow()
     };
   });
@@ -878,8 +1029,11 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
 
 function shouldReuseExhibitRemoteSource(layer: SemanticLayer): boolean {
   if (layer.status === "failed") return false;
+  const config = loadRemoteBackendConfigSync();
+  const canUseRemoteBackend = Boolean(config.enabled && config.baseUrl.trim());
   return layerSourcePathCandidates(layer).some((sourcePath) =>
-    isRemoteTileTemplate(sourcePath) || Boolean(parsePendingJobSource(sourcePath)) || isLegacyPendingSource(sourcePath)
+    isStaticFallbackTileTemplate(sourcePath) ||
+    (canUseRemoteBackend && (isRemoteTileTemplate(sourcePath) || Boolean(parsePendingJobSource(sourcePath)) || isLegacyPendingSource(sourcePath)))
   );
 }
 
@@ -1418,7 +1572,19 @@ function sourcePathsFromManifests(config: RemoteBackendConfig, manifests: Remote
 export async function loadPanoImage(panoId: string, datasetId?: string | null): Promise<PanoImageResponse & { object_url?: string }> {
   const config = loadRemoteBackendConfigSync();
   if (!config.enabled || !config.baseUrl) {
-    const message = "Street-view image loading requires a configured backend or a packaged static pano dataset.";
+    const staticImageUrl = staticFallbackPanoImageUrl(panoId, datasetId);
+    if (staticImageUrl) {
+      return {
+        pano_id: panoId,
+        status: "ready",
+        image_url: staticImageUrl,
+        object_url: staticImageUrl,
+        member_name: null,
+        tar_id: null,
+        message: "Loaded from packaged static fallback pano dataset."
+      };
+    }
+    const message = "Static fallback includes semantic map tiles only for this pano. Add ?backend=<RunPod URL> for arbitrary street-view lookup.";
     reportRemoteRequestFailure("static_pano_unavailable", message, {
       pano_id: panoId,
       dataset_id: datasetId ?? null,
@@ -1720,11 +1886,12 @@ export async function getRemoteTileGeojson(sourcePath: string, z: number, x: num
 
 export async function getDefaultRemoteLayerGeojson(sourcePath: string, cityId: MockCityId = "london"): Promise<FeatureCollection> {
   const city = mockCityConfig(cityId);
-  const center = lonLatToTile(city.center[1], city.center[0], 10);
+  const tileZoom = isStaticFallbackTileTemplate(sourcePath) ? 13 : 10;
+  const center = lonLatToTile(city.center[1], city.center[0], tileZoom);
   const collections = await Promise.all([
-    getRemoteTileGeojson(sourcePath, 10, center.x - 1, center.y),
-    getRemoteTileGeojson(sourcePath, 10, center.x, center.y),
-    getRemoteTileGeojson(sourcePath, 10, center.x + 1, center.y)
+    getRemoteTileGeojson(sourcePath, tileZoom, center.x - 1, center.y),
+    getRemoteTileGeojson(sourcePath, tileZoom, center.x, center.y),
+    getRemoteTileGeojson(sourcePath, tileZoom, center.x + 1, center.y)
   ]);
   return mergeFeatureCollections(collections);
 }

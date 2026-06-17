@@ -53,9 +53,13 @@ Deployment assumptions:
 - GitHub Pages can serve the project from `/docs/index.html` with `.nojekyll` and generated assets under `docs/assets/`.
 - `runtime-config.js` is loaded as a normal static script and can provide defaults, but the URL query string can override the backend at runtime.
 - `?backend=https://POD-8000.proxy.runpod.net` selects the RunPod backend for that browser session. Bare RunPod proxy hosts are normalized to HTTPS by the frontend.
-- When no backend is configured or RunPod is disabled, prompt creation uses deterministic local mock GeoJSON. This is a presentation fallback, not real scoring.
-- Without backend, arbitrary street-view pano image loading is disabled and returns a clear "configured backend or packaged static pano dataset required" message. This avoids broken relative `/api/...` requests on GitHub Pages.
-- The static data strategy is intentionally not to copy the full dataset into Git yet. If real static data is needed later, package only curated GeoJSON/tiles/panos or host larger tiles on CDN/object storage such as R2/S3/Supabase Storage/Mapbox tilesets, then point the static frontend at those URLs.
+- When no backend is configured, the default exhibit layers use real static fallback tiles hosted by the older `TicoCh1/semanticmapdemo` GitHub Pages deployment instead of copying the dataset into this repository.
+- The default static fallback tile base is `https://ticoch1.github.io/semanticmapdemo/static-data`. Runtime config can override it with `staticFallbackDataBaseUrl` or `VITE_STATIC_FALLBACK_DATA_BASE_URL`.
+- Static fallback tile templates are rewritten directly as `.../static-data/tiles/<data_key>/<city>/{z}/{x}/{y}.geojson`; do not trust the old static manifests' `tile_url_template`, because those manifests still contain historical RunPod proxy URLs.
+- The current default fallback maps three exhibit layers to the old static data keys: brick facade, abundant vegetation, and social interaction. User-created prompts still require a RunPod backend for real scoring.
+- Without backend, live search inputs are disabled and explain that static fallback mode is active. Adding `?backend=<RunPod URL>` restores live prompt submission.
+- Without backend, arbitrary street-view pano image loading is disabled. Only packaged static reference pano images available in the old fallback dataset are loaded; other pano clicks keep map score popups but report that arbitrary pano lookup needs a backend.
+- The static data strategy intentionally avoids copying the full dataset into this repo. If the old demo data should be retired later, either sync a curated `docs/static-data/` copy or move tiles to CDN/object storage such as R2/S3/Supabase Storage/Mapbox tilesets, then point the frontend at that URL.
 
 Mobile behavior uses a `max-width: 700px` breakpoint:
 

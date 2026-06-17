@@ -16,6 +16,7 @@ export {
   getRemoteTileGeojson,
   hasExhibitDefaultLayers,
   isRemoteTileTemplate,
+  isStaticFallbackTileTemplate,
   mergeFeatureCollections,
   patchLayer,
   reorderLayers,

@@ -2,7 +2,15 @@ import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "ma
 import { Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
-import { getLayerFallbackGeojson, getLayerGeojson, getLayerSourcePath, getRemoteTileGeojson, isRemoteTileTemplate, mergeFeatureCollections } from "../api/client";
+import {
+  getLayerFallbackGeojson,
+  getLayerGeojson,
+  getLayerSourcePath,
+  getRemoteTileGeojson,
+  isRemoteTileTemplate,
+  isStaticFallbackTileTemplate,
+  mergeFeatureCollections
+} from "../api/client";
 import { StreetViewPanel } from "./StreetViewPanel";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
@@ -27,6 +35,7 @@ type MapViewProps = {
   refreshingLayers?: boolean;
   onCreatePrompt?: (prompt: string) => Promise<void>;
   promptDisabled?: boolean;
+  liveSearchAvailable?: boolean;
 };
 
 type CityConfig = {
@@ -62,6 +71,11 @@ const MOBILE_SEARCH_PLACEHOLDERS = [
   "The scene contains brick facade",
   "The scene contains abundant vegetation"
 ];
+const STATIC_SEARCH_PLACEHOLDER = "Static fallback demo. Add backend URL for live search.";
+const STATIC_FALLBACK_TILE_RANGES: Record<CityId, { z: number; minX: number; maxX: number; minY: number; maxY: number }> = {
+  london: { z: 13, minX: 4091, maxX: 4095, minY: 2721, maxY: 2725 },
+  shanghai: { z: 13, minX: 6858, maxX: 6861, minY: 3345, maxY: 3348 }
+};
 
 function isCompactMapViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
@@ -113,7 +127,8 @@ export const MapView = memo(function MapView({
   progressEntries,
   refreshingLayers = false,
   onCreatePrompt,
-  promptDisabled = false
+  promptDisabled = false,
+  liveSearchAvailable = true
 }: MapViewProps) {
   const [cityVisibility, setCityVisibility] = useState<CityVisibility>(loadCityVisibility);
   const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
@@ -211,7 +226,7 @@ export const MapView = memo(function MapView({
 
   return (
     <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${refreshingLayers ? " is-refreshing-layers" : ""}`} data-tour-target="map">
-      <MobileMapSearch disabled={promptDisabled} onCreatePrompt={onCreatePrompt} />
+      <MobileMapSearch disabled={promptDisabled || !liveSearchAvailable} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
           <span>Semantic Map</span>
@@ -332,9 +347,11 @@ type CityMapPaneProps = {
 
 function MobileMapSearch({
   disabled,
+  liveSearchAvailable,
   onCreatePrompt
 }: {
   disabled: boolean;
+  liveSearchAvailable: boolean;
   onCreatePrompt?: (prompt: string) => Promise<void>;
 }) {
   const [prompt, setPrompt] = useState("");
@@ -342,15 +359,16 @@ function MobileMapSearch({
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
 
   useEffect(() => {
+    if (!liveSearchAvailable) return;
     const timer = window.setInterval(() => {
       setPlaceholderIndex((index) => (index + 1) % MOBILE_SEARCH_PLACEHOLDERS.length);
     }, 2600);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [liveSearchAvailable]);
 
   async function submit() {
     const trimmed = prompt.trim();
-    if (!trimmed || disabled || submitting || !onCreatePrompt) return;
+    if (!trimmed || disabled || !liveSearchAvailable || submitting || !onCreatePrompt) return;
     setSubmitting(true);
     try {
       await onCreatePrompt(trimmed);
@@ -371,11 +389,17 @@ function MobileMapSearch({
       <Search size={17} />
       <input
         value={prompt}
-        placeholder={MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex]}
+        placeholder={liveSearchAvailable ? MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex] : STATIC_SEARCH_PLACEHOLDER}
         aria-label="Search semantic prompt"
+        disabled={disabled || !liveSearchAvailable}
         onChange={(event) => setPrompt(event.target.value)}
       />
-      <button type="submit" disabled={disabled || submitting || !prompt.trim() || !onCreatePrompt} title="Create layer" aria-label="Create layer">
+      <button
+        type="submit"
+        disabled={disabled || !liveSearchAvailable || submitting || !prompt.trim() || !onCreatePrompt}
+        title={liveSearchAvailable ? "Create layer" : "Live search requires a RunPod backend"}
+        aria-label="Create layer"
+      >
         <SendHorizontal size={17} />
       </button>
     </form>
@@ -1027,10 +1051,13 @@ async function loadLayerGeojsonForMap(
     return geojson;
   }
 
-  const tiles = visibleRemoteTiles(map, remoteTileZoom, forceMaxDetail);
+  const usesStaticFallback = isStaticFallbackTileTemplate(sourcePath);
+  const tileZoom = usesStaticFallback ? REMOTE_MAX_DETAIL_ZOOM : remoteTileZoom;
+  const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom, forceMaxDetail || usesStaticFallback), usesStaticFallback);
   const combinedKey = `${cityId}:${layer.id}:${sourcePath}:${tiles.map((tile) => `${tile.z}/${tile.x}/${tile.y}`).join("|")}`;
   const cached = getCachedFeatureCollection(layerCache, combinedKey);
   if (cached) return cached;
+  if (!tiles.length) return emptyFeatureCollection();
 
   let collections: FeatureCollection[];
   try {
@@ -1074,6 +1101,19 @@ function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number, forceMaxDe
   const bounds = map.getBounds();
   const z = clampInteger(remoteTileZoom, 10, REMOTE_MAX_DETAIL_ZOOM);
   return tilesForBounds(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth(), z);
+}
+
+function filterStaticFallbackTiles(cityId: CityId, tiles: Array<{ z: number; x: number; y: number }>, active: boolean): Array<{ z: number; x: number; y: number }> {
+  if (!active) return tiles;
+  const range = STATIC_FALLBACK_TILE_RANGES[cityId];
+  return tiles.filter((tile) => tile.z === range.z && tile.x >= range.minX && tile.x <= range.maxX && tile.y >= range.minY && tile.y <= range.maxY);
+}
+
+function emptyFeatureCollection(): FeatureCollection {
+  return {
+    type: "FeatureCollection",
+    features: []
+  } as FeatureCollection;
 }
 
 function remoteTileZoomForMap(map: MapLibreMap, forceMaxDetail: boolean): number {

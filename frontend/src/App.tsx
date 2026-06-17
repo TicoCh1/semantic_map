@@ -52,6 +52,10 @@ function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_i
   return `${scope}:${pano.pano_id}`;
 }
 
+function revokeObjectUrl(url: string | null | undefined) {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
 type IdleResetDebugState = {
   enabled?: boolean;
   blocked_reason?: "disabled" | "tutorial_open" | null;
@@ -271,7 +275,7 @@ export function App() {
   useEffect(() => {
     return () => {
       for (const objectUrl of panoObjectUrlsRef.current.values()) {
-        URL.revokeObjectURL(objectUrl);
+        revokeObjectUrl(objectUrl);
       }
       panoObjectUrlsRef.current.clear();
       panoRequestsRef.current.clear();
@@ -284,7 +288,7 @@ export function App() {
 
   const clearMarkedPanos = useCallback(() => {
     for (const objectUrl of panoObjectUrlsRef.current.values()) {
-      URL.revokeObjectURL(objectUrl);
+      revokeObjectUrl(objectUrl);
     }
     panoObjectUrlsRef.current.clear();
     panoRequestsRef.current.clear();
@@ -434,6 +438,7 @@ export function App() {
   }, [data, selectedLayer]);
 
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
+  const liveSearchAvailable = Boolean(backendConfig?.enabled && backendConfig.baseUrl.trim());
 
   const updateState = useCallback((mutator: (state: LayerState) => LayerState) => {
     setData((current) => {
@@ -444,6 +449,10 @@ export function App() {
 
   async function handleCreate(prompt: string) {
     setError(null);
+    if (!liveSearchAvailable) {
+      setError("Static fallback mode is active. Add ?backend=<RunPod URL> to enable live semantic search.");
+      return;
+    }
     try {
       await createScoringJob(prompt, priorityTiles);
       await refresh();
@@ -454,6 +463,10 @@ export function App() {
 
   async function handleCreateReference(reference: PanoReference) {
     setError(null);
+    if (!liveSearchAvailable) {
+      setError("Reference pano scoring requires a RunPod backend.");
+      return;
+    }
     try {
       await createPanoReferenceScoringJob(reference, priorityTiles);
       await refresh();
@@ -464,6 +477,10 @@ export function App() {
 
   async function handleRefreshAllLayers() {
     setError(null);
+    if (!liveSearchAvailable) {
+      await refresh();
+      return;
+    }
     setRefreshingLayers(true);
     try {
       await refreshAllScoringLayers(priorityTiles);
@@ -559,13 +576,13 @@ export function App() {
         const latest = markedPanosRef.current;
         const latestPano = latest.find((pano) => keyForPano(pano) === panoKey);
         if (!latestPano) {
-          if (metadata.object_url) URL.revokeObjectURL(metadata.object_url);
+          revokeObjectUrl(metadata.object_url);
           return;
         }
 
         const previousObjectUrl = panoObjectUrlsRef.current.get(panoKey);
         if (previousObjectUrl && previousObjectUrl !== metadata.object_url) {
-          URL.revokeObjectURL(previousObjectUrl);
+          revokeObjectUrl(previousObjectUrl);
         }
         if (metadata.object_url) {
           panoObjectUrlsRef.current.set(panoKey, metadata.object_url);
@@ -782,6 +799,7 @@ export function App() {
       </div>
       <PromptBar
         disabled={loading}
+        liveSearchAvailable={liveSearchAvailable}
         backendConfig={backendConfig}
         remoteConfigLocked={exhibitConfig.lockRunpodUrl}
         onConfigChange={setBackendConfig}
@@ -847,6 +865,7 @@ export function App() {
             refreshingLayers={refreshingLayers}
             onCreatePrompt={handleCreate}
             promptDisabled={loading}
+            liveSearchAvailable={liveSearchAvailable}
           />
         }
         right={sidebar}
