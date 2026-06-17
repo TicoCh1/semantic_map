@@ -68,7 +68,7 @@ Mobile behavior uses a `max-width: 700px` breakpoint:
 - Mobile startup follows `prefers-color-scheme` for theme and default basemap until the user manually changes either setting. Manual changes are marked in local storage with `semantic-map-theme-source=manual` and `semantic-map-basemap-source=manual`.
 - The map toolbar is condensed into independent floating bubbles rather than a fixed banner. The prompt/search input is a Google-Maps-style floating search bubble at the top of the map.
 - Compact mobile does not render London and Shanghai side by side. It renders one city at a time and exposes a floating London/Shanghai switch bubble.
-- Compact mobile renders the MapLibre canvas at pixel ratio 1 to reduce GPU memory and improve stability on high-DPI phones. This trades some map crispness for lower rendering pressure.
+- Compact mobile uses MapLibre's default device pixel ratio again, so high-DPI phones render sharper basemap text and points. Mobile stability is handled by single-city rendering and the `Max detail` scale guard instead.
 - Desktop and compact mobile initialize maps at a visible 500 m scale-bar view so the first render does not start at a heavy wide-area extent. The zoom calculation uses MapLibre's 512 px zoom-0 world scale and must stay aligned with `SCALE_CONTROL_MAX_WIDTH`.
 - Narrow responsive layouts use percentage width rather than `100vw` to avoid horizontal scrollbar drift when the page itself has a vertical scrollbar.
 - Compact mobile `Max detail` remains visible as a labelled floating bubble. When enabled, it is guarded to a 1 km scale-bar limit: checking it while zoomed farther out automatically zooms in to about 1 km, and zooming out past about 1 km automatically turns it off with a short tickbox animation.

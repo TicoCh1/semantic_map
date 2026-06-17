@@ -15,7 +15,7 @@ import { StreetViewPanel } from "./StreetViewPanel";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
-import { attachMapDiagnostics, recordMobileDiagnostic } from "../state/mobileDiagnostics";
+import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 
 type MapViewProps = {
   layers: SemanticLayer[];
@@ -142,7 +142,6 @@ export const MapView = memo(function MapView({
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
   const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
-  const reduceMobileMapResolution = compactViewport;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = layers.length > 0 && visibleLayerCount === 0;
@@ -314,7 +313,6 @@ export const MapView = memo(function MapView({
             onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
             splitIndex={index}
             compactControls={compactViewport}
-            reduceMobileMapResolution={reduceMobileMapResolution}
           />
         ))}
         {activeCities.length === 2 ? (
@@ -357,7 +355,6 @@ type CityMapPaneProps = {
   onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
   splitIndex: number;
   compactControls: boolean;
-  reduceMobileMapResolution: boolean;
 };
 
 function MobileMapSearch({
@@ -441,8 +438,7 @@ function CityMapPane({
   onRemoteTileZoomChange,
   onSemanticLayerLoadingChange,
   splitIndex,
-  compactControls,
-  reduceMobileMapResolution
+  compactControls
 }: CityMapPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
@@ -524,14 +520,6 @@ function CityMapPane({
       minZoom: 2,
       maxZoom: 18
     };
-    if (reduceMobileMapResolution) {
-      Object.assign(mapOptions, {
-        pixelRatio: 1,
-        maxTileCacheSize: 32,
-        maxTileCacheZoomLevels: 1,
-        fadeDuration: 0
-      });
-    }
 
     const map = new maplibregl.Map(mapOptions);
 
@@ -539,14 +527,9 @@ function CityMapPane({
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     }
     map.addControl(new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" }), "bottom-right");
-    if (reduceMobileMapResolution && typeof (map as unknown as { setPixelRatio?: (ratio: number) => void }).setPixelRatio === "function") {
-      (map as unknown as { setPixelRatio: (ratio: number) => void }).setPixelRatio(1);
-      recordMobileDiagnostic("map_pixel_ratio_set", { city_id: city.id, pixel_ratio: 1 });
-    }
     const detachDiagnostics = attachMapDiagnostics(map, {
       cityId: city.id,
-      container: containerRef.current,
-      reducedPixelRatio: reduceMobileMapResolution
+      container: containerRef.current
     });
     map.on("load", () => {
       reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
@@ -568,7 +551,7 @@ function CityMapPane({
       map.remove();
       mapRef.current = null;
     };
-  }, [city.center, city.datasetId, city.id, city.name, compactControls, reduceMobileMapResolution]);
+  }, [city.center, city.datasetId, city.id, city.name, compactControls]);
 
   useEffect(() => {
     const container = containerRef.current;

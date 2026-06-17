@@ -59,7 +59,7 @@ Start-Process -FilePath "cmd.exe" -ArgumentList "/k title UrbanFabric Frontend D
 - The first mobile viewport remains map-first, but `.split-main` uses a clamped height so the sidebar controls are visible below the map.
 - The mobile map prompt/search input is a Google-Maps-style floating bubble at the top of the map. Other top-of-map controls are independent floating bubbles, not a full-width banner.
 - Compact mobile does not render London and Shanghai side by side. It renders one city at a time and switches with a floating London/Shanghai segmented bubble.
-- Compact mobile forces MapLibre pixel ratio to 1 to reduce high-DPI canvas/GPU pressure. Expect slightly softer basemap rendering on dense phone screens.
+- Compact mobile uses MapLibre's default device pixel ratio. High-DPI phones render sharper again; stability is mainly handled by single-city mobile rendering and the `Max detail` scale guard.
 - Desktop and compact mobile initialize to a visible 500 m scale-bar view. The zoom calculation uses MapLibre's 512 px zoom-0 world scale and the shared `SCALE_CONTROL_MAX_WIDTH` value.
 - Narrow responsive layouts use percentage width instead of `100vw` to avoid horizontal scrollbar drift when vertical page scrolling is present.
 - MapLibre navigation/attribution controls are hidden on compact mobile, and the scale remains as a dark pill.
