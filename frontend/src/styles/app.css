@@ -2500,15 +2500,21 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .sidebar-top-bar::after {
-    content: "";
+    content: "↑";
     order: 2;
-    flex: 0 0 22px;
-    width: 22px;
-    height: 22px;
+    flex: 0 0 28px;
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
     margin: 0 auto;
-    border-top: 3px solid #69d391;
-    border-left: 3px solid #69d391;
-    transform: rotate(45deg);
+    border: 1px solid rgba(102, 112, 133, 0.22);
+    border-radius: 999px;
+    background: rgba(148, 163, 184, 0.12);
+    color: #7b8795;
+    font-size: 16px;
+    font-weight: 850;
+    line-height: 1;
     animation: mobile-pull-arrow 1.25s ease-in-out infinite;
   }
 
@@ -2526,10 +2532,12 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .theme-toggle input[type="checkbox"] {
+    position: relative;
     flex: 0 0 42px;
+    display: block;
     width: 42px;
     height: 24px;
-    padding: 2px;
+    padding: 0;
     border-radius: 999px;
     border-color: #8a94a1;
     background: #cbd5e1;
@@ -2537,12 +2545,16 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .theme-toggle input[type="checkbox"]::before {
+    position: absolute;
+    top: 50%;
+    left: 2px;
     width: 18px;
     height: 18px;
     border-radius: 999px;
     background: #ffffff;
+    box-shadow: 0 1px 3px rgba(17, 24, 39, 0.28);
     clip-path: none;
-    transform: translateX(0);
+    transform: translate(0, -50%);
     transition: transform 160ms ease;
   }
 
@@ -2552,7 +2564,7 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .theme-toggle input[type="checkbox"]:checked::before {
-    transform: translateX(18px);
+    transform: translate(18px, -50%);
   }
 
   .theme-toggle span {
@@ -2780,13 +2792,13 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
 @keyframes mobile-pull-arrow {
   0%,
   100% {
-    opacity: 0.42;
-    transform: translateY(4px) rotate(45deg);
+    opacity: 0.5;
+    transform: translateY(3px);
   }
 
   50% {
-    opacity: 1;
-    transform: translateY(-3px) rotate(45deg);
+    opacity: 0.95;
+    transform: translateY(-2px);
   }
 }
 
