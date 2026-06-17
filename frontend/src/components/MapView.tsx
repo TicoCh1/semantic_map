@@ -24,6 +24,7 @@ type MapViewProps = {
   onRemovePano: (panoKey: string) => void;
   scoreField: "score" | "zscore";
   progressEntries: RemoteLogEntry[];
+  refreshingLayers?: boolean;
   onCreatePrompt?: (prompt: string) => Promise<void>;
   promptDisabled?: boolean;
 };
@@ -55,6 +56,7 @@ const MAX_CITY_SPLIT = 72;
 const DEFAULT_SCALE_BAR_METERS = 500;
 const MAX_DETAIL_MIN_SCALE_BAR_METERS = 1000;
 const SCALE_CONTROL_MAX_WIDTH = 120;
+const MAPLIBRE_METERS_PER_PIXEL_ZOOM0 = 78271.51696402048;
 const MOBILE_SEARCH_PLACEHOLDERS = [
   "Search semantic prompt with statements",
   "The scene contains brick facade",
@@ -109,6 +111,7 @@ export const MapView = memo(function MapView({
   onRemovePano,
   scoreField,
   progressEntries,
+  refreshingLayers = false,
   onCreatePrompt,
   promptDisabled = false
 }: MapViewProps) {
@@ -124,7 +127,7 @@ export const MapView = memo(function MapView({
   );
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
   const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
-  const reduceMobileMapResolution = compactViewport && activeCities.length === 2;
+  const reduceMobileMapResolution = compactViewport;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
   const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
@@ -207,7 +210,7 @@ export const MapView = memo(function MapView({
   }, []);
 
   return (
-    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}`} data-tour-target="map">
+    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${refreshingLayers ? " is-refreshing-layers" : ""}`} data-tour-target="map">
       <MobileMapSearch disabled={promptDisabled} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
@@ -292,6 +295,7 @@ export const MapView = memo(function MapView({
       </div>
 
       <MapProgressOverlay entries={progressEntries} />
+      <MapRefreshOverlay active={refreshingLayers} />
       <StreetViewPanel
         panos={markedPanos}
         selectedPanoKey={selectedPanoKey}
@@ -489,7 +493,7 @@ function CityMapPane({
     if (!compactControls) {
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     }
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: 120, unit: "metric" }), "bottom-right");
+    map.addControl(new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" }), "bottom-right");
     if (reduceMobileMapResolution && typeof (map as unknown as { setPixelRatio?: (ratio: number) => void }).setPixelRatio === "function") {
       (map as unknown as { setPixelRatio: (ratio: number) => void }).setPixelRatio(1);
       recordMobileDiagnostic("map_pixel_ratio_set", { city_id: city.id, pixel_ratio: 1 });
@@ -874,6 +878,17 @@ function CityMapPane({
   );
 }
 
+function MapRefreshOverlay({ active }: { active: boolean }) {
+  if (!active) return null;
+
+  return (
+    <div className="map-refresh-overlay" role="status" aria-live="polite">
+      <span className="map-refresh-spinner" aria-hidden="true" />
+      <span>Updating semantic layers...</span>
+    </div>
+  );
+}
+
 function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
   if (!entries.length) return null;
 
@@ -1118,7 +1133,8 @@ function zoomForGroundScale(scale: number, lat: number): number {
 function zoomForScaleBarMeters(targetMeters: number, lat: number): number {
   const targetMaxDistance = targetMeters * 1.1;
   const metersPerPixel = targetMaxDistance / SCALE_CONTROL_MAX_WIDTH;
-  const worldMetersAtLat = 156543.03392 * latitudeCos(lat);
+  // MapLibre zoom 0 uses a 512 px world, so this is half the common 256 px Web Mercator constant.
+  const worldMetersAtLat = MAPLIBRE_METERS_PER_PIXEL_ZOOM0 * latitudeCos(lat);
   return clampNumber(Math.log2(worldMetersAtLat / metersPerPixel), 2, 18);
 }
 

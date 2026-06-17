@@ -844,6 +844,7 @@ export function App() {
             onRemovePano={handleRemovePano}
             scoreField={scoreField}
             progressEntries={mapProgressEntries}
+            refreshingLayers={refreshingLayers}
             onCreatePrompt={handleCreate}
             promptDisabled={loading}
           />
