@@ -2475,13 +2475,13 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
 
 @media (max-width: 700px) {
   .split-main {
-    height: clamp(520px, calc(100svh - 128px), 760px);
+    height: clamp(560px, calc(100svh - 68px), 820px);
     min-height: 0;
   }
 
   @supports not (height: 100svh) {
     .split-main {
-      height: clamp(520px, calc(100vh - 128px), 760px);
+      height: clamp(560px, calc(100vh - 68px), 820px);
     }
   }
 
@@ -2492,6 +2492,72 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
 
   .sidebar-content {
     padding: 10px;
+  }
+
+  .sidebar-top-bar {
+    position: relative;
+    margin-bottom: 10px;
+  }
+
+  .sidebar-top-bar::after {
+    content: "";
+    order: 2;
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    margin: 0 auto;
+    border-top: 3px solid #69d391;
+    border-left: 3px solid #69d391;
+    transform: rotate(45deg);
+    animation: mobile-pull-arrow 1.25s ease-in-out infinite;
+  }
+
+  .sidebar-top-bar .intro-button {
+    order: 1;
+  }
+
+  .sidebar-top-bar .theme-toggle {
+    order: 3;
+  }
+
+  .theme-toggle {
+    align-items: center;
+    gap: 7px;
+  }
+
+  .theme-toggle input[type="checkbox"] {
+    flex: 0 0 42px;
+    width: 42px;
+    height: 24px;
+    padding: 2px;
+    border-radius: 999px;
+    border-color: #8a94a1;
+    background: #cbd5e1;
+    transition: background 160ms ease, border-color 160ms ease;
+  }
+
+  .theme-toggle input[type="checkbox"]::before {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #ffffff;
+    clip-path: none;
+    transform: translateX(0);
+    transition: transform 160ms ease;
+  }
+
+  .theme-toggle input[type="checkbox"]:checked {
+    border-color: #2d93df;
+    background: #2d93df;
+  }
+
+  .theme-toggle input[type="checkbox"]:checked::before {
+    transform: translateX(18px);
+  }
+
+  .theme-toggle span {
+    font-size: 12px;
+    font-weight: 800;
   }
 
   .prompt-bar {
@@ -2560,8 +2626,8 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .city-toggle-group,
+  .basemap-select,
   .basemap-select > span,
-  .map-detail-toggle span,
   .map-status {
     display: none;
   }
@@ -2596,30 +2662,31 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     color: #ffffff;
   }
 
-  .basemap-select {
-    min-width: 0;
-    padding: 3px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.94);
-    box-shadow: 0 6px 18px rgba(17, 24, 39, 0.16);
-  }
-
-  .basemap-select select {
-    width: 124px;
-    height: 28px;
-    border: 0;
-    border-radius: 999px;
-    background: transparent;
-    font-size: 12px;
-    font-weight: 800;
-  }
-
   .map-detail-toggle {
+    gap: 6px;
     min-height: 34px;
-    padding: 9px 10px;
+    padding: 7px 10px;
     border-radius: 999px;
     background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 6px 18px rgba(17, 24, 39, 0.16);
+  }
+
+  .map-detail-toggle span {
+    display: inline;
+    color: inherit;
+    font-size: 11px;
+    font-weight: 850;
+    line-height: 1;
+    text-transform: none;
+    white-space: nowrap;
+  }
+
+  .map-detail-toggle.is-auto-cancelled {
+    animation: max-detail-cancel 620ms ease both;
+  }
+
+  .map-detail-toggle.is-auto-cancelled input {
+    animation: max-detail-checkbox-cancel 620ms ease both;
   }
 
   .city-map-layout.has-two-cities {
@@ -2638,24 +2705,7 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .city-map-label {
-    top: calc(var(--map-toolbar-clearance) + 6px);
-    bottom: auto;
-    left: 8px;
-    display: inline-flex;
-    width: auto;
-    max-width: calc(100% - 16px);
-    padding: 5px 8px;
-    border-radius: 999px;
-  }
-
-  .city-map-label strong,
-  .city-map-label small {
     display: none;
-  }
-
-  .city-map-label span {
-    font-size: 10px;
-    line-height: 1;
   }
 
   .city-map-pane .maplibregl-ctrl-top-right,
@@ -2724,5 +2774,49 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   .theme-dark .mobile-city-switch button.is-active {
     background: #2d93df;
     color: #ffffff;
+  }
+}
+
+@keyframes mobile-pull-arrow {
+  0%,
+  100% {
+    opacity: 0.42;
+    transform: translateY(4px) rotate(45deg);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-3px) rotate(45deg);
+  }
+}
+
+@keyframes max-detail-cancel {
+  0%,
+  100% {
+    box-shadow: 0 6px 18px rgba(17, 24, 39, 0.16);
+    transform: translateX(0);
+  }
+
+  20%,
+  60% {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.34), 0 6px 18px rgba(17, 24, 39, 0.16);
+    transform: translateX(-2px);
+  }
+
+  40%,
+  80% {
+    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.34), 0 6px 18px rgba(17, 24, 39, 0.16);
+    transform: translateX(2px);
+  }
+}
+
+@keyframes max-detail-checkbox-cancel {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.22);
   }
 }

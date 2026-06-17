@@ -59,7 +59,11 @@ Start-Process -FilePath "cmd.exe" -ArgumentList "/k title UrbanFabric Frontend D
 - The first mobile viewport remains map-first, but `.split-main` uses a clamped height so the sidebar controls are visible below the map.
 - The mobile map prompt/search input is a Google-Maps-style floating bubble at the top of the map. Other top-of-map controls are independent floating bubbles, not a full-width banner.
 - Compact mobile does not render London and Shanghai side by side. It renders one city at a time and switches with a floating London/Shanghai segmented bubble.
-- Compact mobile initializes each city close to a 500 m scale-bar view. MapLibre navigation/attribution controls are hidden, and the scale remains as a dark pill.
+- Desktop and compact mobile initialize close to a 500 m scale-bar view. MapLibre navigation/attribution controls are hidden on compact mobile, and the scale remains as a dark pill.
+- Compact mobile `Max detail` is labelled in the floating control row. It is guarded to about a 1 km scale-bar view: enabling it while farther out zooms in to the limit, and zooming out past the limit auto-disables it with a short tickbox animation.
+- Compact mobile binds basemap to theme: dark mode uses OpenFreeMap Dark, light mode uses OpenStreetMap. The mobile basemap bubble is hidden, and the in-map city label chip is hidden because the city switch already shows London/Shanghai.
+- Compact mobile search placeholder rotates through `Search semantic prompt with statements`, `The scene contains brick facade`, and `The scene contains abundant vegetation`.
+- The first compact-mobile viewport only exposes the sidebar top bar below the map: `Project intro`, an animated pull-up hint arrow, and `Dark mode`. `Layers / Display Order` should not be visible until the user scrolls.
 - On startup, when a backend URL is configured, `App.tsx` automatically attempts the same all-layer RunPod refresh as the manual layer refresh button. Failure is treated as fallback, not as a blocking UI error.
 - `frontend/src/state/mobileDiagnostics.ts` starts from `main.tsx`, records mobile/browser/map failure signals, stores them under `semantic-map-mobile-diagnostics-v1`, exposes `window.__SEMANTIC_MAP_DIAGNOSTICS__`, and shows an in-page panel on `?diag=1` or `?debugDiagnostics=1`.
 - `frontend/src/components/MapView.tsx` attaches diagnostics for MapLibre errors, move/zoom/idle snapshots, WebGL context loss/restoration, canvas size, and pixel ratio.

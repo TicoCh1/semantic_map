@@ -52,8 +52,14 @@ const MOBILE_CITY_KEY = "semantic-map-mobile-city-v1";
 const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
 const MIN_CITY_SPLIT = 28;
 const MAX_CITY_SPLIT = 72;
-const MOBILE_SCALE_BAR_METERS = 500;
+const DEFAULT_SCALE_BAR_METERS = 500;
+const MAX_DETAIL_MIN_SCALE_BAR_METERS = 1000;
 const SCALE_CONTROL_MAX_WIDTH = 120;
+const MOBILE_SEARCH_PLACEHOLDERS = [
+  "Search semantic prompt with statements",
+  "The scene contains brick facade",
+  "The scene contains abundant vegetation"
+];
 
 function isCompactMapViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
@@ -112,8 +118,9 @@ export const MapView = memo(function MapView({
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
   const [compactViewport, setCompactViewport] = useState(isCompactMapViewport);
   const [forceMaxDetail, setForceMaxDetail] = useState(() => window.localStorage.getItem("semantic-map-force-max-detail") === "true");
+  const [maxDetailAutoCancelled, setMaxDetailAutoCancelled] = useState(false);
   const [sharedGroundScale, setSharedGroundScale] = useState(() =>
-    groundScaleForZoom(CITY_CONFIGS[0].initialZoom, CITY_CONFIGS[0].center[1])
+    groundScaleForZoom(zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, CITY_CONFIGS[0].center[1]), CITY_CONFIGS[0].center[1])
   );
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
   const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
@@ -191,6 +198,14 @@ export const MapView = memo(function MapView({
     });
   }, []);
 
+  const handleForceMaxDetailChange = useCallback((enabled: boolean, reason: "user" | "scale_limit" = "user") => {
+    setForceMaxDetail(enabled);
+    if (!enabled && reason === "scale_limit") {
+      setMaxDetailAutoCancelled(true);
+      window.setTimeout(() => setMaxDetailAutoCancelled(false), 650);
+    }
+  }, []);
+
   return (
     <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}`} data-tour-target="map">
       <MobileMapSearch disabled={promptDisabled} onCreatePrompt={onCreatePrompt} />
@@ -232,8 +247,11 @@ export const MapView = memo(function MapView({
             ))}
           </select>
         </label>
-        <label className="map-detail-toggle" title="when enabled, map render time might be significantly delayed if viewing a large region">
-          <input type="checkbox" checked={forceMaxDetail} onChange={(event) => setForceMaxDetail(event.target.checked)} />
+        <label
+          className={`map-detail-toggle${maxDetailAutoCancelled ? " is-auto-cancelled" : ""}`}
+          title="Max detail loads high-resolution semantic tiles. On phones it is limited to a 1 km scale to avoid crashes."
+        >
+          <input type="checkbox" checked={forceMaxDetail} onChange={(event) => handleForceMaxDetailChange(event.target.checked)} />
           <span title="when enabled, map render time might be significantly delayed if viewing a large region">Max detail</span>
         </label>
         <div className="map-status">{statusLabel}</div>
@@ -258,6 +276,7 @@ export const MapView = memo(function MapView({
             onMarkPano={onMarkPano}
             onSelectPano={onSelectPano}
             forceMaxDetail={forceMaxDetail}
+            onForceMaxDetailChange={handleForceMaxDetailChange}
             sharedGroundScale={sharedGroundScale}
             onSharedGroundScaleChange={setSharedGroundScale}
             sharedRemoteTileZoom={sharedRemoteTileZoom}
@@ -297,6 +316,7 @@ type CityMapPaneProps = {
   onMarkPano: (pano: PanoMapPoint) => void;
   onSelectPano: (panoKey: string) => void;
   forceMaxDetail: boolean;
+  onForceMaxDetailChange: (enabled: boolean, reason?: "user" | "scale_limit") => void;
   sharedGroundScale: number;
   onSharedGroundScaleChange: (scale: number) => void;
   sharedRemoteTileZoom: number;
@@ -315,6 +335,14 @@ function MobileMapSearch({
 }) {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setPlaceholderIndex((index) => (index + 1) % MOBILE_SEARCH_PLACEHOLDERS.length);
+    }, 2600);
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function submit() {
     const trimmed = prompt.trim();
@@ -339,7 +367,7 @@ function MobileMapSearch({
       <Search size={17} />
       <input
         value={prompt}
-        placeholder="Search semantic prompt"
+        placeholder={MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex]}
         aria-label="Search semantic prompt"
         onChange={(event) => setPrompt(event.target.value)}
       />
@@ -363,6 +391,7 @@ function CityMapPane({
   onMarkPano,
   onSelectPano,
   forceMaxDetail,
+  onForceMaxDetailChange,
   sharedGroundScale,
   onSharedGroundScaleChange,
   sharedRemoteTileZoom,
@@ -375,6 +404,7 @@ function CityMapPane({
   const mapRef = useRef<MapLibreMap | null>(null);
   const basemapRef = useRef<BasemapId>(basemapId);
   const forceMaxDetailRef = useRef(forceMaxDetail);
+  const forceMaxDetailChangeRef = useRef(onForceMaxDetailChange);
   const sharedGroundScaleRef = useRef(sharedGroundScale);
   const sharedRemoteTileZoomRef = useRef(sharedRemoteTileZoom);
   const priorityTileChangeRef = useRef(onPriorityTileChange);
@@ -441,7 +471,7 @@ function CityMapPane({
       container: containerRef.current,
       style: basemapStyle(initialBasemap),
       center: city.center,
-      zoom: compactControls ? zoomForScaleBarMeters(MOBILE_SCALE_BAR_METERS, city.center[1]) : zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
+      zoom: compactControls ? zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, city.center[1]) : zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
       minZoom: 2,
       maxZoom: 18
     };
@@ -509,10 +539,19 @@ function CityMapPane({
     if (!map) return;
     remoteTileCache.current.clear();
     geojsonCache.current.clear();
+    if (compactControls && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
+      reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
+      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      return;
+    }
     reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
     requestSemanticRedraw(styleGenerationRef.current);
-  }, [forceMaxDetail]);
+  }, [city.datasetId, compactControls, forceMaxDetail]);
+
+  useEffect(() => {
+    forceMaxDetailChangeRef.current = onForceMaxDetailChange;
+  }, [onForceMaxDetailChange]);
 
   useEffect(() => {
     priorityTileChangeRef.current = onPriorityTileChange;
@@ -625,6 +664,10 @@ function CityMapPane({
     const map = mapRef.current;
     if (!map) return;
     const onViewportSettled = () => {
+      if (compactControls && forceMaxDetailRef.current && isScaleBarPastLimit(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
+        forceMaxDetailChangeRef.current(false, "scale_limit");
+        return;
+      }
       if (!applyingScaleSyncRef.current) {
         const nextScale = groundScaleForZoom(map.getZoom(), map.getCenter().lat);
         sharedGroundScaleRef.current = nextScale;
@@ -640,7 +683,7 @@ function CityMapPane({
       map.off("zoomend", onViewportSettled);
       map.off("moveend", onViewportSettled);
     };
-  }, [onSharedGroundScaleChange]);
+  }, [compactControls, onSharedGroundScaleChange]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -1077,6 +1120,22 @@ function zoomForScaleBarMeters(targetMeters: number, lat: number): number {
   const metersPerPixel = targetMaxDistance / SCALE_CONTROL_MAX_WIDTH;
   const worldMetersAtLat = 156543.03392 * latitudeCos(lat);
   return clampNumber(Math.log2(worldMetersAtLat / metersPerPixel), 2, 18);
+}
+
+function isScaleBarPastLimit(map: MapLibreMap, limitMeters: number): boolean {
+  const minZoom = zoomForScaleBarMeters(limitMeters, map.getCenter().lat);
+  return map.getZoom() < minZoom - 0.02;
+}
+
+function zoomToScaleBarIfNeeded(map: MapLibreMap, limitMeters: number): boolean {
+  const minZoom = zoomForScaleBarMeters(limitMeters, map.getCenter().lat);
+  if (map.getZoom() >= minZoom - 0.02) return false;
+  map.easeTo({
+    zoom: minZoom,
+    duration: 420,
+    essential: true
+  });
+  return true;
 }
 
 function latitudeCos(lat: number): number {

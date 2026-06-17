@@ -104,10 +104,10 @@ function loadInitialDarkMode(): boolean {
 }
 
 function loadInitialBasemapId(): BasemapId {
+  if (isCompactViewport()) return prefersDarkColorScheme() ? "openfreemap_dark" : "osm";
   if (window.localStorage.getItem(BASEMAP_SOURCE_KEY) === "manual") {
     return normalizeBasemapId(window.localStorage.getItem("semantic-map-basemap"));
   }
-  if (isCompactViewport()) return prefersDarkColorScheme() ? "openfreemap_dark" : "osm";
   return normalizeBasemapId(window.localStorage.getItem("semantic-map-basemap"));
 }
 
@@ -168,8 +168,6 @@ export function App() {
       const prefersDark = colorScheme.matches;
       if (window.localStorage.getItem(THEME_SOURCE_KEY) !== "manual") {
         setDarkMode(prefersDark);
-      }
-      if (window.localStorage.getItem(BASEMAP_SOURCE_KEY) !== "manual") {
         setBasemapId(prefersDark ? "openfreemap_dark" : "osm");
       }
     };
@@ -244,7 +242,15 @@ export function App() {
   const handleDarkModeChange = useCallback((enabled: boolean) => {
     window.localStorage.setItem(THEME_SOURCE_KEY, "manual");
     setDarkMode(enabled);
+    if (isCompactViewport()) {
+      setBasemapId(enabled ? "openfreemap_dark" : "osm");
+    }
   }, []);
+
+  useEffect(() => {
+    if (!isCompactViewport()) return;
+    setBasemapId(darkMode ? "openfreemap_dark" : "osm");
+  }, [darkMode]);
 
   const handleBasemapChange = useCallback((nextBasemapId: BasemapId) => {
     window.localStorage.setItem(BASEMAP_SOURCE_KEY, "manual");
