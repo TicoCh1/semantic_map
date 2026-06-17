@@ -76,8 +76,9 @@ Mobile behavior uses a `max-width: 700px` breakpoint:
 - Compact mobile hides the in-map city label chip because the London/Shanghai switch already communicates the active city.
 - The mobile search placeholder rotates between `Search semantic prompt with statements`, `The scene contains brick facade`, and `The scene contains abundant vegetation`.
 - MapLibre navigation and attribution controls are hidden on compact mobile; the scale control remains visible as a dark pill.
-- On startup, the frontend automatically attempts the same all-layer RunPod refresh as the manual layer refresh button when a backend URL is configured. If the backend is unavailable, the app keeps running with local fallback layers instead of blocking the UI.
-- The centered `Updating semantic layers...` overlay is tied to actual MapLibre semantic-layer drawing, not to RunPod job lifetime. It appears while no semantic layer has attached for the active city view and hides as soon as the active map pane finishes attaching its semantic layers; long-running RunPod jobs continue in the progress cards without blocking the map.
+- On startup, the frontend automatically attempts the same all-layer RunPod refresh as the manual layer refresh button when a backend URL is configured. It submits visible layers first in top-to-bottom display order, then submits hidden layers in the background. If the backend is unavailable, the app keeps running with local fallback layers instead of blocking the UI.
+- The centered `Updating semantic layers...` overlay is tied to actual MapLibre semantic-layer drawing for currently visible layers, not to hidden-layer refreshes or RunPod job lifetime. It appears while no semantic layer has attached for the active city view and hides as soon as the first visible semantic content is attached; long-running RunPod jobs continue in the progress cards without blocking the map after content exists.
+- If every layer eye is disabled, the map shows a separate all-layers-hidden message and the layer-panel eye buttons pulse. Hidden-layer backend refreshes do not trigger the updating overlay.
 - The first compact-mobile viewport only exposes the sidebar top bar (`Project intro`, pull-up hint arrow, and `Dark mode`) below the map. The layer list starts below the first viewport.
 
 Mobile diagnostics:
@@ -215,7 +216,7 @@ Refresh-all behavior:
 - It does not create duplicate layers and does not rewrite layer-local style, stops, opacity, score range, visibility, or order.
 - If the backend has an existing result, the ready manifest is reloaded and the local layer is relinked to the current tile URL template.
 - If the backend does not have the result, the same request path queues a new scoring job.
-- Requests are submitted together so the backend prompt bucket can batch compatible GPU work.
+- Requests are submitted sequentially in display-priority order: visible layers first from top to bottom, then hidden layers. Hidden-layer submissions are marked as background work so they do not trigger map updating overlays.
 
 Priority tile behavior:
 

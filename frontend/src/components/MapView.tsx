@@ -1,6 +1,6 @@
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
 import { Search, SendHorizontal } from "lucide-react";
-import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
   getLayerFallbackGeojson,
@@ -144,7 +144,9 @@ export const MapView = memo(function MapView({
   const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
   const reduceMobileMapResolution = compactViewport;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
-  const semanticLayerOverlayActive = activeCities.length > 0 && activeCities.every((city) => semanticLayerLoadingByCity[city.id] ?? true);
+  const visibleLayerCount = layers.filter((layer) => layer.visible).length;
+  const allLayersHidden = layers.length > 0 && visibleLayerCount === 0;
+  const semanticLayerOverlayActive = !allLayersHidden && activeCities.length > 0 && activeCities.every((city) => semanticLayerLoadingByCity[city.id] === true);
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
   const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
 
@@ -230,7 +232,12 @@ export const MapView = memo(function MapView({
   }, []);
 
   return (
-    <div className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}`} data-tour-target="map">
+    <div
+      className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
+        allLayersHidden ? " is-all-layers-hidden" : ""
+      }`}
+      data-tour-target="map"
+    >
       <MobileMapSearch disabled={promptDisabled || !liveSearchAvailable} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
@@ -317,6 +324,7 @@ export const MapView = memo(function MapView({
 
       <MapProgressOverlay entries={progressEntries} />
       <MapRefreshOverlay active={semanticLayerOverlayActive} />
+      <AllLayersHiddenOverlay active={allLayersHidden} />
       <StreetViewPanel
         panos={markedPanos}
         selectedPanoKey={selectedPanoKey}
@@ -454,12 +462,17 @@ function CityMapPane({
   const handlerCleanups = useRef<Map<string, Array<() => void>>>(new Map());
   const geojsonCache = useRef<Map<string, FeatureCollection>>(new Map());
   const remoteTileCache = useRef<Map<string, FeatureCollection>>(new Map());
+  const layersRef = useRef(layers);
+  const gradientsRef = useRef(gradients);
   const applyingScaleSyncRef = useRef(false);
   const semanticRedrawTimerRef = useRef<number | undefined>(undefined);
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
   const [status, setStatus] = useState("Loading map");
   const [showMaxDetailWarning, setShowMaxDetailWarning] = useState(false);
   const selectedLayerName = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
+  const semanticDrawKey = useMemo(() => semanticLayerDrawKey(layers, gradients, city.id), [city.id, gradients, layers]);
+  layersRef.current = layers;
+  gradientsRef.current = gradients;
 
   function clearSemanticLayers(map: MapLibreMap) {
     for (const layerId of drawnLayerIds.current) {
@@ -748,12 +761,29 @@ function CityMapPane({
     let cancelled = false;
     let retryTimer: number | undefined;
     let maxDetailWarningTimer: number | undefined;
-    onSemanticLayerLoadingChange(city.id, true);
+    let loadingReported = false;
+
+    const reportSemanticLoading = (loading: boolean) => {
+      if (loadingReported === loading) return;
+      loadingReported = loading;
+      onSemanticLayerLoadingChange(city.id, loading);
+    };
 
     async function draw(attempt = 0) {
       if (cancelled || generation !== styleGenerationRef.current) return;
 
       try {
+        const currentLayers = layersRef.current;
+        const currentGradients = gradientsRef.current;
+        const visibleTopToBottom = currentLayers.filter((layer) => layer.visible);
+        if (!visibleTopToBottom.length) {
+          clearSemanticLayers(currentMap);
+          setStatus(`0 rendered / 0 visible / ${currentLayers.length} total`);
+          reportSemanticLoading(false);
+          return;
+        }
+        reportSemanticLoading(true);
+
         if (forceMaxDetailRef.current && maxDetailWarningTimer === undefined) {
           setShowMaxDetailWarning(false);
           maxDetailWarningTimer = window.setTimeout(() => {
@@ -769,9 +799,9 @@ function CityMapPane({
 
         clearSemanticLayers(currentMap);
 
-        const visibleTopToBottom = layers.filter((layer) => layer.visible);
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
+        let displayedContent = false;
         for (const layer of layersToDraw) {
           const geojson = await loadLayerGeojsonForMap(
             layer,
@@ -785,7 +815,7 @@ function CityMapPane({
           if (cancelled || generation !== styleGenerationRef.current) return;
 
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
-          const gradient = layerGradient(layer, gradients);
+          const gradient = layerGradient(layer, currentGradients);
           if (currentMap.getLayer(sourceId)) currentMap.removeLayer(sourceId);
           if (currentMap.getSource(sourceId)) currentMap.removeSource(sourceId);
           currentMap.addSource(sourceId, { type: "geojson", data: geojson });
@@ -820,7 +850,7 @@ function CityMapPane({
               void collectPanoLayerValues(
                 pano.pano_id,
                 pano.dataset_id ?? city.datasetId,
-                layers,
+                layersRef.current,
                 currentMap,
                 geojsonCache.current,
                 remoteTileCache.current,
@@ -856,6 +886,10 @@ function CityMapPane({
           ]);
 
           drawnLayerIds.current.add(sourceId);
+          if (!displayedContent && geojson.features.length) {
+            displayedContent = true;
+            reportSemanticLoading(false);
+          }
         }
 
         const missingLayer = layersToDraw.some((layer) => !currentMap.getLayer(sourceIdForCityLayer(city.id, layer.id)));
@@ -869,8 +903,12 @@ function CityMapPane({
             maxDetailWarningTimer = undefined;
           }
           setShowMaxDetailWarning(false);
-          setStatus(`${layersToDraw.length} rendered / ${visibleTopToBottom.length} visible / ${layers.length} total`);
-          onSemanticLayerLoadingChange(city.id, false);
+          setStatus(`${layersToDraw.length} rendered / ${visibleTopToBottom.length} visible / ${currentLayers.length} total`);
+          if (!displayedContent && layersToDraw.some((layer) => isLayerWaitingForRemoteData(layer, city.id))) {
+            setStatus(`Waiting for semantic layer data`);
+          } else {
+            reportSemanticLoading(false);
+          }
         }
       } catch (error) {
         if (cancelled || generation !== styleGenerationRef.current) return;
@@ -887,7 +925,7 @@ function CityMapPane({
         }
         setShowMaxDetailWarning(false);
         setStatus(error instanceof Error ? error.message : "Layer draw failed");
-        onSemanticLayerLoadingChange(city.id, false);
+        reportSemanticLoading(false);
       }
     }
 
@@ -897,8 +935,9 @@ function CityMapPane({
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
       if (maxDetailWarningTimer !== undefined) window.clearTimeout(maxDetailWarningTimer);
       setShowMaxDetailWarning(false);
+      reportSemanticLoading(false);
     };
-  }, [city.id, redrawRequest, layers, gradients, onSemanticLayerLoadingChange]);
+  }, [city.id, redrawRequest, semanticDrawKey, onSemanticLayerLoadingChange]);
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex}>
@@ -922,6 +961,16 @@ function MapRefreshOverlay({ active }: { active: boolean }) {
     <div className="map-refresh-overlay" role="status" aria-live="polite">
       <span className="map-refresh-spinner" aria-hidden="true" />
       <span>Updating semantic layers...</span>
+    </div>
+  );
+}
+
+function AllLayersHiddenOverlay({ active }: { active: boolean }) {
+  if (!active) return null;
+
+  return (
+    <div className="map-hidden-layers-overlay" role="status" aria-live="polite">
+      <span>All semantic layers are hidden. Turn on an eye icon to display the map data.</span>
     </div>
   );
 }
@@ -1234,6 +1283,37 @@ function renderableSemanticLayers(topToBottom: SemanticLayer[]): SemanticLayer[]
   }
 
   return renderable;
+}
+
+function semanticLayerDrawKey(layers: SemanticLayer[], gradients: GradientPreset[], cityId: CityId): string {
+  return renderableSemanticLayers(layers.filter((layer) => layer.visible))
+    .map((layer) => {
+      const style = layer.style;
+      const gradient = layerGradient(layer, gradients);
+      return [
+        layer.id,
+        layer.status,
+        getLayerSourcePath(layer, cityId),
+        layer.score_property,
+        style.gradient_id,
+        style.opacity,
+        style.score_min,
+        style.score_max,
+        style.point_radius,
+        style.absolute_radius ? 1 : 0,
+        gradient?.updated_at ?? "",
+        gradient?.opacity ?? "",
+        gradient?.score_min ?? "",
+        gradient?.score_max ?? "",
+        (style.stops ?? gradient?.stops ?? []).map((stop) => `${stop.value}:${stop.color}`).join(",")
+      ].join("~");
+    })
+    .join("|");
+}
+
+function isLayerWaitingForRemoteData(layer: SemanticLayer, cityId: CityId): boolean {
+  const sourcePath = getLayerSourcePath(layer, cityId);
+  return layer.status === "queued" || layer.status === "running" || sourcePath.startsWith("remote://job/") || sourcePath.startsWith("remote://pending/");
 }
 
 function loadCityVisibility(): CityVisibility {

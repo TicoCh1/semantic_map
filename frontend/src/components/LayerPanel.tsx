@@ -13,6 +13,7 @@ type LayerPanelProps = {
   onRefreshAll: () => Promise<void>;
   refreshingAll?: boolean;
   disabled?: boolean;
+  highlightHiddenEyes?: boolean;
 };
 
 export function LayerPanel({
@@ -25,7 +26,8 @@ export function LayerPanel({
   onReorder,
   onRefreshAll,
   refreshingAll = false,
-  disabled = false
+  disabled = false,
+  highlightHiddenEyes = false
 }: LayerPanelProps) {
   function handleDrop(draggedId: string, targetId: string, placeAfter: boolean) {
     if (draggedId === targetId) return;
@@ -40,7 +42,7 @@ export function LayerPanel({
   }
 
   return (
-    <section className="panel-section layer-panel" data-tour-target="layers">
+    <section className={`panel-section layer-panel${highlightHiddenEyes ? " is-all-hidden" : ""}`} data-tour-target="layers">
       <div className="section-heading with-action">
         <div>
           <span>Layers</span>

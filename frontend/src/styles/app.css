@@ -363,6 +363,28 @@ button:disabled {
   pointer-events: none;
 }
 
+.map-hidden-layers-overlay {
+  position: absolute;
+  z-index: 7;
+  top: 120px;
+  left: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: min(460px, calc(100% - 160px));
+  transform: translateX(-50%);
+  padding: 11px 14px;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: rgba(255, 247, 237, 0.96);
+  box-shadow: 0 10px 28px rgba(17, 24, 39, 0.22);
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+  pointer-events: none;
+}
+
 .map-refresh-spinner {
   flex: 0 0 auto;
   width: 14px;
@@ -882,6 +904,13 @@ button:disabled {
 
 .visibility-button {
   color: #164c7f;
+}
+
+.layer-panel.is-all-hidden .visibility-button {
+  border-color: #f59e0b;
+  background: #fff7ed;
+  color: #b45309;
+  animation: hidden-eye-pulse 1.05s ease-in-out infinite;
 }
 
 .delete-button {
@@ -2111,6 +2140,12 @@ html.theme-dark-root body::-webkit-scrollbar-thumb,
   background: #19344b;
 }
 
+.theme-dark .layer-panel.is-all-hidden .visibility-button {
+  border-color: #f59e0b;
+  background: rgba(92, 55, 16, 0.82);
+  color: #fed7aa;
+}
+
 .theme-dark .map-toolbar > div:first-child,
 .theme-dark .map-status,
 .theme-dark .basemap-select,
@@ -2363,6 +2398,12 @@ html.theme-dark-root body::-webkit-scrollbar-thumb,
   border-color: #2d93df;
   background: rgba(20, 42, 63, 0.96);
   color: #bfdbfe;
+}
+
+.theme-dark .map-hidden-layers-overlay {
+  border-color: #f59e0b;
+  background: rgba(67, 38, 16, 0.96);
+  color: #fed7aa;
 }
 
 .theme-dark .map-refresh-spinner {
@@ -2744,6 +2785,7 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .map-refresh-overlay,
+  .map-hidden-layers-overlay,
   .map-max-detail-warning {
     top: 108px;
     width: calc(100% - 20px);
@@ -2859,6 +2901,19 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   50% {
     opacity: 0.95;
     transform: translateY(-2px) rotate(45deg);
+  }
+}
+
+@keyframes hidden-eye-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.24);
+    transform: scale(1.06);
   }
 }
 

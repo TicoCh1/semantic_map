@@ -1263,25 +1263,34 @@ export async function refreshAllScoringLayers(priorityTiles?: CityPriorityTiles 
   }
 
   const state = loadStateSync();
-  const layers = state.layers.filter((layer) => layer.prompt.trim());
+  const promptLayers = state.layers.filter((layer) => layer.prompt.trim());
+  const visibleLayers = promptLayers.filter((layer) => layer.visible);
+  const hiddenLayers = promptLayers.filter((layer) => !layer.visible);
+  const layers = [...visibleLayers, ...hiddenLayers];
   if (!layers.length) {
     emitRemoteInfoLog(null, null, "No layers found to refresh.");
     return { submitted: 0, skipped: 0, failed: 0 };
   }
 
-  emitRemoteInfoLog(null, null, `Refreshing ${layers.length} layer prompt(s) through RunPod.`);
-  const results = await Promise.all(
-    layers.map(async (layer) => {
-      if (ACTIVE_REMOTE_POLLS.has(layer.id)) return "skipped" as const;
-      try {
-        await submitRemoteScoringForLayer(config, layer, priorityTiles);
-        return "submitted" as const;
-      } catch {
-        restoreLayerLocalFallbackSync(layer);
-        return "failed" as const;
-      }
-    })
+  emitRemoteInfoLog(
+    null,
+    null,
+    `Refreshing ${layers.length} layer prompt(s) through RunPod: ${visibleLayers.length} visible first, ${hiddenLayers.length} hidden in background.`
   );
+  const results: Array<"submitted" | "skipped" | "failed"> = [];
+  for (const layer of layers) {
+    if (ACTIVE_REMOTE_POLLS.has(layer.id)) {
+      results.push("skipped");
+      continue;
+    }
+    try {
+      await submitRemoteScoringForLayer(config, layer, priorityTiles, { mapOverlay: layer.visible ? undefined : false });
+      results.push("submitted");
+    } catch {
+      restoreLayerLocalFallbackSync(layer);
+      results.push("failed");
+    }
+  }
 
   const submitted = results.filter((result) => result === "submitted").length;
   const skipped = results.filter((result) => result === "skipped").length;
@@ -1290,7 +1299,12 @@ export async function refreshAllScoringLayers(priorityTiles?: CityPriorityTiles 
   return { submitted, skipped, failed };
 }
 
-async function submitRemoteScoringForLayer(config: RemoteBackendConfig, layer: SemanticLayer, priorityTiles?: CityPriorityTiles | null): Promise<ScoringJob> {
+async function submitRemoteScoringForLayer(
+  config: RemoteBackendConfig,
+  layer: SemanticLayer,
+  priorityTiles?: CityPriorityTiles | null,
+  options: { mapOverlay?: boolean } = {}
+): Promise<ScoringJob> {
   const prompt = layer.prompt;
   const isReferenceLayer = layer.query_type === "pano_reference";
   const referencePano = isReferenceLayer && layer.reference_pano ? normalizePanoReference(layer.reference_pano) : null;
@@ -1313,7 +1327,7 @@ async function submitRemoteScoringForLayer(config: RemoteBackendConfig, layer: S
     const submitted = referencePano
       ? await submitRemoteReferenceScoringJob(config, prompt, referencePano, priorityTiles)
       : await submitRemoteScoringJob(config, prompt, priorityTiles);
-    const showOnMap = submitted.status !== "ready";
+    const showOnMap = options.mapOverlay ?? submitted.status !== "ready";
     const job: ScoringJob = {
       ...submitted,
       layer_id: layer.id,

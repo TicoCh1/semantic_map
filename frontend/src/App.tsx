@@ -817,6 +817,7 @@ export function App() {
         onReorder={(layerIds) => void handleReorder(layerIds)}
         onRefreshAll={handleRefreshAllLayers}
         refreshingAll={refreshingLayers}
+        highlightHiddenEyes={data.state.layers.length > 0 && data.state.layers.every((layer) => !layer.visible)}
       />
       <HistogramPanel
         layer={selectedLayer}
