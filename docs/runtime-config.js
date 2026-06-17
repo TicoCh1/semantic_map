@@ -1,0 +1,1 @@
+window.__SEMANTIC_MAP_RUNTIME_CONFIG__ = window.__SEMANTIC_MAP_RUNTIME_CONFIG__ || {};

@@ -36,18 +36,15 @@ jobs:
 
       - name: Build frontend
         working-directory: frontend
-        run: npm run build
+        run: npm run build:pages
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Disable Jekyll processing
-        run: touch frontend/dist/.nojekyll
-
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist
+          path: docs
 
   deploy:
     needs: build

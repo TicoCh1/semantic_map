@@ -1,6 +1,11 @@
 # Local agent notes and long-form private docs
 AGENT.md
-docs/
+docs/*
+!docs/.nojekyll
+!docs/index.html
+!docs/runtime-config.js
+!docs/assets/
+!docs/assets/**
 
 # Python
 .venv/

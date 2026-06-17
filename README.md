@@ -57,9 +57,21 @@ npm.cmd run build
 
 ## GitHub Pages Frontend
 
-The React frontend can be published as a static GitHub Pages site. The repository includes a GitHub Actions workflow at `.github/workflows/github-pages.yml` that builds `frontend/` and deploys `frontend/dist/` to Pages.
+The React frontend can be published as a static GitHub Pages site. The repository supports both GitHub Pages source modes:
 
-After enabling GitHub Pages with GitHub Actions as the source, the app can be opened from a repository Pages URL such as:
+- Branch source: publish from `/docs`.
+- GitHub Actions source: use `.github/workflows/github-pages.yml`.
+
+To generate the branch-source `/docs` site locally:
+
+```powershell
+cd frontend
+npm.cmd run build:pages
+```
+
+This writes the static app to `docs/index.html`, `docs/assets/`, `docs/runtime-config.js`, and `docs/.nojekyll`. Commit those generated files when using GitHub Pages branch source with the `/docs` folder.
+
+After enabling GitHub Pages, the app can be opened from a repository Pages URL such as:
 
 ```text
 https://ticoch1.github.io/semantic_map/
