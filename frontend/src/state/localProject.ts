@@ -298,6 +298,9 @@ function notifyStateUpdated() {
 
 function normalizeBackendBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, "");
+  if (/^[a-z0-9-]+-\d+\.proxy\.runpod\.net$/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
   try {
     const url = new URL(trimmed);
     if (url.protocol === "http:" && url.hostname.toLowerCase().endsWith(".proxy.runpod.net")) {
@@ -309,6 +312,29 @@ function normalizeBackendBaseUrl(value: string): string {
     return trimmed;
   }
   return trimmed;
+}
+
+function browserUrlParam(name: string): string {
+  if (typeof window === "undefined") return "";
+  return (new URLSearchParams(window.location.search).get(name) ?? "").trim();
+}
+
+function urlBackendOverride(): string {
+  const value = browserUrlParam("backend") || browserUrlParam("runpod") || browserUrlParam("runpodUrl");
+  return value ? normalizeBackendBaseUrl(value) : "";
+}
+
+function syncBackendOverrideUrl(config: RemoteBackendConfig) {
+  if (typeof window === "undefined" || !urlBackendOverride()) return;
+  const url = new URL(window.location.href);
+  url.searchParams.delete("runpod");
+  url.searchParams.delete("runpodUrl");
+  if (config.enabled && config.baseUrl.trim()) {
+    url.searchParams.set("backend", normalizeBackendBaseUrl(config.baseUrl));
+  } else {
+    url.searchParams.delete("backend");
+  }
+  window.history.replaceState(window.history.state, "", url);
 }
 
 function normalizeDatasetIds(value: readonly string[] | string | null | undefined): string[] {
@@ -435,6 +461,19 @@ function saveGradientsSync(gradients: GradientPreset[]) {
 }
 
 function loadRemoteBackendConfigSync(): RemoteBackendConfig {
+  const raw = readJson<Partial<RemoteBackendConfig>>(REMOTE_BACKEND_KEY);
+  const urlBaseUrl = urlBackendOverride();
+  if (urlBaseUrl) {
+    return {
+      baseUrl: urlBaseUrl,
+      token: typeof raw?.token === "string" ? raw.token : runtimeConfig.runpodToken,
+      datasetId: String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID),
+      datasetIds: normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS,
+      datasetGroupId: typeof raw?.datasetGroupId === "string" ? raw.datasetGroupId : DEFAULT_REMOTE_DATASET_GROUP_ID,
+      enabled: true
+    };
+  }
+
   if (exhibitConfig.lockRunpodUrl) {
     return {
       baseUrl: normalizeBackendBaseUrl(exhibitConfig.lockedRunpodUrl),
@@ -446,7 +485,6 @@ function loadRemoteBackendConfigSync(): RemoteBackendConfig {
     };
   }
 
-  const raw = readJson<Partial<RemoteBackendConfig>>(REMOTE_BACKEND_KEY);
   const baseUrl = normalizeBackendBaseUrl(String(raw?.baseUrl ?? DEFAULT_REMOTE_BACKEND_URL));
   const datasetId = String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID);
   const datasetIds = normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS;
@@ -474,7 +512,8 @@ function saveRemoteBackendConfigSync(config: RemoteBackendConfig): RemoteBackend
     enabled: config.enabled
   };
   writeJson(REMOTE_BACKEND_KEY, normalized);
-  return normalized;
+  syncBackendOverrideUrl(normalized);
+  return loadRemoteBackendConfigSync();
 }
 
 export async function getRemoteBackendConfig(): Promise<RemoteBackendConfig> {

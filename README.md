@@ -55,6 +55,32 @@ cd frontend
 npm.cmd run build
 ```
 
+## GitHub Pages Frontend
+
+The React frontend can be published as a static GitHub Pages site. The repository includes a GitHub Actions workflow at `.github/workflows/github-pages.yml` that builds `frontend/` and deploys `frontend/dist/` to Pages.
+
+After enabling GitHub Pages with GitHub Actions as the source, the app can be opened from a repository Pages URL such as:
+
+```text
+https://ticoch1.github.io/semantic_map/
+```
+
+To point the static frontend at a specific RunPod backend, pass the backend URL as a query parameter:
+
+```text
+https://ticoch1.github.io/semantic_map/?backend=https%3A%2F%2FYOUR_POD-8000.proxy.runpod.net
+```
+
+The shorter RunPod proxy host form is also normalized by the frontend:
+
+```text
+https://ticoch1.github.io/semantic_map/?backend=YOUR_POD-8000.proxy.runpod.net
+```
+
+When `?backend=` is present, the frontend enables RunPod mode and uses that backend ahead of browser-local saved settings. Editing the RunPod URL in the prompt panel updates the current URL parameter; disabling RunPod removes the parameter and falls back to local mock behavior.
+
+The backend must be reachable over HTTPS and must allow the GitHub Pages origin in CORS, for example `https://ticoch1.github.io`. Do not put long-lived backend tokens in the URL because query strings can be stored in browser history, logs, and screenshots.
+
 Development launchers:
 
 ```powershell
