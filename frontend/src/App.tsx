@@ -58,6 +58,14 @@ function revokeObjectUrl(url: string | null | undefined) {
   if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
 }
 
+function panoFailureMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : "";
+  if (/Pano request failed\s*\(404\)/i.test(message) || /Failed to parse URL|Invalid URL/i.test(message)) {
+    return STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE;
+  }
+  return message || "Pano unavailable";
+}
+
 type IdleResetDebugState = {
   enabled?: boolean;
   blocked_reason?: "disabled" | "tutorial_open" | null;
@@ -613,7 +621,7 @@ export function App() {
             ? {
                 ...pano,
                 status: "failed" as const,
-                message: error instanceof Error ? error.message : "Pano unavailable"
+                message: panoFailureMessage(error)
               }
             : pano
         );

@@ -1617,7 +1617,7 @@ function sourcePathsFromManifests(config: RemoteBackendConfig, manifests: Remote
 
 export async function loadPanoImage(panoId: string, datasetId?: string | null): Promise<PanoImageResponse & { object_url?: string }> {
   const config = loadRemoteBackendConfigSync();
-  if (!config.enabled || !config.baseUrl) {
+  if (!config.enabled || !isUsableRemoteBackendUrl(config.baseUrl)) {
     const staticImageUrl = staticFallbackPanoImageUrl(panoId, datasetId);
     if (staticImageUrl) {
       return {

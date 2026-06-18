@@ -108,7 +108,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
               </button>
             </div>
           ) : null}
-          {selected ? (
+          {selected?.status === "ready" ? (
             <PanoLayerValues
               pano={selected}
               scoreField={scoreField}

@@ -2755,6 +2755,27 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     outline: 0;
   }
 
+  .mobile-map-search.is-static-unavailable {
+    min-height: 58px;
+    border-radius: 18px;
+  }
+
+  .mobile-static-search-message {
+    min-width: 0;
+    overflow: hidden;
+    color: #344054;
+    font-size: 12px;
+    font-weight: 750;
+    line-height: 1.25;
+  }
+
+  .mobile-static-search-message span {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+  }
+
   .mobile-map-search button {
     display: grid;
     place-items: center;
@@ -2865,6 +2886,10 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     font-size: 12px;
   }
 
+  .map-shell:has(.mobile-map-search.is-static-unavailable) .map-toolbar {
+    top: 78px;
+  }
+
   .map-shell.is-refreshing-layers .map-max-detail-warning {
     top: 152px;
   }
@@ -2946,6 +2971,7 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .theme-dark .mobile-map-search input,
+  .theme-dark .mobile-static-search-message,
   .theme-dark .basemap-select select,
   .theme-dark .mobile-city-switch button {
     color: #e5edf5;

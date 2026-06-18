@@ -238,7 +238,7 @@ export const MapView = memo(function MapView({
       }`}
       data-tour-target="map"
     >
-      <MobileMapSearch disabled={promptDisabled || !liveSearchAvailable} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
+      <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
       <div className="map-toolbar">
         <div>
           <span>Semantic Map</span>
@@ -400,24 +400,30 @@ function MobileMapSearch({
 
   return (
     <form
-      className="mobile-map-search"
+      className={`mobile-map-search${liveSearchAvailable ? "" : " is-static-unavailable"}`}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
       <Search size={17} />
-      <input
-        value={prompt}
-        placeholder={liveSearchAvailable ? MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex] : STATIC_SEARCH_PLACEHOLDER}
-        aria-label="Search semantic prompt"
-        disabled={disabled || !liveSearchAvailable}
-        onChange={(event) => setPrompt(event.target.value)}
-      />
+      {liveSearchAvailable ? (
+        <input
+          value={prompt}
+          placeholder={MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex]}
+          aria-label="Search semantic prompt"
+          disabled={disabled}
+          onChange={(event) => setPrompt(event.target.value)}
+        />
+      ) : (
+        <div className="mobile-static-search-message" aria-label={STATIC_SEARCH_PLACEHOLDER}>
+          <span>{STATIC_SEARCH_PLACEHOLDER}</span>
+        </div>
+      )}
       <button
         type={liveSearchAvailable ? "submit" : "button"}
         className={liveSearchAvailable ? "" : contactCopied ? "is-copied" : "is-contact-copy"}
-        disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() || !onCreatePrompt : disabled}
+        disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() || !onCreatePrompt : false}
         title={liveSearchAvailable ? "Create layer" : "Copy author email"}
         aria-label={liveSearchAvailable ? "Create layer" : "Copy author email"}
         onClick={liveSearchAvailable ? undefined : () => void copyContactEmail()}
