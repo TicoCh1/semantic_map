@@ -9,6 +9,7 @@ import {
   ensureExhibitDefaultRemoteLayers,
   getAppState,
   hasExhibitDefaultLayers,
+  isUsableRemoteBackendUrl,
   loadPanoImage,
   getRemoteBackendConfig,
   patchLayer,
@@ -44,6 +45,7 @@ import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
 import { exhibitConfig } from "./state/exhibitConfig";
 import { runtimeConfig } from "./state/runtimeConfig";
+import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./state/staticDeployment";
 import { TUTORIAL_PAGES } from "./state/tutorialContent";
 
 function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "city_id">): string {
@@ -193,7 +195,7 @@ export function App() {
   useEffect(() => {
     if (startupRefreshAttemptedRef.current || !data || !backendConfig) return;
     startupRefreshAttemptedRef.current = true;
-    if (!backendConfig.enabled || !backendConfig.baseUrl) return;
+    if (!backendConfig.enabled || !isUsableRemoteBackendUrl(backendConfig.baseUrl)) return;
 
     let cancelled = false;
     const timer = window.setTimeout(() => {
@@ -320,7 +322,7 @@ export function App() {
     if (
       !data ||
       !backendConfig?.enabled ||
-      !backendConfig.baseUrl ||
+      !isUsableRemoteBackendUrl(backendConfig.baseUrl) ||
       !exhibitConfig.idleResetEnabled ||
       !hasExhibitDefaultLayers(data.state) ||
       exhibitDefaultRequestRef.current
@@ -438,7 +440,7 @@ export function App() {
   }, [data, selectedLayer]);
 
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
-  const liveSearchAvailable = Boolean(backendConfig?.enabled && backendConfig.baseUrl.trim());
+  const liveSearchAvailable = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
 
   const updateState = useCallback((mutator: (state: LayerState) => LayerState) => {
     setData((current) => {
@@ -450,7 +452,7 @@ export function App() {
   async function handleCreate(prompt: string) {
     setError(null);
     if (!liveSearchAvailable) {
-      setError("Static fallback mode is active. Add ?backend=<RunPod URL> to enable live semantic search.");
+      setError(STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE);
       return;
     }
     try {

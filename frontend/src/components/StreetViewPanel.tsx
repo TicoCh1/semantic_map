@@ -1,8 +1,9 @@
 import { Viewer } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
-import { Maximize2, Minimize2, X } from "lucide-react";
+import { Check, Copy, Maximize2, Minimize2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { PANO_REFERENCE_DRAG_TYPE, type MarkedPano, type PanoReference } from "../api/types";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type StreetViewPanelProps = {
   panos: MarkedPano[];
@@ -15,6 +16,7 @@ type StreetViewPanelProps = {
 export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPano, onRemovePano }: StreetViewPanelProps) {
   const [height, setHeight] = useState(320);
   const [valuesExpanded, setValuesExpanded] = useState(false);
+  const [contactCopied, setContactCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
   const chipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
@@ -58,6 +60,12 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
 
   if (!panos.length) return null;
 
+  async function copyContactEmail() {
+    await copyStaticDeploymentContactEmail();
+    setContactCopied(true);
+    window.setTimeout(() => setContactCopied(false), 1400);
+  }
+
   function startResize(event: React.PointerEvent<HTMLDivElement>) {
     event.preventDefault();
     const startY = event.clientY;
@@ -85,7 +93,21 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
         <div className="street-view-canvas" ref={containerRef}>
           {!selected ? <div className="street-view-state">No pano selected</div> : null}
           {selected?.status === "loading" ? <div className="street-view-state">Loading pano</div> : null}
-          {selected?.status === "failed" ? <div className="street-view-state">{selected.message || "Pano unavailable"}</div> : null}
+          {selected?.status === "failed" ? (
+            <div className="street-view-state street-view-error-state">
+              <span>{selected.message || STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}</span>
+              <button
+                className={`street-view-contact-button${contactCopied ? " is-copied" : ""}`}
+                type="button"
+                onClick={() => void copyContactEmail()}
+                title="Copy author email"
+                aria-label="Copy author email"
+              >
+                {contactCopied ? <Check size={15} /> : <Copy size={15} />}
+                <span>{contactCopied ? "Copied" : "Copy email"}</span>
+              </button>
+            </div>
+          ) : null}
           {selected ? (
             <PanoLayerValues
               pano={selected}

@@ -17,6 +17,7 @@ export {
   hasExhibitDefaultLayers,
   isRemoteTileTemplate,
   isStaticFallbackTileTemplate,
+  isUsableRemoteBackendUrl,
   mergeFeatureCollections,
   patchLayer,
   reorderLayers,

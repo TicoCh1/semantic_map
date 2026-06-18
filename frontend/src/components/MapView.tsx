@@ -1,5 +1,5 @@
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
-import { Search, SendHorizontal } from "lucide-react";
+import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
@@ -16,6 +16,7 @@ import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/ba
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type MapViewProps = {
   layers: SemanticLayer[];
@@ -71,7 +72,7 @@ const MOBILE_SEARCH_PLACEHOLDERS = [
   "The scene contains brick facade",
   "The scene contains abundant vegetation"
 ];
-const STATIC_SEARCH_PLACEHOLDER = "Static fallback demo. Add backend URL for live search.";
+const STATIC_SEARCH_PLACEHOLDER = STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE;
 const STATIC_FALLBACK_TILE_RANGES: Record<CityId, { z: number; minX: number; maxX: number; minY: number; maxY: number }> = {
   london: { z: 13, minX: 4091, maxX: 4095, minY: 2721, maxY: 2725 },
   shanghai: { z: 13, minX: 6858, maxX: 6861, minY: 3345, maxY: 3348 }
@@ -369,6 +370,7 @@ function MobileMapSearch({
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const [contactCopied, setContactCopied] = useState(false);
 
   useEffect(() => {
     if (!liveSearchAvailable) return;
@@ -390,6 +392,12 @@ function MobileMapSearch({
     }
   }
 
+  async function copyContactEmail() {
+    await copyStaticDeploymentContactEmail();
+    setContactCopied(true);
+    window.setTimeout(() => setContactCopied(false), 1400);
+  }
+
   return (
     <form
       className="mobile-map-search"
@@ -407,12 +415,14 @@ function MobileMapSearch({
         onChange={(event) => setPrompt(event.target.value)}
       />
       <button
-        type="submit"
-        disabled={disabled || !liveSearchAvailable || submitting || !prompt.trim() || !onCreatePrompt}
-        title={liveSearchAvailable ? "Create layer" : "Live search requires a RunPod backend"}
-        aria-label="Create layer"
+        type={liveSearchAvailable ? "submit" : "button"}
+        className={liveSearchAvailable ? "" : contactCopied ? "is-copied" : "is-contact-copy"}
+        disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() || !onCreatePrompt : disabled}
+        title={liveSearchAvailable ? "Create layer" : "Copy author email"}
+        aria-label={liveSearchAvailable ? "Create layer" : "Copy author email"}
+        onClick={liveSearchAvailable ? undefined : () => void copyContactEmail()}
       >
-        <SendHorizontal size={17} />
+        {liveSearchAvailable ? <SendHorizontal size={17} /> : contactCopied ? <Check size={17} /> : <Copy size={17} />}
       </button>
     </form>
   );

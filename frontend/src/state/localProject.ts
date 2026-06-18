@@ -21,6 +21,7 @@ import { DEFAULT_POINT_RADIUS, clamp, layerStyleFromGradient, slugify } from "./
 import { reportDemoMonitorEvent } from "./demoMonitor";
 import { exhibitConfig } from "./exhibitConfig";
 import { runtimeConfig } from "./runtimeConfig";
+import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./staticDeployment";
 
 const STATE_KEY = "semantic-map-local-state-v1";
 const GRADIENTS_KEY = "semantic-map-local-gradients-v1";
@@ -331,6 +332,17 @@ function normalizeBackendBaseUrl(value: string): string {
     return trimmed;
   }
   return trimmed;
+}
+
+export function isUsableRemoteBackendUrl(value: string | null | undefined): boolean {
+  const normalized = normalizeBackendBaseUrl(String(value ?? ""));
+  if (!normalized) return false;
+  try {
+    const url = new URL(normalized);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 function browserUrlParam(name: string): string {
@@ -1618,7 +1630,7 @@ export async function loadPanoImage(panoId: string, datasetId?: string | null): 
         message: "Loaded from packaged static fallback pano dataset."
       };
     }
-    const message = "Static fallback includes semantic map tiles only for this pano. Add ?backend=<RunPod URL> for arbitrary street-view lookup.";
+    const message = STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE;
     reportRemoteRequestFailure("static_pano_unavailable", message, {
       pano_id: panoId,
       dataset_id: datasetId ?? null,

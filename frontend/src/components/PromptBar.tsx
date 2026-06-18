@@ -1,7 +1,8 @@
-import { SendHorizontal } from "lucide-react";
+import { Check, Copy, SendHorizontal } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import { saveRemoteBackendConfig } from "../api/client";
 import { PANO_REFERENCE_DRAG_TYPE, type PanoReference, type RemoteBackendConfig } from "../api/types";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type PromptBarProps = {
   disabled?: boolean;
@@ -17,6 +18,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [referenceDragOver, setReferenceDragOver] = useState(false);
+  const [contactCopied, setContactCopied] = useState(false);
 
   async function submit() {
     const trimmed = prompt.trim();
@@ -34,6 +36,12 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
     if (!backendConfig) return;
     const saved = await saveRemoteBackendConfig({ ...backendConfig, ...patch });
     onConfigChange(saved);
+  }
+
+  async function copyContactEmail() {
+    await copyStaticDeploymentContactEmail();
+    setContactCopied(true);
+    window.setTimeout(() => setContactCopied(false), 1400);
   }
 
   function canAcceptReferenceDrag(event: DragEvent): boolean {
@@ -94,7 +102,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
         <textarea
           id="prompt-input"
           value={prompt}
-          placeholder={liveSearchAvailable ? "The scene contains an animal" : "Static fallback demo. Add ?backend=<RunPod URL> to enable live semantic search."}
+          placeholder={liveSearchAvailable ? "The scene contains an animal" : STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}
           disabled={disabled || !liveSearchAvailable}
           onChange={(event) => setPrompt(event.target.value)}
           onKeyDown={(event) => {
@@ -102,12 +110,14 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
           }}
         />
         <button
-          className="primary-icon-button"
-          disabled={disabled || !liveSearchAvailable || submitting || !prompt.trim()}
-          onClick={() => void submit()}
-          title={liveSearchAvailable ? "Create layer" : "Live search requires a RunPod backend"}
+          type="button"
+          className={`primary-icon-button${liveSearchAvailable ? "" : " contact-copy-button"}${contactCopied ? " is-copied" : ""}`}
+          disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() : disabled}
+          onClick={() => (liveSearchAvailable ? void submit() : void copyContactEmail())}
+          title={liveSearchAvailable ? "Create layer" : "Copy author email"}
+          aria-label={liveSearchAvailable ? "Create layer" : "Copy author email"}
         >
-          <SendHorizontal size={18} />
+          {liveSearchAvailable ? <SendHorizontal size={18} /> : contactCopied ? <Check size={18} /> : <Copy size={18} />}
         </button>
       </div>
     </section>
