@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, us
 import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
   REMOTE_LOG_EVENT,
+  checkRemoteBackendReachable,
   createPanoReferenceScoringJob,
   createScoringJob,
   deleteGradient,
@@ -60,7 +61,7 @@ function revokeObjectUrl(url: string | null | undefined) {
 
 function panoFailureMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : "";
-  if (/Pano request failed\s*\(404\)/i.test(message) || /Failed to parse URL|Invalid URL/i.test(message)) {
+  if (/Pano request failed\s*\(404\)|Pano image download failed\s*\(404\)|Failed to fetch|NetworkError|Load failed|timed out|Failed to parse URL|Invalid URL/i.test(message)) {
     return STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE;
   }
   return message || "Pano unavailable";
@@ -132,6 +133,7 @@ export function App() {
   const [darkMode, setDarkMode] = useState(loadInitialDarkMode);
   const [basemapId, setBasemapId] = useState<BasemapId>(loadInitialBasemapId);
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
+  const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
   const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
   const [remoteLogs, setRemoteLogs] = useState<RemoteLogEntry[]>([]);
   const [mapProgressEntries, setMapProgressEntries] = useState<RemoteLogEntry[]>([]);
@@ -201,6 +203,11 @@ export function App() {
   }, [priorityTiles]);
 
   useEffect(() => {
+    startupRefreshAttemptedRef.current = false;
+    setBackendConnectionFailed(false);
+  }, [backendConfig?.enabled, backendConfig?.baseUrl]);
+
+  useEffect(() => {
     if (startupRefreshAttemptedRef.current || !data || !backendConfig) return;
     startupRefreshAttemptedRef.current = true;
     if (!backendConfig.enabled || !isUsableRemoteBackendUrl(backendConfig.baseUrl)) return;
@@ -208,12 +215,24 @@ export function App() {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       setRefreshingLayers(true);
-      void refreshAllScoringLayers(priorityTilesRef.current)
-        .then(() => {
-          if (!cancelled) void refresh();
+      void checkRemoteBackendReachable(backendConfig)
+        .then(async (reachable) => {
+          if (cancelled) return;
+          if (!reachable) {
+            setBackendConnectionFailed(true);
+            setError(null);
+            return;
+          }
+          const result = await refreshAllScoringLayers(priorityTilesRef.current);
+          if (cancelled) return;
+          setBackendConnectionFailed(result.failed > 0 && result.submitted === 0 && result.skipped === 0);
+          void refresh();
         })
         .catch(() => {
-          if (!cancelled) setError(null);
+          if (!cancelled) {
+            setBackendConnectionFailed(true);
+            setError(null);
+          }
         })
         .finally(() => {
           if (!cancelled) setRefreshingLayers(false);
@@ -448,7 +467,8 @@ export function App() {
   }, [data, selectedLayer]);
 
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
-  const liveSearchAvailable = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
+  const backendCanAttemptSearch = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
+  const liveSearchAvailable = backendCanAttemptSearch && !backendConnectionFailed;
 
   const updateState = useCallback((mutator: (state: LayerState) => LayerState) => {
     setData((current) => {
@@ -487,16 +507,24 @@ export function App() {
 
   async function handleRefreshAllLayers() {
     setError(null);
-    if (!liveSearchAvailable) {
+    if (!backendCanAttemptSearch || !backendConfig) {
       await refresh();
       return;
     }
     setRefreshingLayers(true);
     try {
-      await refreshAllScoringLayers(priorityTiles);
+      const reachable = await checkRemoteBackendReachable(backendConfig);
+      if (!reachable) {
+        setBackendConnectionFailed(true);
+        await refresh();
+        return;
+      }
+      const result = await refreshAllScoringLayers(priorityTiles);
+      setBackendConnectionFailed(result.failed > 0 && result.submitted === 0 && result.skipped === 0);
       await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to refresh layers");
+    } catch {
+      setBackendConnectionFailed(true);
+      setError(null);
     } finally {
       setRefreshingLayers(false);
     }

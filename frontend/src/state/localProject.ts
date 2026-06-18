@@ -1446,6 +1446,24 @@ async function checkRemoteBackendReady(config: RemoteBackendConfig): Promise<boo
   }
 }
 
+export async function checkRemoteBackendReachable(config: RemoteBackendConfig): Promise<boolean> {
+  if (!isUsableRemoteBackendUrl(config.baseUrl)) return false;
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), REMOTE_READY_TIMEOUT_MS);
+  try {
+    const response = await fetch(resolveRemoteUrl(config, "/api/ready"), {
+      headers: remoteAuthHeaders(config),
+      cache: "no-store",
+      signal: controller.signal
+    });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    window.clearTimeout(timeout);
+  }
+}
+
 function priorityTilesForRequest(config: RemoteBackendConfig, priorityTiles?: CityPriorityTiles | null): TileCoord[] {
   if (!priorityTiles) return [];
   const datasetIds = new Set(remoteDatasetIds(config));

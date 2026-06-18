@@ -417,7 +417,10 @@ function MobileMapSearch({
         />
       ) : (
         <div className="mobile-static-search-message" aria-label={STATIC_SEARCH_PLACEHOLDER}>
-          <span>{STATIC_SEARCH_PLACEHOLDER}</span>
+          <div className="mobile-static-search-message-track">
+            <span>{STATIC_SEARCH_PLACEHOLDER}</span>
+            <span aria-hidden="true">{STATIC_SEARCH_PLACEHOLDER}</span>
+          </div>
         </div>
       )}
       <button
