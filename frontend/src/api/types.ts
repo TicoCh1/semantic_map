@@ -165,6 +165,20 @@ export type ScoringJob = {
   results?: ScoringResultRef[];
 };
 
+export type ScoringJobBatchItemResponse = {
+  index: number;
+  status: "accepted" | "rejected";
+  job?: ScoringJob | null;
+  error_type?: string | null;
+  error?: string | null;
+};
+
+export type ScoringJobBatchResponse = {
+  request_id: string;
+  received_at: string;
+  queries: ScoringJobBatchItemResponse[];
+};
+
 export type ScoringResultRef = {
   dataset_id: string;
   prompt_id: string;
@@ -212,6 +226,7 @@ export type RemoteResultManifest = {
   zooms: number[];
   density_rule?: string;
   density_base_zoom?: number | null;
+  result_revision?: string | null;
   stats: {
     count: number;
     score_min: number;

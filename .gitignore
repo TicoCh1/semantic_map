@@ -36,6 +36,17 @@ logs/
 oom.txt
 semantic_backend/
 frontend/public/screensaver-panos/
+downloads/
+outputs/
+tmp/
+analysis/semantic_validation/
+data/external_validation/
+pcatsne-geojson/
+
+# Local document and archive artifacts
+*.docx
+*.zip
+_caadria_docx_render_*/
 
 # Secrets and local runtime configuration
 .env

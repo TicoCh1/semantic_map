@@ -44,6 +44,33 @@ class ScoringJobCreate(BaseModel):
     zooms: list[int] | None = None
     priority_tile: TileCoord | None = None
     priority_tiles: list[TileCoord] | None = None
+    force_override: bool = False
+    client_request_id: str | None = Field(default=None, max_length=128)
+
+
+class ScoringJobBatchCreate(BaseModel):
+    """Canonical API envelope for one or more query inputs.
+
+    Every element uses the same ScoringJobCreate schema as the single-query
+    endpoint. The backend may coalesce cache misses that share a batch key.
+    """
+
+    queries: list[ScoringJobCreate] = Field(min_length=1, max_length=256)
+    client_request_id: str | None = Field(default=None, max_length=128)
+
+
+class ScoringJobBatchItemResponse(BaseModel):
+    index: int = Field(ge=0)
+    status: Literal["accepted", "rejected"]
+    job: "ScoringJobResponse | None" = None
+    error_type: str | None = None
+    error: str | None = None
+
+
+class ScoringJobBatchResponse(BaseModel):
+    request_id: str
+    received_at: str
+    queries: list[ScoringJobBatchItemResponse]
 
 
 class ScoringResultRef(BaseModel):
@@ -78,6 +105,11 @@ class ScoringJobResponse(BaseModel):
     manifest_url: str | None = None
     tile_url_template: str | None = None
     results: list[ScoringResultRef] = Field(default_factory=list)
+    request_id: str | None = None
+    received_at: str | None = None
+    execution_batch_id: str | None = None
+    cache_status: Literal["pending", "cache_hit", "force_override", "active_deduplicated"] = "pending"
+    force_override: bool = False
 
 
 class ScoreStats(BaseModel):
@@ -111,7 +143,82 @@ class ResultManifest(BaseModel):
     density_base_zoom: int | None = None
     density_trigger_points: int
     density_keep_points: int
+    result_revision: str | None = None
     created_at: str
+
+
+class ArcGISFeatureField(BaseModel):
+    name: str
+    type: Literal["oid", "string", "double", "integer", "date"]
+    alias: str | None = None
+    length: int | None = None
+
+
+class ArcGISFeature(BaseModel):
+    geometry: dict[str, Any]
+    attributes: dict[str, Any]
+
+
+class ArcGISFeatureSchema(BaseModel):
+    prompt_id: str
+    dataset_id: str
+    dataset_group_id: str | None = None
+    prompt: str
+    query_type: QueryType = "text"
+    reference_pano: PanoReference | None = None
+    geometry_type: Literal["esriGeometryPoint"] = "esriGeometryPoint"
+    object_id_field_name: str = "objectid"
+    spatial_reference: dict[str, int] = Field(default_factory=lambda: {"wkid": 4326})
+    fields: list[ArcGISFeatureField]
+    stats: ScoreStats
+    total: int
+
+
+class ArcGISFeaturePage(ArcGISFeatureSchema):
+    features: list[ArcGISFeature]
+    offset: int
+    limit: int
+    count: int
+    has_more: bool
+    next_offset: int | None = None
+
+
+class ArcGISMergedFeatureRequest(BaseModel):
+    dataset_id: str = Field(min_length=1)
+    dataset_group_id: str | None = None
+    dataset_ids: list[str] | None = None
+    prompts: list[str] = Field(min_length=1)
+    bbox: str | None = None
+    limit: int = Field(default=50_000, ge=1, le=200_000)
+    offset: int = Field(default=0, ge=0)
+    priority_tile: TileCoord | None = None
+    priority_tiles: list[TileCoord] | None = None
+    force_override: bool = False
+    client_request_id: str | None = Field(default=None, max_length=128)
+
+
+class ArcGISMergedPromptRef(BaseModel):
+    index: int = Field(ge=1)
+    prompt: str
+    prompt_id: str
+    dataset_id: str
+
+
+class ArcGISMergedFeaturePage(BaseModel):
+    dataset_id: str
+    dataset_group_id: str | None = None
+    prompts: list[ArcGISMergedPromptRef]
+    geometry_type: Literal["esriGeometryPoint"] = "esriGeometryPoint"
+    object_id_field_name: str = "objectid"
+    spatial_reference: dict[str, int] = Field(default_factory=lambda: {"wkid": 4326})
+    fields: list[ArcGISFeatureField]
+    total: int
+    features: list[ArcGISFeature]
+    offset: int
+    limit: int
+    count: int
+    has_more: bool
+    next_offset: int | None = None
 
 
 class ReadyResponse(BaseModel):
@@ -121,6 +228,9 @@ class ReadyResponse(BaseModel):
     model_dir: str
     data_root: str
     result_root: str
+    log_root: str
+    execution_log_root: str
+    execution_log_enabled: bool
     tile_index_root: str
     default_dataset_id: str
     default_dataset_ids: list[str]

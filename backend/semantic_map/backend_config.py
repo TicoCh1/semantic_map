@@ -38,6 +38,10 @@ class BackendSettings:
     model_dir: Path
     data_root: Path
     result_root: Path
+    log_root: Path
+    execution_log_root: Path
+    execution_log_enabled: bool
+    execution_log_fsync: bool
     tile_index_root: Path
     pano_tar_dir: Path
     pano_cache_root: Path
@@ -131,6 +135,13 @@ def get_backend_settings() -> BackendSettings:
         model_dir=_path_env("MODEL_DIR", workspace_root / "models" / "Qwen3-VL-Embedding-2B"),
         data_root=_path_env("DATA_ROOT", workspace_root / "embedding"),
         result_root=_path_env("RESULT_ROOT", workspace_root / "semantic_backend" / "results"),
+        log_root=_path_env("LOG_ROOT", workspace_root / "semantic_backend" / "logs"),
+        execution_log_root=_path_env(
+            "EXECUTION_LOG_ROOT",
+            _path_env("LOG_ROOT", workspace_root / "semantic_backend" / "logs") / "query_execution",
+        ),
+        execution_log_enabled=_parse_bool(os.getenv("EXECUTION_LOG_ENABLED"), default=True),
+        execution_log_fsync=_parse_bool(os.getenv("EXECUTION_LOG_FSYNC"), default=True),
         tile_index_root=_path_env("TILE_INDEX_ROOT", workspace_root / "semantic_backend" / "tile_index"),
         pano_tar_dir=_path_env("PANO_TAR_DIR", workspace_root / "pano"),
         pano_cache_root=_path_env("PANO_CACHE_ROOT", workspace_root / "semantic_backend" / "pano_cache"),

@@ -14,6 +14,7 @@ import type {
   RemoteLogEntry,
   RemoteResultManifest,
   ScoringJob,
+  ScoringJobBatchResponse,
   SemanticLayer,
   TileCoord
 } from "../api/types";
@@ -1500,10 +1501,10 @@ async function submitRemoteScoringJob(config: RemoteBackendConfig, prompt: strin
           zooms: DEFAULT_REMOTE_ZOOMS,
           priority_tile: priorityTileList[0] ?? undefined
         };
-  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs"), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs/batch"), {
     method: "POST",
     headers: remoteJsonHeaders(config),
-    body: JSON.stringify(body)
+    body: JSON.stringify({ queries: [body] })
   }, REMOTE_SUBMIT_TIMEOUT_MS);
   if (!response.ok) {
     reportRemoteRequestFailure("remote_scoring_submit_failed", `RunPod scoring request failed (${response.status})`, {
@@ -1513,7 +1514,7 @@ async function submitRemoteScoringJob(config: RemoteBackendConfig, prompt: strin
     });
     throw new Error(`RunPod scoring request failed (${response.status})`);
   }
-  const raw = (await response.json()) as ScoringJob;
+  const raw = acceptedJobFromBatchResponse((await response.json()) as ScoringJobBatchResponse);
   return {
     ...raw,
     layer_id: null
@@ -1548,10 +1549,10 @@ async function submitRemoteReferenceScoringJob(
           zooms: DEFAULT_REMOTE_ZOOMS,
           priority_tile: priorityTileList[0] ?? undefined
         };
-  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs"), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs/batch"), {
     method: "POST",
     headers: remoteJsonHeaders(config),
-    body: JSON.stringify(body)
+    body: JSON.stringify({ queries: [body] })
   }, REMOTE_SUBMIT_TIMEOUT_MS);
   if (!response.ok) {
     reportRemoteRequestFailure("remote_reference_scoring_submit_failed", `RunPod reference scoring request failed (${response.status})`, {
@@ -1561,11 +1562,22 @@ async function submitRemoteReferenceScoringJob(
     });
     throw new Error(`RunPod reference scoring request failed (${response.status})`);
   }
-  const raw = (await response.json()) as ScoringJob;
+  const raw = acceptedJobFromBatchResponse((await response.json()) as ScoringJobBatchResponse);
   return {
     ...raw,
     layer_id: null
   };
+}
+
+function acceptedJobFromBatchResponse(payload: ScoringJobBatchResponse): ScoringJob {
+  const result = payload.queries?.[0];
+  if (!result) {
+    throw new Error("RunPod scoring batch returned no query result.");
+  }
+  if (result.status !== "accepted" || !result.job) {
+    throw new Error(result.error || "RunPod rejected the scoring query.");
+  }
+  return result.job;
 }
 
 async function getRemoteScoringJob(config: RemoteBackendConfig, jobId: string): Promise<ScoringJob> {

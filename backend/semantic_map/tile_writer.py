@@ -20,85 +20,112 @@ def write_prompt_result(
     storage: ResultStorage,
     settings: BackendSettings,
     priority_tile: TileCoord | None,
+    result_revision: str | None = None,
     progress_callback: Callable[[TileKey, int, int], None] | None = None,
 ) -> ResultManifest:
     records, scores, zscores = result_to_arrays(result)
-    storage.write_score_arrays(result.dataset_id, result.prompt_id, scores, zscores)
-    if settings.write_scores_jsonl:
-        storage.write_scores_jsonl(
+    try:
+        storage.write_score_arrays(
             result.dataset_id,
             result.prompt_id,
-            iter_score_jsonl_rows(result, records, scores, zscores),
+            scores,
+            zscores,
+            revision=result_revision,
         )
+        if settings.write_scores_jsonl:
+            storage.write_scores_jsonl(
+                result.dataset_id,
+                result.prompt_id,
+                iter_score_jsonl_rows(result, records, scores, zscores),
+                revision=result_revision,
+            )
 
-    write_queue = result_tile_write_queue(tile_index, priority_tile, prewrite_all=settings.prewrite_all_tiles)
-    total_tiles = len(write_queue)
-    for index, tile in enumerate(write_queue, start=1):
-        write_geojson_tile_from_arrays(
+        write_queue = result_tile_write_queue(tile_index, priority_tile, prewrite_all=settings.prewrite_all_tiles)
+        total_tiles = len(write_queue)
+        for index, tile in enumerate(write_queue, start=1):
+            write_geojson_tile_from_arrays(
+                prompt_id=result.prompt_id,
+                dataset_id=result.dataset_id,
+                tile=tile,
+                tile_index=tile_index,
+                records=records,
+                scores=scores,
+                zscores=zscores,
+                storage=storage,
+                result_revision=result_revision,
+            )
+            if progress_callback is not None:
+                progress_callback(tile, index, total_tiles)
+
+        if result.query_type == "pano_reference" and result.reference_pano:
+            reference_dataset_id = str(result.reference_pano.get("dataset_id") or "")
+            reference_pano_id = str(result.reference_pano.get("pano_id") or "")
+            canonical_prompt = None
+            prompt_key_hash = make_reference_prompt_key_hash(
+                dataset_id=result.dataset_id,
+                reference_dataset_id=reference_dataset_id,
+                reference_pano_id=reference_pano_id,
+                model_version=settings.model_version,
+                scoring_version=result.scoring_version or settings.scoring_version,
+                tile_index_version=settings.tile_index_version,
+            )
+        else:
+            canonical_prompt = normalize_prompt(result.prompt)
+            prompt_key_hash = make_prompt_key_hash(
+                dataset_id=result.dataset_id,
+                prompt=result.prompt,
+                model_version=settings.model_version,
+                scoring_version=result.scoring_version or settings.scoring_version,
+                tile_index_version=settings.tile_index_version,
+            )
+
+        manifest = ResultManifest(
             prompt_id=result.prompt_id,
             dataset_id=result.dataset_id,
-            tile=tile,
-            tile_index=tile_index,
-            records=records,
-            scores=scores,
-            zscores=zscores,
-            storage=storage,
-        )
-        if progress_callback is not None:
-            progress_callback(tile, index, total_tiles)
-
-    if result.query_type == "pano_reference" and result.reference_pano:
-        reference_dataset_id = str(result.reference_pano.get("dataset_id") or "")
-        reference_pano_id = str(result.reference_pano.get("pano_id") or "")
-        canonical_prompt = None
-        prompt_key_hash = make_reference_prompt_key_hash(
-            dataset_id=result.dataset_id,
-            reference_dataset_id=reference_dataset_id,
-            reference_pano_id=reference_pano_id,
-            model_version=settings.model_version,
-            scoring_version=result.scoring_version or settings.scoring_version,
-            tile_index_version=settings.tile_index_version,
-        )
-    else:
-        canonical_prompt = normalize_prompt(result.prompt)
-        prompt_key_hash = make_prompt_key_hash(
-            dataset_id=result.dataset_id,
+            dataset_group_id=result.dataset_group_id,
             prompt=result.prompt,
+            query_type=result.query_type,
+            reference_pano=result.reference_pano,
+            canonical_prompt=canonical_prompt,
+            prompt_key_hash=prompt_key_hash,
+            tile_url_template=storage.tile_url_template(result.prompt_id, revision=result_revision),
+            zooms=list(tile_index.zooms),
+            stats=ScoreStats(
+                count=result.count,
+                score_min=float(result.score_min),
+                score_max=float(result.score_max),
+                zscore_min=float(result.zscore_min),
+                zscore_max=float(result.zscore_max),
+            ),
             model_version=settings.model_version,
             scoring_version=result.scoring_version or settings.scoring_version,
+            base_scoring_version=result.base_scoring_version,
             tile_index_version=settings.tile_index_version,
+            density_rule=tile_index.density_rule,
+            density_base_zoom=tile_index.density_base_zoom,
+            density_trigger_points=settings.density_trigger_points,
+            density_keep_points=settings.density_keep_points,
+            result_revision=result_revision,
+            created_at=utc_now(),
         )
-
-    manifest = ResultManifest(
-        prompt_id=result.prompt_id,
-        dataset_id=result.dataset_id,
-        dataset_group_id=result.dataset_group_id,
-        prompt=result.prompt,
-        query_type=result.query_type,
-        reference_pano=result.reference_pano,
-        canonical_prompt=canonical_prompt,
-        prompt_key_hash=prompt_key_hash,
-        tile_url_template=storage.tile_url_template(result.prompt_id),
-        zooms=list(tile_index.zooms),
-        stats=ScoreStats(
-            count=result.count,
-            score_min=float(result.score_min),
-            score_max=float(result.score_max),
-            zscore_min=float(result.zscore_min),
-            zscore_max=float(result.zscore_max),
-        ),
-        model_version=settings.model_version,
-        scoring_version=result.scoring_version or settings.scoring_version,
-        base_scoring_version=result.base_scoring_version,
-        tile_index_version=settings.tile_index_version,
-        density_rule=tile_index.density_rule,
-        density_base_zoom=tile_index.density_base_zoom,
-        density_trigger_points=settings.density_trigger_points,
-        density_keep_points=settings.density_keep_points,
-        created_at=utc_now(),
-    )
-    storage.write_json(storage.manifest_path(result.dataset_id, result.prompt_id), manifest.model_dump())
-    return manifest
+        storage.write_json(
+            storage.manifest_path(result.dataset_id, result.prompt_id, result_revision),
+            manifest.model_dump(),
+        )
+        if result_revision:
+            storage.validate_result_revision(
+                result.dataset_id,
+                result.prompt_id,
+                result_revision,
+                expected_count=result.count,
+                required_tiles=write_queue,
+            )
+            storage.activate_result_revision(result.dataset_id, result.prompt_id, result_revision)
+        return manifest
+    except Exception:
+        if result_revision:
+            storage.delete_result_revision(result.dataset_id, result.prompt_id, result_revision)
+        raise
 
 
 def write_geojson_tile_from_arrays(
@@ -111,6 +138,7 @@ def write_geojson_tile_from_arrays(
     scores,
     zscores,
     storage: ResultStorage,
+    result_revision: str | None = None,
 ) -> None:
     entries = tile_index.entries_by_tile.get(tile, ())
     features = [
@@ -134,7 +162,11 @@ def write_geojson_tile_from_arrays(
             "feature_count": len(features),
         },
     }
-    storage.write_json(storage.tile_path(dataset_id, prompt_id, tile.z, tile.x, tile.y), payload, compact=True)
+    storage.write_json(
+        storage.tile_path(dataset_id, prompt_id, tile.z, tile.x, tile.y, result_revision),
+        payload,
+        compact=True,
+    )
 
 
 def result_to_arrays(result: PromptScoreResult) -> tuple[tuple[PanoRecord, ...], np.ndarray, np.ndarray]:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
+from urllib.parse import urlencode
 
 from .backend_config import BackendSettings
 from .prompt_ids import normalize_prompt
@@ -24,20 +26,47 @@ class ResultStorage:
     def job_path(self, dataset_id: str, prompt_id: str) -> Path:
         return self.result_dir(dataset_id, prompt_id) / "job.json"
 
-    def manifest_path(self, dataset_id: str, prompt_id: str) -> Path:
-        return self.result_dir(dataset_id, prompt_id) / "manifest.json"
+    def revision_pointer_path(self, dataset_id: str, prompt_id: str) -> Path:
+        return self.result_dir(dataset_id, prompt_id) / "current.json"
 
-    def scores_path(self, dataset_id: str, prompt_id: str) -> Path:
-        return self.result_dir(dataset_id, prompt_id) / "scores.jsonl"
+    def revision_dir(self, dataset_id: str, prompt_id: str, revision: str) -> Path:
+        return self.result_dir(dataset_id, prompt_id) / "revisions" / safe_segment(revision)
 
-    def score_array_path(self, dataset_id: str, prompt_id: str) -> Path:
-        return self.result_dir(dataset_id, prompt_id) / "score.npy"
+    def active_revision(self, dataset_id: str, prompt_id: str) -> str | None:
+        payload = self.read_json(self.revision_pointer_path(dataset_id, prompt_id))
+        if not payload:
+            return None
+        revision = str(payload.get("revision") or "").strip()
+        return revision or None
 
-    def zscore_array_path(self, dataset_id: str, prompt_id: str) -> Path:
-        return self.result_dir(dataset_id, prompt_id) / "zscore.npy"
+    def artifact_dir(self, dataset_id: str, prompt_id: str, revision: str | None = None) -> Path:
+        effective_revision = revision or self.active_revision(dataset_id, prompt_id)
+        if effective_revision:
+            return self.revision_dir(dataset_id, prompt_id, effective_revision)
+        return self.result_dir(dataset_id, prompt_id)
 
-    def tile_path(self, dataset_id: str, prompt_id: str, z: int, x: int, y: int) -> Path:
-        return self.result_dir(dataset_id, prompt_id) / "tiles" / str(z) / str(x) / f"{y}.geojson"
+    def manifest_path(self, dataset_id: str, prompt_id: str, revision: str | None = None) -> Path:
+        return self.artifact_dir(dataset_id, prompt_id, revision) / "manifest.json"
+
+    def scores_path(self, dataset_id: str, prompt_id: str, revision: str | None = None) -> Path:
+        return self.artifact_dir(dataset_id, prompt_id, revision) / "scores.jsonl"
+
+    def score_array_path(self, dataset_id: str, prompt_id: str, revision: str | None = None) -> Path:
+        return self.artifact_dir(dataset_id, prompt_id, revision) / "score.npy"
+
+    def zscore_array_path(self, dataset_id: str, prompt_id: str, revision: str | None = None) -> Path:
+        return self.artifact_dir(dataset_id, prompt_id, revision) / "zscore.npy"
+
+    def tile_path(
+        self,
+        dataset_id: str,
+        prompt_id: str,
+        z: int,
+        x: int,
+        y: int,
+        revision: str | None = None,
+    ) -> Path:
+        return self.artifact_dir(dataset_id, prompt_id, revision) / "tiles" / str(z) / str(x) / f"{y}.geojson"
 
     def tmp_path_for(self, path: Path) -> Path:
         return path.with_name(f"{path.name}.{uuid4().hex}.tmp")
@@ -49,7 +78,7 @@ class ResultStorage:
         for dataset_dir in self.settings.result_root.iterdir():
             if not dataset_dir.is_dir():
                 continue
-            manifest_path = dataset_dir / target_name / "manifest.json"
+            manifest_path = self.manifest_path(dataset_dir.name, target_name)
             if manifest_path.exists():
                 return manifest_path
         return None
@@ -75,7 +104,7 @@ class ResultStorage:
         for result_dir in dataset_dir.iterdir():
             if not result_dir.is_dir():
                 continue
-            manifest_path = result_dir / "manifest.json"
+            manifest_path = self.manifest_path(dataset_id, result_dir.name)
             if not manifest_path.exists():
                 continue
             payload = self.read_json(manifest_path)
@@ -108,11 +137,19 @@ class ResultStorage:
             return None
         return json.loads(path.read_text(encoding="utf-8"))
 
-    def write_score_arrays(self, dataset_id: str, prompt_id: str, scores, zscores) -> None:
+    def write_score_arrays(
+        self,
+        dataset_id: str,
+        prompt_id: str,
+        scores,
+        zscores,
+        *,
+        revision: str | None = None,
+    ) -> None:
         import numpy as np
 
-        score_path = self.score_array_path(dataset_id, prompt_id)
-        zscore_path = self.zscore_array_path(dataset_id, prompt_id)
+        score_path = self.score_array_path(dataset_id, prompt_id, revision)
+        zscore_path = self.zscore_array_path(dataset_id, prompt_id, revision)
         score_path.parent.mkdir(parents=True, exist_ok=True)
 
         for path, values in ((score_path, scores), (zscore_path, zscores)):
@@ -121,11 +158,11 @@ class ResultStorage:
                 np.save(handle, np.asarray(values, dtype=np.float32))
             tmp_path.replace(path)
 
-    def read_score_arrays(self, dataset_id: str, prompt_id: str):
+    def read_score_arrays(self, dataset_id: str, prompt_id: str, *, revision: str | None = None):
         import numpy as np
 
-        score_path = self.score_array_path(dataset_id, prompt_id)
-        zscore_path = self.zscore_array_path(dataset_id, prompt_id)
+        score_path = self.score_array_path(dataset_id, prompt_id, revision)
+        zscore_path = self.zscore_array_path(dataset_id, prompt_id, revision)
         if not score_path.exists() or not zscore_path.exists():
             return None
         return (
@@ -133,8 +170,94 @@ class ResultStorage:
             np.load(zscore_path, mmap_mode="r"),
         )
 
-    def write_scores_jsonl(self, dataset_id: str, prompt_id: str, rows: Iterable[dict[str, Any]]) -> None:
-        path = self.scores_path(dataset_id, prompt_id)
+    def activate_result_revision(self, dataset_id: str, prompt_id: str, revision: str) -> None:
+        manifest_path = self.manifest_path(dataset_id, prompt_id, revision)
+        if not manifest_path.exists():
+            raise RuntimeError(f"Cannot activate incomplete result revision without manifest: {manifest_path}")
+        self.write_json(
+            self.revision_pointer_path(dataset_id, prompt_id),
+            {"revision": safe_segment(revision)},
+            compact=True,
+        )
+
+    def validate_result_revision(
+        self,
+        dataset_id: str,
+        prompt_id: str,
+        revision: str,
+        *,
+        expected_count: int,
+        required_tiles,
+    ) -> None:
+        manifest_path = self.manifest_path(dataset_id, prompt_id, revision)
+        manifest = self.read_json(manifest_path)
+        if not manifest:
+            raise RuntimeError(f"Result revision manifest is missing or empty: {manifest_path}")
+        if manifest.get("result_revision") != revision:
+            raise RuntimeError(
+                f"Result revision manifest mismatch: expected {revision}, got {manifest.get('result_revision')}"
+            )
+
+        arrays = self.read_score_arrays(dataset_id, prompt_id, revision=revision)
+        if arrays is None:
+            raise RuntimeError(f"Result revision score arrays are missing: {revision}")
+        scores, zscores = arrays
+        if len(scores) != expected_count or len(zscores) != expected_count:
+            raise RuntimeError(
+                f"Result revision array length mismatch for {revision}: "
+                f"scores={len(scores)}, zscores={len(zscores)}, expected={expected_count}"
+            )
+
+        for tile in required_tiles:
+            tile_path = self.tile_path(dataset_id, prompt_id, tile.z, tile.x, tile.y, revision)
+            if not tile_path.exists():
+                raise RuntimeError(f"Result revision tile is missing: {tile_path}")
+            tile_payload = self.read_json(tile_path)
+            if not tile_payload or tile_payload.get("type") != "FeatureCollection":
+                raise RuntimeError(f"Result revision tile is invalid: {tile_path}")
+
+    def delete_result_revision(self, dataset_id: str, prompt_id: str, revision: str) -> None:
+        revision_dir = self.revision_dir(dataset_id, prompt_id, revision)
+        if revision_dir.exists():
+            shutil.rmtree(revision_dir)
+
+    def prune_superseded_results(self, dataset_id: str, prompt_id: str, *, keep_revision: str) -> list[str]:
+        active_revision = self.active_revision(dataset_id, prompt_id)
+        if active_revision != keep_revision:
+            raise RuntimeError(
+                f"Refusing to prune result revisions because active={active_revision!r}, keep={keep_revision!r}"
+            )
+
+        removed: list[str] = []
+        revisions_dir = self.result_dir(dataset_id, prompt_id) / "revisions"
+        if revisions_dir.exists():
+            for candidate in revisions_dir.iterdir():
+                if not candidate.is_dir() or candidate.name == safe_segment(keep_revision):
+                    continue
+                shutil.rmtree(candidate)
+                removed.append(candidate.name)
+
+        legacy_result_dir = self.result_dir(dataset_id, prompt_id)
+        legacy_tiles = legacy_result_dir / "tiles"
+        if legacy_tiles.exists():
+            shutil.rmtree(legacy_tiles)
+            removed.append("legacy:tiles")
+        for name in ("manifest.json", "score.npy", "zscore.npy", "scores.jsonl"):
+            path = legacy_result_dir / name
+            if path.exists():
+                path.unlink()
+                removed.append(f"legacy:{name}")
+        return removed
+
+    def write_scores_jsonl(
+        self,
+        dataset_id: str,
+        prompt_id: str,
+        rows: Iterable[dict[str, Any]],
+        *,
+        revision: str | None = None,
+    ) -> None:
+        path = self.scores_path(dataset_id, prompt_id, revision)
         path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = self.tmp_path_for(path)
         with tmp_path.open("w", encoding="utf-8") as handle:
@@ -143,8 +266,10 @@ class ResultStorage:
                 handle.write("\n")
         tmp_path.replace(path)
 
-    def tile_url_template(self, prompt_id: str) -> str:
+    def tile_url_template(self, prompt_id: str, *, revision: str | None = None) -> str:
         route = f"/api/scoring/results/{prompt_id}/tiles/{{z}}/{{x}}/{{y}}.geojson"
+        if revision:
+            route = f"{route}?{urlencode({'revision': safe_segment(revision)})}"
         if not self.settings.public_base_url:
             return route
         return f"{self.settings.public_base_url.rstrip('/')}{route}"

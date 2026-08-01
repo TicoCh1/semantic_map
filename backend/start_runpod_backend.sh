@@ -26,6 +26,11 @@ QWEN_REPO_DIR="${QWEN_REPO_DIR:-/tmp/Qwen3-VL-Embedding}"
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
 LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
+EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-${LOG_ROOT}/query_execution}"
+EXECUTION_LOG_ENABLED="${EXECUTION_LOG_ENABLED:-true}"
+EXECUTION_LOG_FSYNC="${EXECUTION_LOG_FSYNC:-true}"
+UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-${LOG_ROOT}/uvicorn.log}"
+UVICORN_LOG_MAX_BYTES="${UVICORN_LOG_MAX_BYTES:-104857600}"
 DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/embedding}"
 DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID:-london_224_8_45}"
 DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS:-london_224_8_45,shanghai_224_8_45_2B}"
@@ -78,6 +83,12 @@ export DEFAULT_DATASET_ID
 export DEFAULT_DATASET_IDS
 export DEFAULT_DATASET_GROUP_ID
 export RESULT_ROOT
+export LOG_ROOT
+export EXECUTION_LOG_ROOT
+export EXECUTION_LOG_ENABLED
+export EXECUTION_LOG_FSYNC
+export UVICORN_LOG_PATH
+export UVICORN_LOG_MAX_BYTES
 export TILE_INDEX_ROOT
 export PANO_TAR_DIR
 export PANO_CACHE_ROOT
@@ -107,7 +118,16 @@ export DEMO_ALERT_COOLDOWN_SECONDS
 export PORT
 export PYTHONPATH="${QWEN_REPO_DIR}:${WORKSPACE_ROOT}:${PYTHONPATH:-}"
 
-mkdir -p "${LOG_ROOT}" "${RESULT_ROOT}" "${TILE_INDEX_ROOT}" "${PANO_CACHE_ROOT}" "$(dirname "${PANO_INDEX_PATH}")"
+mkdir -p "${LOG_ROOT}" "${EXECUTION_LOG_ROOT}" "${RESULT_ROOT}" "${TILE_INDEX_ROOT}" "${PANO_CACHE_ROOT}" "$(dirname "${PANO_INDEX_PATH}")"
+
+if [ -f "${UVICORN_LOG_PATH}" ] && [ "$(wc -c < "${UVICORN_LOG_PATH}")" -ge "${UVICORN_LOG_MAX_BYTES}" ]; then
+  rm -f "${UVICORN_LOG_PATH}.3"
+  [ ! -f "${UVICORN_LOG_PATH}.2" ] || mv "${UVICORN_LOG_PATH}.2" "${UVICORN_LOG_PATH}.3"
+  [ ! -f "${UVICORN_LOG_PATH}.1" ] || mv "${UVICORN_LOG_PATH}.1" "${UVICORN_LOG_PATH}.2"
+  mv "${UVICORN_LOG_PATH}" "${UVICORN_LOG_PATH}.1"
+fi
+
+exec > >(tee -a "${UVICORN_LOG_PATH}") 2>&1
 
 if [ ! -f "${QWEN_REPO_DIR}/.venv/bin/activate" ]; then
   echo "ERROR: Qwen runtime venv not found: ${QWEN_REPO_DIR}/.venv" >&2
@@ -136,6 +156,8 @@ echo "Dataset:        ${DATA_ROOT}/${DEFAULT_DATASET_ID}"
 echo "Dataset group:  ${DEFAULT_DATASET_IDS}"
 echo "Group id:       ${DEFAULT_DATASET_GROUP_ID:-<auto>}"
 echo "Results:        ${RESULT_ROOT}"
+echo "Execution logs: ${EXECUTION_LOG_ROOT} (enabled: ${EXECUTION_LOG_ENABLED}, fsync: ${EXECUTION_LOG_FSYNC})"
+echo "Server log:     ${UVICORN_LOG_PATH}"
 echo "Tile index:     ${TILE_INDEX_ROOT}"
 echo "Pano tar dir:   ${PANO_TAR_DIR}"
 echo "Shanghai pano:  ${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B}"
@@ -149,4 +171,4 @@ echo "Demo alerts:    ${DEMO_ALERT_ENABLED} (channel: ${DEMO_ALERT_CHANNEL}, to:
 echo "Public URL:     ${PUBLIC_BASE_URL:-<not set>}"
 echo "Listen:         ${HOST}:${PORT}"
 
-exec python -m uvicorn backend.main:app --host "${HOST}" --port "${PORT}"
+exec python -m uvicorn backend.main:app --host "${HOST}" --port "${PORT}" --access-log --log-level info

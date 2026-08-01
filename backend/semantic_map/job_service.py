@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import time
+import traceback
 from collections import defaultdict
 from dataclasses import dataclass, replace
 from datetime import datetime
+from uuid import uuid4
 
 from .backend_config import BackendSettings
 from .dataset_groups import dataset_group_id_for, scoring_version_for_dataset_group, unique_dataset_ids
+from .execution_log import ExecutionAuditLog, utc_now_precise
 from .prompt_ids import (
     make_job_id,
     make_legacy_prompt_id,
@@ -21,11 +24,16 @@ from .remote_schemas import PanoReference, QueryType, ScoringJobCreate, ScoringJ
 from .result_storage import ResultStorage
 from .scoring_engine import SemanticScoringEngine, TemporarySemanticScoringEngine
 from .tile_index import TileIndex, load_or_build_tile_index
+from .tile_math import latlon_to_tile
 from .tile_writer import result_tile_write_queue, write_prompt_result
 
 
 TERMINAL_JOB_STATUSES = {"ready", "failed", "cancelled"}
 PANO_REFERENCE_SCORING_SUFFIX = "pano-reference-aligned-v1"
+DEFAULT_PRIORITY_CENTRES = {
+    "london": (51.5072, -0.1276),
+    "shanghai": (31.2304, 121.4737),
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +46,10 @@ class DatasetTarget:
 @dataclass(frozen=True, slots=True)
 class QueuedSubmission:
     job_id: str
+    request_id: str
+    received_at: str
+    received_monotonic: float
+    request_payload: dict
     dataset_group_id: str
     dataset_ids: tuple[str, ...]
     targets: tuple[DatasetTarget, ...]
@@ -46,6 +58,7 @@ class QueuedSubmission:
     reference_pano: dict | None
     zooms: tuple[int, ...]
     scoring_version: str
+    force_override: bool
 
     @property
     def prompt_id(self) -> str:
@@ -72,6 +85,7 @@ class PromptBatchService:
         self._tile_indexes: dict[tuple[str, tuple[int, ...]], TileIndex] = {}
         self._warmed_up = False
         self._warmup_timings: dict[str, float] = {}
+        self.audit_log = ExecutionAuditLog(settings)
 
     async def start(self) -> None:
         if self.settings.warmup_on_startup and not self._warmed_up:
@@ -119,14 +133,119 @@ class PromptBatchService:
             pass
         self._worker_task = None
 
-    async def submit(self, payload: ScoringJobCreate) -> ScoringJobResponse:
+    async def submit(
+        self,
+        payload: ScoringJobCreate,
+        *,
+        request_id: str | None = None,
+        received_at: str | None = None,
+        entrypoint: str = "/api/scoring/jobs",
+    ) -> ScoringJobResponse:
+        jobs = await self.submit_many(
+            [payload],
+            request_id=request_id,
+            received_at=received_at,
+            entrypoint=entrypoint,
+            request_payload=payload.model_dump(mode="json"),
+        )
+        return jobs[0]
+
+    async def submit_many(
+        self,
+        payloads: list[ScoringJobCreate] | tuple[ScoringJobCreate, ...],
+        *,
+        request_id: str | None = None,
+        received_at: str | None = None,
+        entrypoint: str,
+        request_payload: dict | None = None,
+    ) -> list[ScoringJobResponse]:
+        results = await self.submit_many_results(
+            payloads,
+            request_id=request_id,
+            received_at=received_at,
+            entrypoint=entrypoint,
+            request_payload=request_payload,
+        )
+        for result in results:
+            if isinstance(result, ValueError):
+                raise result
+        return [result for result in results if isinstance(result, ScoringJobResponse)]
+
+    async def submit_many_results(
+        self,
+        payloads: list[ScoringJobCreate] | tuple[ScoringJobCreate, ...],
+        *,
+        request_id: str | None = None,
+        received_at: str | None = None,
+        entrypoint: str,
+        request_payload: dict | None = None,
+    ) -> list[ScoringJobResponse | ValueError]:
+        if not payloads:
+            raise ValueError("At least one query payload is required.")
+
+        effective_request_id = request_id or f"request_{uuid4().hex}"
+        effective_received_at = received_at or utc_now_precise()
+        effective_received_monotonic = time.perf_counter()
+        payload_list = [payload.model_dump(mode="json") for payload in payloads]
+        self.audit_log.record(
+            "api_request_received",
+            request_id=effective_request_id,
+            received_at=effective_received_at,
+            entrypoint=entrypoint,
+            payload=request_payload if request_payload is not None else {"queries": payload_list},
+            query_count=len(payload_list),
+        )
+
+        results: list[ScoringJobResponse | ValueError] = []
+        for index, payload in enumerate(payloads):
+            try:
+                results.append(
+                    await self._submit_one(
+                        payload,
+                        request_id=effective_request_id,
+                        received_at=effective_received_at,
+                        received_monotonic=effective_received_monotonic,
+                        request_payload=payload_list[index],
+                    )
+                )
+            except ValueError as exc:
+                self.audit_log.record(
+                    "query_rejected",
+                    request_id=effective_request_id,
+                    received_at=effective_received_at,
+                    query_index=index,
+                    request_payload=payload_list[index],
+                    exception_type=type(exc).__name__,
+                    exception_message=str(exc),
+                )
+                results.append(exc)
+        return results
+
+    async def _submit_one(
+        self,
+        payload: ScoringJobCreate,
+        *,
+        request_id: str,
+        received_at: str,
+        received_monotonic: float,
+        request_payload: dict,
+    ) -> ScoringJobResponse:
         dataset_ids = self._payload_dataset_ids(payload)
         default_group_id = self.settings.default_dataset_group_id if len(dataset_ids) > 1 else None
         dataset_group_id = dataset_group_id_for(dataset_ids, payload.dataset_group_id or default_group_id)
         scoring_version = scoring_version_for_dataset_group(self.settings.scoring_version, dataset_ids, dataset_group_id)
         query_type = payload.query_type or "text"
         if query_type == "pano_reference":
-            return await self._submit_pano_reference(payload, dataset_ids, dataset_group_id, scoring_version)
+            return await self._submit_pano_reference(
+                payload,
+                dataset_ids,
+                dataset_group_id,
+                scoring_version,
+                request_id=request_id,
+                received_at=received_at,
+                received_monotonic=received_monotonic,
+                request_payload=request_payload,
+            )
         if query_type != "text":
             raise ValueError(f"Unsupported scoring query_type: {query_type}")
         raw_prompt = payload.prompt
@@ -134,7 +253,7 @@ class PromptBatchService:
         if not prompt:
             raise ValueError("Prompt is required for text scoring jobs.")
         zooms = tuple(int(z) for z in payload.zooms) if payload.zooms else self.settings.tile_zooms
-        priority_tiles = self._priority_tiles_by_dataset(payload, dataset_ids)
+        priority_tiles = self._priority_tiles_by_dataset(payload, dataset_ids, zooms)
         targets = tuple(
             DatasetTarget(
                 dataset_id=dataset_id,
@@ -164,60 +283,73 @@ class PromptBatchService:
             )
         active_job = await self._find_active_job_by_prompt_ids(active_prompt_ids)
         if active_job is not None:
+            self._record_query_event(
+                "query_active_deduplicated",
+                job_id=active_job.job_id,
+                request_id=request_id,
+                received_at=received_at,
+                request_payload=request_payload,
+                query_type="text",
+                prompt=prompt,
+                dataset_ids=dataset_ids,
+                force_override=payload.force_override,
+                cache_status="active_deduplicated",
+            )
             return active_job
 
         existing_targets = []
-        all_existing = True
-        for target in targets:
-            existing_prompt_id = target.prompt_id
-            existing_manifest = self.storage.manifest_path(target.dataset_id, target.prompt_id)
-            if len(targets) == 1:
-                legacy_prompt_ids = tuple(
-                    dict.fromkeys(
-                        make_legacy_prompt_id(
-                            dataset_id=target.dataset_id,
-                            prompt=legacy_prompt,
-                            model_version=self.settings.model_version,
-                            scoring_version=scoring_version,
-                            tile_index_version=self.settings.tile_index_version,
+        all_existing = not payload.force_override
+        if not payload.force_override:
+            for target in targets:
+                existing_prompt_id = target.prompt_id
+                existing_manifest = self.storage.manifest_path(target.dataset_id, target.prompt_id)
+                if len(targets) == 1:
+                    legacy_prompt_ids = tuple(
+                        dict.fromkeys(
+                            make_legacy_prompt_id(
+                                dataset_id=target.dataset_id,
+                                prompt=legacy_prompt,
+                                model_version=self.settings.model_version,
+                                scoring_version=scoring_version,
+                                tile_index_version=self.settings.tile_index_version,
+                            )
+                            for legacy_prompt in (prompt, normalize_prompt_legacy(raw_prompt))
                         )
-                        for legacy_prompt in (prompt, normalize_prompt_legacy(raw_prompt))
                     )
-                )
-                for legacy_prompt_id in legacy_prompt_ids:
-                    if existing_manifest.exists() or legacy_prompt_id == target.prompt_id:
-                        continue
-                    legacy_manifest = self.storage.manifest_path(target.dataset_id, legacy_prompt_id)
-                    if legacy_manifest.exists():
-                        existing_prompt_id = legacy_prompt_id
-                        existing_manifest = legacy_manifest
-                        break
+                    for legacy_prompt_id in legacy_prompt_ids:
+                        if existing_manifest.exists() or legacy_prompt_id == target.prompt_id:
+                            continue
+                        legacy_manifest = self.storage.manifest_path(target.dataset_id, legacy_prompt_id)
+                        if legacy_manifest.exists():
+                            existing_prompt_id = legacy_prompt_id
+                            existing_manifest = legacy_manifest
+                            break
 
-            matching_manifest = self.storage.find_manifest_for_prompt(
-                dataset_id=target.dataset_id,
-                canonical_prompt=prompt,
-                model_version=self.settings.model_version,
-                scoring_version=scoring_version,
-                tile_index_version=self.settings.tile_index_version,
-            )
-            if not existing_manifest.exists() and matching_manifest is not None:
-                existing_prompt_id, existing_manifest = matching_manifest
-            if existing_manifest.exists():
-                existing_targets.append(
-                    DatasetTarget(
-                        dataset_id=target.dataset_id,
-                        prompt_id=existing_prompt_id,
-                        priority_tile=target.priority_tile,
-                    )
+                matching_manifest = self.storage.find_manifest_for_prompt(
+                    dataset_id=target.dataset_id,
+                    canonical_prompt=prompt,
+                    model_version=self.settings.model_version,
+                    scoring_version=scoring_version,
+                    tile_index_version=self.settings.tile_index_version,
                 )
-            else:
-                all_existing = False
-                break
+                if not existing_manifest.exists() and matching_manifest is not None:
+                    existing_prompt_id, existing_manifest = matching_manifest
+                if existing_manifest.exists():
+                    existing_targets.append(
+                        DatasetTarget(
+                            dataset_id=target.dataset_id,
+                            prompt_id=existing_prompt_id,
+                            priority_tile=target.priority_tile,
+                        )
+                    )
+                else:
+                    all_existing = False
+                    break
 
         now = utc_now()
         ready_targets = tuple(existing_targets)
         queued_targets = targets
-        job_id = make_job_id(now, ready_targets[0].prompt_id if all_existing and ready_targets else targets[0].prompt_id)
+        job_id = f"{make_job_id(now, ready_targets[0].prompt_id if all_existing and ready_targets else targets[0].prompt_id)}_{uuid4().hex[:8]}"
         if all_existing:
             job = self._make_job_response(
                 job_id=job_id,
@@ -233,8 +365,25 @@ class PromptBatchService:
                 created_at=now,
                 updated_at=now,
                 current_stage="ready",
+                request_id=request_id,
+                received_at=received_at,
+                cache_status="cache_hit",
+                force_override=False,
             )
             await self._save_job(job)
+            self._record_query_event(
+                "query_cache_hit",
+                job_id=job.job_id,
+                request_id=request_id,
+                received_at=received_at,
+                request_payload=request_payload,
+                query_type="text",
+                prompt=prompt,
+                dataset_ids=dataset_ids,
+                force_override=False,
+                cache_status="cache_hit",
+                priority_tiles=job.priority_tiles,
+            )
             return job
 
         job = self._make_job_response(
@@ -251,11 +400,32 @@ class PromptBatchService:
             created_at=now,
             updated_at=now,
             current_stage="queued",
+            request_id=request_id,
+            received_at=received_at,
+            cache_status="force_override" if payload.force_override else "pending",
+            force_override=payload.force_override,
         )
         await self._save_job(job)
+        self._record_query_event(
+            "query_admitted",
+            job_id=job.job_id,
+            request_id=request_id,
+            received_at=received_at,
+            request_payload=request_payload,
+            query_type="text",
+            prompt=prompt,
+            dataset_ids=dataset_ids,
+            force_override=payload.force_override,
+            cache_status=job.cache_status,
+            priority_tiles=job.priority_tiles,
+        )
         await self._queue.put(
             QueuedSubmission(
                 job_id=job_id,
+                request_id=request_id,
+                received_at=received_at,
+                received_monotonic=received_monotonic,
+                request_payload=request_payload,
                 dataset_group_id=dataset_group_id,
                 dataset_ids=dataset_ids,
                 targets=queued_targets,
@@ -264,6 +434,7 @@ class PromptBatchService:
                 reference_pano=None,
                 zooms=zooms,
                 scoring_version=scoring_version,
+                force_override=payload.force_override,
             )
         )
         return job
@@ -274,13 +445,18 @@ class PromptBatchService:
         dataset_ids: tuple[str, ...],
         dataset_group_id: str,
         base_scoring_version: str,
+        *,
+        request_id: str,
+        received_at: str,
+        received_monotonic: float,
+        request_payload: dict,
     ) -> ScoringJobResponse:
         reference = normalize_reference_pano(payload.reference_pano)
         self._validate_dataset_ids((reference["dataset_id"],))
         scoring_version = f"{base_scoring_version}--{PANO_REFERENCE_SCORING_SUFFIX}"
         prompt = payload.prompt.strip() or reference_prompt_label(reference)
         zooms = tuple(int(z) for z in payload.zooms) if payload.zooms else self.settings.tile_zooms
-        priority_tiles = self._priority_tiles_by_dataset(payload, dataset_ids)
+        priority_tiles = self._priority_tiles_by_dataset(payload, dataset_ids, zooms)
         targets = tuple(
             DatasetTarget(
                 dataset_id=dataset_id,
@@ -299,22 +475,36 @@ class PromptBatchService:
 
         active_job = await self._find_active_job_by_prompt_ids([target.prompt_id for target in targets])
         if active_job is not None:
+            self._record_query_event(
+                "query_active_deduplicated",
+                job_id=active_job.job_id,
+                request_id=request_id,
+                received_at=received_at,
+                request_payload=request_payload,
+                query_type="pano_reference",
+                prompt=prompt,
+                reference_pano=reference,
+                dataset_ids=dataset_ids,
+                force_override=payload.force_override,
+                cache_status="active_deduplicated",
+            )
             return active_job
 
         existing_targets = []
-        all_existing = True
-        for target in targets:
-            existing_manifest = self.storage.manifest_path(target.dataset_id, target.prompt_id)
-            if existing_manifest.exists():
-                existing_targets.append(target)
-            else:
-                all_existing = False
-                break
+        all_existing = not payload.force_override
+        if not payload.force_override:
+            for target in targets:
+                existing_manifest = self.storage.manifest_path(target.dataset_id, target.prompt_id)
+                if existing_manifest.exists():
+                    existing_targets.append(target)
+                else:
+                    all_existing = False
+                    break
 
         now = utc_now()
         ready_targets = tuple(existing_targets)
         queued_targets = targets
-        job_id = make_job_id(now, ready_targets[0].prompt_id if all_existing and ready_targets else targets[0].prompt_id)
+        job_id = f"{make_job_id(now, ready_targets[0].prompt_id if all_existing and ready_targets else targets[0].prompt_id)}_{uuid4().hex[:8]}"
         if all_existing:
             job = self._make_job_response(
                 job_id=job_id,
@@ -330,8 +520,26 @@ class PromptBatchService:
                 created_at=now,
                 updated_at=now,
                 current_stage="ready",
+                request_id=request_id,
+                received_at=received_at,
+                cache_status="cache_hit",
+                force_override=False,
             )
             await self._save_job(job)
+            self._record_query_event(
+                "query_cache_hit",
+                job_id=job.job_id,
+                request_id=request_id,
+                received_at=received_at,
+                request_payload=request_payload,
+                query_type="pano_reference",
+                prompt=prompt,
+                reference_pano=reference,
+                dataset_ids=dataset_ids,
+                force_override=False,
+                cache_status="cache_hit",
+                priority_tiles=job.priority_tiles,
+            )
             return job
 
         job = self._make_job_response(
@@ -348,11 +556,33 @@ class PromptBatchService:
             created_at=now,
             updated_at=now,
             current_stage="queued",
+            request_id=request_id,
+            received_at=received_at,
+            cache_status="force_override" if payload.force_override else "pending",
+            force_override=payload.force_override,
         )
         await self._save_job(job)
+        self._record_query_event(
+            "query_admitted",
+            job_id=job.job_id,
+            request_id=request_id,
+            received_at=received_at,
+            request_payload=request_payload,
+            query_type="pano_reference",
+            prompt=prompt,
+            reference_pano=reference,
+            dataset_ids=dataset_ids,
+            force_override=payload.force_override,
+            cache_status=job.cache_status,
+            priority_tiles=job.priority_tiles,
+        )
         await self._queue.put(
             QueuedSubmission(
                 job_id=job_id,
+                request_id=request_id,
+                received_at=received_at,
+                received_monotonic=received_monotonic,
+                request_payload=request_payload,
                 dataset_group_id=dataset_group_id,
                 dataset_ids=dataset_ids,
                 targets=queued_targets,
@@ -361,6 +591,7 @@ class PromptBatchService:
                 reference_pano=reference,
                 zooms=zooms,
                 scoring_version=scoring_version,
+                force_override=payload.force_override,
             )
         )
         return job
@@ -383,20 +614,44 @@ class PromptBatchService:
             requested_label = ", ".join(unknown)
             raise ValueError(f"Unsupported dataset id(s): {requested_label}. Allowed dataset ids: {allowed_label}")
 
-    def _priority_tiles_by_dataset(self, payload: ScoringJobCreate, dataset_ids: tuple[str, ...]) -> dict[str, TileCoord]:
+    def _priority_tiles_by_dataset(
+        self,
+        payload: ScoringJobCreate,
+        dataset_ids: tuple[str, ...],
+        zooms: tuple[int, ...],
+    ) -> dict[str, TileCoord]:
         by_dataset: dict[str, TileCoord] = {}
-        tiles = list(payload.priority_tiles or [])
+        tiles: list[TileCoord] = []
         if payload.priority_tile is not None:
             tiles.append(payload.priority_tile)
+        tiles.extend(payload.priority_tiles or [])
 
         for index, tile in enumerate(tiles):
             dataset_id = tile.dataset_id
             if not dataset_id and index < len(dataset_ids):
                 dataset_id = dataset_ids[index]
             if not dataset_id or dataset_id not in dataset_ids:
-                continue
+                raise ValueError("Each priority tile must target one requested dataset.")
+            if tile.z not in zooms:
+                raise ValueError(f"Priority tile zoom {tile.z} is not one of the requested zooms: {list(zooms)}")
             by_dataset[dataset_id] = tile.model_copy(update={"dataset_id": dataset_id})
+
+        for dataset_id in dataset_ids:
+            by_dataset.setdefault(dataset_id, self._default_priority_tile(dataset_id, zooms))
         return by_dataset
+
+    def _default_priority_tile(self, dataset_id: str, zooms: tuple[int, ...]) -> TileCoord:
+        """Use a deterministic city-centre tile whenever the client omits priority."""
+
+        lowered = dataset_id.lower()
+        if "london" in lowered:
+            lat, lon = DEFAULT_PRIORITY_CENTRES["london"]
+        elif "shanghai" in lowered:
+            lat, lon = DEFAULT_PRIORITY_CENTRES["shanghai"]
+        else:
+            lat, lon = 0.0, 0.0
+        key = latlon_to_tile(lat, lon, max(zooms))
+        return TileCoord(z=key.z, x=key.x, y=key.y, dataset_id=dataset_id)
 
     def _make_job_response(
         self,
@@ -415,6 +670,11 @@ class PromptBatchService:
         updated_at: str,
         current_stage: str,
         stage_timings: dict[str, float] | None = None,
+        request_id: str | None = None,
+        received_at: str | None = None,
+        execution_batch_id: str | None = None,
+        cache_status: str = "pending",
+        force_override: bool = False,
     ) -> ScoringJobResponse:
         primary = targets[0]
         results = [
@@ -449,6 +709,23 @@ class PromptBatchService:
             manifest_url=results[0].manifest_url,
             tile_url_template=results[0].tile_url_template,
             results=results,
+            request_id=request_id,
+            received_at=received_at,
+            execution_batch_id=execution_batch_id,
+            cache_status=cache_status,
+            force_override=force_override,
+        )
+
+    def _record_query_event(self, event: str, **fields) -> None:
+        self.audit_log.record(event, **fields)
+
+    @staticmethod
+    def _gpu_cosine_seconds(timings: dict[str, float]) -> float:
+        """Return the actual GPU cosine-matrix stage reported by the scorer."""
+
+        return round(
+            float(timings.get("prompt_cosine", 0.0)) + float(timings.get("reference_cosine", 0.0)),
+            6,
         )
 
     async def get_job(self, job_id: str) -> ScoringJobResponse | None:
@@ -470,6 +747,17 @@ class PromptBatchService:
             self._jobs[job_id] = updated
             self._write_job_file(updated)
             self._prune_jobs_locked()
+            self.audit_log.record(
+                "query_cancelled",
+                job_id=updated.job_id,
+                request_id=updated.request_id,
+                execution_batch_id=updated.execution_batch_id,
+                cancelled_at=utc_now_precise(),
+                received_at=updated.received_at,
+                prompt=updated.prompt,
+                query_type=updated.query_type,
+                dataset_ids=updated.dataset_ids,
+            )
             return updated
 
     async def _find_active_job_by_prompt_ids(self, prompt_ids) -> ScoringJobResponse | None:
@@ -497,12 +785,13 @@ class PromptBatchService:
                 groups[item.batch_key].append(item)
 
             for submissions in groups.values():
-                await self._process_batch(submissions)
+                execution_batch_id = f"batch_{uuid4().hex}"
+                await self._process_batch(submissions, execution_batch_id=execution_batch_id)
 
             for _item in batch:
                 self._queue.task_done()
 
-    async def _process_batch(self, submissions: list[QueuedSubmission]) -> None:
+    async def _process_batch(self, submissions: list[QueuedSubmission], *, execution_batch_id: str) -> None:
         active = []
         for item in submissions:
             if not await self._is_cancelled(item.job_id):
@@ -512,6 +801,23 @@ class PromptBatchService:
 
         timings: dict[str, float] = {}
         loop = asyncio.get_running_loop()
+        batch_started_at = utc_now_precise()
+        batch_started_monotonic = time.perf_counter()
+        batch_received_at = min(item.received_at for item in active)
+        self.audit_log.record(
+            "execution_batch_started",
+            execution_batch_id=execution_batch_id,
+            received_at=batch_received_at,
+            started_at=batch_started_at,
+            scheduler_window_ms=self.settings.prompt_batch_window_ms,
+            query_count=len(active),
+            query_job_ids=[item.job_id for item in active],
+            request_ids=[item.request_id for item in active],
+            dataset_ids=list(active[0].dataset_ids),
+            dataset_group_id=active[0].dataset_group_id,
+            query_type=active[0].query_type,
+            force_override_count=sum(1 for item in active if item.force_override),
+        )
 
         try:
             await self._update_many(
@@ -521,6 +827,7 @@ class PromptBatchService:
                 current_stage="loading_dataset",
                 stage_timings=timings.copy(),
                 message="Loading cached dataset.",
+                execution_batch_id=execution_batch_id,
             )
             dataset_ids = active[0].dataset_ids
             dataset_group_id = active[0].dataset_group_id
@@ -542,6 +849,7 @@ class PromptBatchService:
                 current_stage="building_tile_index",
                 stage_timings=timings.copy(),
                 message="Loading or building dataset tile index.",
+                execution_batch_id=execution_batch_id,
             )
             tile_indexes = {
                 dataset_id: await asyncio.to_thread(self._get_tile_index, dataset_id, zooms, records, scoped_settings)
@@ -562,6 +870,7 @@ class PromptBatchService:
                     current_stage="scoring",
                     stage_timings=timings.copy(),
                     message=f"Scoring {len(references)} reference pano(s) across {len(dataset_ids)} dataset(s) as one batch.",
+                    execution_batch_id=execution_batch_id,
                 )
                 score_references_with_timings = getattr(self.engine, "score_pano_references_dataset_group_with_timings", None)
                 if callable(score_references_with_timings):
@@ -592,6 +901,7 @@ class PromptBatchService:
                     current_stage="scoring",
                     stage_timings=timings.copy(),
                     message=f"Scoring {len(unique_prompts)} prompt(s) across {len(dataset_ids)} dataset(s) as one batch.",
+                    execution_batch_id=execution_batch_id,
                 )
                 score_group_with_timings = getattr(self.engine, "score_dataset_group_with_timings", None)
                 if callable(score_group_with_timings):
@@ -613,6 +923,15 @@ class PromptBatchService:
                         scoring_version=scoring_version,
                     )
                     timings["scoring_total"] = round(time.perf_counter() - stage_start, 3)
+            self.audit_log.record(
+                "execution_batch_scoring_complete",
+                execution_batch_id=execution_batch_id,
+                completed_at=utc_now_precise(),
+                query_count=len(active),
+                stage_timings=timings.copy(),
+                gpu_cosine_seconds=self._gpu_cosine_seconds(timings),
+                scoring_total_seconds=timings.get("scoring_total", 0.0),
+            )
             results_by_key = {
                 (dataset_id, result.prompt_id): result
                 for dataset_id, results in grouped_results.items()
@@ -630,15 +949,22 @@ class PromptBatchService:
                     tiles_total=self._expected_tile_write_count(submission, tile_indexes, scoped_settings),
                     stage_timings=timings.copy(),
                     message="Writing result cache and GeoJSON tile cache.",
+                    execution_batch_id=execution_batch_id,
                 )
 
             written_result_keys: set[tuple[str, str]] = set()
+            tile_stage_started_at = utc_now_precise()
+            tile_stage_started_monotonic = time.perf_counter()
             for submission in active:
                 if await self._is_cancelled(submission.job_id):
                     continue
-                tile_stage_start = time.perf_counter()
+                query_tile_stage_start = time.perf_counter()
+                query_tile_write_started_at = utc_now_precise()
+                first_priority_tile_at: str | None = None
+                first_priority_tile_id: str | None = None
                 completed_tiles = 0
                 total_tiles = self._expected_tile_write_count(submission, tile_indexes, scoped_settings)
+                dataset_tile_timings: list[dict] = []
                 for target in submission.targets:
                     result_key = (target.dataset_id, target.prompt_id)
                     if result_key in written_result_keys:
@@ -646,16 +972,57 @@ class PromptBatchService:
                         continue
                     result = results_by_key[result_key]
                     tile_index = tile_indexes[target.dataset_id]
+                    dataset_tile_stage_start = time.perf_counter()
+                    dataset_tile_write_started_at = utc_now_precise()
+                    dataset_first_priority_tile_at: str | None = None
+                    dataset_first_priority_tile_id: str | None = None
                     last_tile_update = 0.0
+                    previous_revision = self.storage.active_revision(target.dataset_id, target.prompt_id)
+                    result_revision = f"rev_{uuid4().hex}"
+                    if submission.force_override:
+                        self.audit_log.record(
+                            "query_override_revision_started",
+                            execution_batch_id=execution_batch_id,
+                            job_id=submission.job_id,
+                            request_id=submission.request_id,
+                            dataset_id=target.dataset_id,
+                            prompt_id=target.prompt_id,
+                            previous_revision=previous_revision,
+                            result_revision=result_revision,
+                            started_at=dataset_tile_write_started_at,
+                        )
 
                     def progress_callback(tile, done: int, total: int) -> None:
+                        nonlocal dataset_first_priority_tile_at
+                        nonlocal dataset_first_priority_tile_id
+                        nonlocal first_priority_tile_at
+                        nonlocal first_priority_tile_id
                         nonlocal last_tile_update
                         now = time.perf_counter()
+                        if dataset_first_priority_tile_at is None:
+                            dataset_first_priority_tile_at = utc_now_precise()
+                            dataset_first_priority_tile_id = tile.id
+                            if first_priority_tile_at is None:
+                                first_priority_tile_at = dataset_first_priority_tile_at
+                                first_priority_tile_id = dataset_first_priority_tile_id
+                            self.audit_log.record(
+                                "query_first_priority_tile_written",
+                                execution_batch_id=execution_batch_id,
+                                job_id=submission.job_id,
+                                request_id=submission.request_id,
+                                dataset_id=target.dataset_id,
+                                prompt_id=target.prompt_id,
+                                priority_tile=target.priority_tile.model_dump() if target.priority_tile else None,
+                                written_tile={"z": tile.z, "x": tile.x, "y": tile.y},
+                                first_priority_tile_at=dataset_first_priority_tile_at,
+                                latency_from_received_seconds=round(now - submission.received_monotonic, 6),
+                            )
                         if done < total and now - last_tile_update < 0.6:
                             return
                         last_tile_update = now
-                        elapsed = round(now - tile_stage_start, 3)
+                        elapsed = round(now - dataset_tile_stage_start, 3)
                         aggregate_done = completed_tiles + done
+                        timing_key = f"tile_writing_{target.dataset_id}"
                         patch = {
                             "status": "building_tiles",
                             "progress": 0.75 + 0.24 * (aggregate_done / max(total_tiles, 1)),
@@ -663,8 +1030,9 @@ class PromptBatchService:
                             "current_tile": TileCoord(z=tile.z, x=tile.x, y=tile.y, dataset_id=target.dataset_id),
                             "tiles_done": aggregate_done,
                             "tiles_total": total_tiles,
-                            "stage_timings": {**timings, "tile_writing": elapsed},
+                            "stage_timings": {**timings, timing_key: elapsed},
                             "message": f"Writing {target.dataset_id} tile {tile.id} ({aggregate_done}/{total_tiles}).",
+                            "execution_batch_id": execution_batch_id,
                         }
                         loop.call_soon_threadsafe(
                             lambda job_id=submission.job_id, patch=patch: asyncio.create_task(self._update_job(job_id, **patch))
@@ -677,21 +1045,152 @@ class PromptBatchService:
                         storage=self.storage,
                         settings=scoped_settings,
                         priority_tile=target.priority_tile,
+                        result_revision=result_revision,
                         progress_callback=progress_callback,
                     )
-                    completed_tiles += self._expected_target_tile_write_count(target, tile_index, scoped_settings)
-                    timings["tile_writing"] = round(time.perf_counter() - tile_stage_start, 3)
+                    target_tile_count = self._expected_target_tile_write_count(target, tile_index, scoped_settings)
+                    completed_tiles += target_tile_count
+                    dataset_completed_at = utc_now_precise()
+                    dataset_tile_writing_seconds = round(time.perf_counter() - dataset_tile_stage_start, 6)
+                    dataset_timing = {
+                        "dataset_id": target.dataset_id,
+                        "prompt_id": target.prompt_id,
+                        "result_revision": result_revision,
+                        "previous_revision": previous_revision,
+                        "tile_write_started_at": dataset_tile_write_started_at,
+                        "first_priority_tile_at": dataset_first_priority_tile_at,
+                        "first_priority_tile_id": dataset_first_priority_tile_id,
+                        "all_tiles_written_at": dataset_completed_at,
+                        "tile_writing_seconds": dataset_tile_writing_seconds,
+                        "tiles_written": target_tile_count,
+                    }
+                    dataset_tile_timings.append(dataset_timing)
+                    self.audit_log.record(
+                        "query_dataset_tiles_complete",
+                        execution_batch_id=execution_batch_id,
+                        job_id=submission.job_id,
+                        request_id=submission.request_id,
+                        **dataset_timing,
+                    )
+                    if submission.force_override:
+                        self.audit_log.record(
+                            "query_override_revision_activated",
+                            execution_batch_id=execution_batch_id,
+                            job_id=submission.job_id,
+                            request_id=submission.request_id,
+                            dataset_id=target.dataset_id,
+                            prompt_id=target.prompt_id,
+                            previous_revision=previous_revision,
+                            result_revision=result_revision,
+                            activated_at=dataset_completed_at,
+                        )
+                        try:
+                            removed_artifacts = self.storage.prune_superseded_results(
+                                target.dataset_id,
+                                target.prompt_id,
+                                keep_revision=result_revision,
+                            )
+                            self.audit_log.record(
+                                "query_override_superseded_results_pruned",
+                                execution_batch_id=execution_batch_id,
+                                job_id=submission.job_id,
+                                request_id=submission.request_id,
+                                dataset_id=target.dataset_id,
+                                prompt_id=target.prompt_id,
+                                result_revision=result_revision,
+                                removed_artifacts=removed_artifacts,
+                                pruned_at=utc_now_precise(),
+                            )
+                        except Exception as cleanup_exc:
+                            cleanup_traceback = traceback.format_exc()
+                            print(
+                                f"Override cleanup failed for {target.dataset_id}/{target.prompt_id}: "
+                                f"{type(cleanup_exc).__name__}: {cleanup_exc}\n{cleanup_traceback}",
+                                flush=True,
+                            )
+                            self.audit_log.record(
+                                "query_override_cleanup_failed",
+                                execution_batch_id=execution_batch_id,
+                                job_id=submission.job_id,
+                                request_id=submission.request_id,
+                                dataset_id=target.dataset_id,
+                                prompt_id=target.prompt_id,
+                                result_revision=result_revision,
+                                exception_type=type(cleanup_exc).__name__,
+                                exception_message=str(cleanup_exc),
+                                traceback=cleanup_traceback,
+                            )
                     written_result_keys.add(result_key)
+                query_completed_at = utc_now_precise()
+                query_backend_elapsed = round(time.perf_counter() - submission.received_monotonic, 6)
+                query_tile_writing = round(time.perf_counter() - query_tile_stage_start, 6)
+                query_timings = {
+                    **timings,
+                    "tile_writing_total": query_tile_writing,
+                    **{
+                        f"tile_writing_{item['dataset_id']}": float(item["tile_writing_seconds"])
+                        for item in dataset_tile_timings
+                    },
+                }
                 await self._update_job(
                     submission.job_id,
                     status="ready",
                     progress=1.0,
                     current_stage="ready",
                     current_tile=None,
-                    stage_timings=timings.copy(),
+                    stage_timings=query_timings,
                     message="Ready.",
+                    execution_batch_id=execution_batch_id,
                 )
+                self.audit_log.record(
+                    "query_execution_complete",
+                    execution_batch_id=execution_batch_id,
+                    job_id=submission.job_id,
+                    request_id=submission.request_id,
+                    received_at=submission.received_at,
+                    tile_write_started_at=query_tile_write_started_at,
+                    first_priority_tile_at=first_priority_tile_at,
+                    first_priority_tile_id=first_priority_tile_id,
+                    all_tiles_written_at=query_completed_at,
+                    completed_at=query_completed_at,
+                    query_type=submission.query_type,
+                    prompt=submission.prompt,
+                    reference_pano=submission.reference_pano,
+                    dataset_ids=list(submission.dataset_ids),
+                    prompt_ids=[target.prompt_id for target in submission.targets],
+                    priority_tiles=[target.priority_tile.model_dump() for target in submission.targets if target.priority_tile],
+                    force_override=submission.force_override,
+                    gpu_cosine_seconds=self._gpu_cosine_seconds(timings),
+                    scoring_total_seconds=timings.get("scoring_total", 0.0),
+                    tile_writing_seconds=query_tile_writing,
+                    dataset_tile_timings=dataset_tile_timings,
+                    backend_latency_from_received_seconds=query_backend_elapsed,
+                    stage_timings=query_timings,
+                )
+            batch_completed_at = utc_now_precise()
+            batch_tile_writing_seconds = round(time.perf_counter() - tile_stage_started_monotonic, 6)
+            self.audit_log.record(
+                "execution_batch_complete",
+                execution_batch_id=execution_batch_id,
+                received_at=batch_received_at,
+                started_at=batch_started_at,
+                tile_write_started_at=tile_stage_started_at,
+                all_tiles_written_at=batch_completed_at,
+                completed_at=batch_completed_at,
+                query_count=len(active),
+                query_job_ids=[item.job_id for item in active],
+                gpu_cosine_seconds=self._gpu_cosine_seconds(timings),
+                scoring_total_seconds=timings.get("scoring_total", 0.0),
+                tile_writing_seconds=batch_tile_writing_seconds,
+                execution_seconds=round(time.perf_counter() - batch_started_monotonic, 6),
+                stage_timings=timings.copy(),
+            )
         except Exception as exc:
+            traceback_text = traceback.format_exc()
+            print(
+                f"Execution batch {execution_batch_id} failed: {type(exc).__name__}: {exc}\n{traceback_text}",
+                flush=True,
+            )
             await self._update_many(
                 active,
                 status="failed",
@@ -699,7 +1198,35 @@ class PromptBatchService:
                 current_stage="failed",
                 stage_timings=timings.copy(),
                 message=f"{type(exc).__name__}: {exc}",
+                execution_batch_id=execution_batch_id,
             )
+            self.audit_log.record(
+                "execution_batch_failed",
+                execution_batch_id=execution_batch_id,
+                failed_at=utc_now_precise(),
+                query_job_ids=[item.job_id for item in active],
+                exception_type=type(exc).__name__,
+                exception_message=str(exc),
+                traceback=traceback_text,
+                stage_timings=timings.copy(),
+            )
+            for submission in active:
+                self.audit_log.record(
+                    "query_execution_failed",
+                    execution_batch_id=execution_batch_id,
+                    job_id=submission.job_id,
+                    request_id=submission.request_id,
+                    received_at=submission.received_at,
+                    failed_at=utc_now_precise(),
+                    query_type=submission.query_type,
+                    prompt=submission.prompt,
+                    reference_pano=submission.reference_pano,
+                    force_override=submission.force_override,
+                    exception_type=type(exc).__name__,
+                    exception_message=str(exc),
+                    traceback=traceback_text,
+                    stage_timings=timings.copy(),
+                )
 
     def _get_tile_index(
         self,
