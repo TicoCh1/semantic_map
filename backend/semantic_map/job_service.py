@@ -681,8 +681,8 @@ class PromptBatchService:
             ScoringResultRef(
                 dataset_id=target.dataset_id,
                 prompt_id=target.prompt_id,
-                manifest_url=self.storage.manifest_url(target.prompt_id),
-                tile_url_template=self.storage.tile_url_template(target.prompt_id),
+                manifest_url=self.storage.manifest_url(target.dataset_id, target.prompt_id),
+                tile_url_template=self.storage.tile_url_template(target.dataset_id, target.prompt_id),
                 priority_tile=target.priority_tile,
             )
             for target in targets
@@ -1296,8 +1296,9 @@ class PromptBatchService:
             ScoringResultRef(
                 dataset_id=job.dataset_id,
                 prompt_id=job.prompt_id,
-                manifest_url=job.manifest_url or self.storage.manifest_url(job.prompt_id),
-                tile_url_template=job.tile_url_template or self.storage.tile_url_template(job.prompt_id),
+                manifest_url=job.manifest_url or self.storage.manifest_url(job.dataset_id, job.prompt_id),
+                tile_url_template=job.tile_url_template
+                or self.storage.tile_url_template(job.dataset_id, job.prompt_id),
                 priority_tile=job.priority_tile,
             )
         ]

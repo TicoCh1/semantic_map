@@ -110,8 +110,9 @@ fresh queries in a physical batch; it must therefore be analysed at the
 and the query's position in serial tile materialisation.
 
 `start_runpod_backend.sh` also tees Uvicorn stdout, stderr, tracebacks and access
-logs to `${LOG_ROOT}/uvicorn.log`, rotating it at 100 MiB with three retained
-backups by default.
+logs to the Pod-local `${UVICORN_LOG_PATH}` (under `/tmp` by default), rotating
+it at 100 MiB with three retained backups. Tile access logging therefore does
+not synchronously append to the `/workspace` network volume.
 
-The existing `package_runpod_query_logs.sh` includes `LOG_ROOT`, so future log
-archives will retain these append-only files automatically.
+`package_runpod_query_logs.sh` includes both the durable `LOG_ROOT` execution
+logs and the current Pod-local Uvicorn log in downloaded archives.

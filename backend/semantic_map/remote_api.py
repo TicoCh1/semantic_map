@@ -4,6 +4,7 @@ import asyncio
 import shutil
 import time
 from dataclasses import replace
+from functools import lru_cache
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -589,6 +590,22 @@ def get_result_manifest(prompt_id: str, response: Response) -> ResultManifest:
     manifest_path = storage.find_manifest_path(prompt_id)
     if manifest_path is None:
         raise HTTPException(status_code=404, detail="Result manifest not found")
+    return result_manifest_response(manifest_path, response)
+
+
+@router.get(
+    "/api/scoring/results/{dataset_id}/{prompt_id}/manifest",
+    response_model=ResultManifest,
+    dependencies=[Depends(require_backend_token)],
+)
+def get_dataset_result_manifest(dataset_id: str, prompt_id: str, response: Response) -> ResultManifest:
+    manifest_path = storage.manifest_path(dataset_id, prompt_id)
+    if not manifest_path.exists():
+        raise HTTPException(status_code=404, detail="Result manifest not found")
+    return result_manifest_response(manifest_path, response)
+
+
+def result_manifest_response(manifest_path, response: Response) -> ResultManifest:
     payload = storage.read_json(manifest_path)
     if payload is None:
         raise HTTPException(status_code=404, detail="Result manifest not found")
@@ -597,6 +614,7 @@ def get_result_manifest(prompt_id: str, response: Response) -> ResultManifest:
     return manifest.model_copy(
         update={
             "tile_url_template": storage.tile_url_template(
+                manifest.dataset_id,
                 manifest.prompt_id,
                 revision=manifest.result_revision,
             )
@@ -917,6 +935,7 @@ def load_result_manifest(prompt_id: str, *, dataset_id: str | None = None) -> Re
     return manifest.model_copy(
         update={
             "tile_url_template": storage.tile_url_template(
+                manifest.dataset_id,
                 manifest.prompt_id,
                 revision=manifest.result_revision,
             )
@@ -1062,42 +1081,136 @@ def arcgis_feature_from_record(
 
 
 @router.get(
+    "/api/scoring/results/{dataset_id}/{prompt_id}/revisions/{revision}/tiles/{z}/{x}/{y}.geojson",
+    dependencies=[Depends(require_backend_token)],
+)
+def get_result_revision_tile(
+    dataset_id: str,
+    prompt_id: str,
+    revision: str,
+    z: int,
+    x: int,
+    y: int,
+):
+    """Serve immutable revision tiles without reading current.json or manifest.json on a cache hit."""
+
+    return serve_revision_tile(dataset_id, prompt_id, revision, z, x, y)
+
+
+@router.get(
+    "/api/scoring/results/{dataset_id}/{prompt_id}/tiles/{z}/{x}/{y}.geojson",
+    dependencies=[Depends(require_backend_token)],
+)
+def get_dataset_result_tile(dataset_id: str, prompt_id: str, z: int, x: int, y: int):
+    """Dataset-addressed compatibility route for callers that do not yet have a revision URL."""
+
+    revision = storage.active_revision(dataset_id, prompt_id)
+    if revision:
+        return serve_revision_tile(dataset_id, prompt_id, revision, z, x, y)
+    return serve_legacy_tile(dataset_id, prompt_id, z, x, y)
+
+
+@router.get(
     "/api/scoring/results/{prompt_id}/tiles/{z}/{x}/{y}.geojson",
     dependencies=[Depends(require_backend_token)],
 )
 def get_result_tile(prompt_id: str, z: int, x: int, y: int, revision: str | None = None):
-    active_manifest_path = storage.find_manifest_path(prompt_id)
-    if active_manifest_path is None:
-        return JSONResponse(status_code=202, content={"status": "not_ready", "prompt_id": prompt_id}, headers=NO_STORE_HEADERS)
+    """Legacy prompt-only route retained for already-persisted frontend layer URLs."""
 
-    active_payload = storage.read_json(active_manifest_path)
-    if active_payload is None:
-        return JSONResponse(status_code=202, content={"status": "not_ready", "prompt_id": prompt_id}, headers=NO_STORE_HEADERS)
-    active_manifest = ResultManifest.model_validate(active_payload)
-    manifest_path = storage.manifest_path(active_manifest.dataset_id, prompt_id, revision) if revision else active_manifest_path
+    if not storage.settings.result_root.exists():
+        return tile_not_ready_response(prompt_id)
+
+    if revision:
+        for dataset_dir in storage.settings.result_root.iterdir():
+            if not dataset_dir.is_dir():
+                continue
+            dataset_id = dataset_dir.name
+            tile_path = storage.tile_path(dataset_id, prompt_id, z, x, y, revision)
+            if tile_path.exists():
+                return immutable_tile_response(tile_path)
+            if storage.manifest_path(dataset_id, prompt_id, revision).exists():
+                return serve_revision_tile(dataset_id, prompt_id, revision, z, x, y)
+        raise HTTPException(status_code=404, detail="Result revision not found")
+
+    for dataset_dir in storage.settings.result_root.iterdir():
+        if not dataset_dir.is_dir():
+            continue
+        dataset_id = dataset_dir.name
+        legacy_tile_path = storage.legacy_tile_path(dataset_id, prompt_id, z, x, y)
+        if legacy_tile_path.exists():
+            return immutable_tile_response(legacy_tile_path)
+        legacy_manifest_path = storage.result_dir(dataset_id, prompt_id) / "manifest.json"
+        if legacy_manifest_path.exists():
+            return serve_legacy_tile(dataset_id, prompt_id, z, x, y)
+        revision_pointer_path = storage.revision_pointer_path(dataset_id, prompt_id)
+        if revision_pointer_path.exists():
+            active_revision = storage.active_revision(dataset_id, prompt_id)
+            if active_revision:
+                return serve_revision_tile(dataset_id, prompt_id, active_revision, z, x, y)
+    return tile_not_ready_response(prompt_id)
+
+
+def serve_revision_tile(dataset_id: str, prompt_id: str, revision: str, z: int, x: int, y: int):
+    tile_path = storage.tile_path(dataset_id, prompt_id, z, x, y, revision)
+    if tile_path.exists():
+        return immutable_tile_response(tile_path)
+
+    manifest = load_immutable_revision_manifest(dataset_id, prompt_id, revision)
+    return generate_missing_tile(manifest, revision, tile_path, z, x, y)
+
+
+def serve_legacy_tile(dataset_id: str, prompt_id: str, z: int, x: int, y: int):
+    tile_path = storage.legacy_tile_path(dataset_id, prompt_id, z, x, y)
+    if tile_path.exists():
+        return immutable_tile_response(tile_path)
+
+    manifest_path = storage.result_dir(dataset_id, prompt_id) / "manifest.json"
+    payload = storage.read_json(manifest_path)
+    if payload is None:
+        return tile_not_ready_response(prompt_id)
+    manifest = ResultManifest.model_validate(payload)
+    return generate_missing_tile(manifest, None, tile_path, z, x, y)
+
+
+@lru_cache(maxsize=2048)
+def load_immutable_revision_manifest(dataset_id: str, prompt_id: str, revision: str) -> ResultManifest:
+    """Reuse parsed immutable revision manifests across missing-tile requests."""
+
+    manifest_path = storage.manifest_path(dataset_id, prompt_id, revision)
     payload = storage.read_json(manifest_path)
     if payload is None:
         raise HTTPException(status_code=404, detail="Result revision not found")
-
     manifest = ResultManifest.model_validate(payload)
-    effective_revision = revision or manifest.result_revision
-    tile_path = storage.tile_path(manifest.dataset_id, prompt_id, z, x, y, effective_revision)
-    if tile_path.exists():
-        return FileResponse(tile_path, media_type="application/geo+json", headers=IMMUTABLE_RESULT_HEADERS)
+    if (
+        manifest.dataset_id != dataset_id
+        or manifest.prompt_id != prompt_id
+        or manifest.result_revision != revision
+    ):
+        raise HTTPException(status_code=409, detail="Result revision metadata does not match the requested path")
+    return manifest
 
+
+def generate_missing_tile(
+    manifest: ResultManifest,
+    revision: str | None,
+    tile_path,
+    z: int,
+    x: int,
+    y: int,
+):
     if z not in manifest.zooms:
         raise HTTPException(status_code=404, detail="Tile zoom is not available for this result")
 
-    score_arrays = storage.read_score_arrays(manifest.dataset_id, prompt_id, revision=effective_revision)
+    score_arrays = storage.read_score_arrays(manifest.dataset_id, manifest.prompt_id, revision=revision)
     if score_arrays is None:
-        return JSONResponse(status_code=202, content={"status": "tile_not_ready", "prompt_id": prompt_id}, headers=NO_STORE_HEADERS)
+        return tile_not_ready_response(manifest.prompt_id)
 
     records = prompt_batch_service.engine.get_dataset_records(manifest.dataset_id)
     scoped_settings = replace(settings, tile_zooms=tuple(manifest.zooms))
     tile_index = prompt_batch_service.get_tile_index(manifest.dataset_id, tuple(manifest.zooms), records, scoped_settings)
     scores, zscores = score_arrays
     write_geojson_tile_from_arrays(
-        prompt_id=prompt_id,
+        prompt_id=manifest.prompt_id,
         dataset_id=manifest.dataset_id,
         tile=TileKey(z=z, x=x, y=y),
         tile_index=tile_index,
@@ -1105,10 +1218,21 @@ def get_result_tile(prompt_id: str, z: int, x: int, y: int, revision: str | None
         scores=scores,
         zscores=zscores,
         storage=storage,
-        result_revision=effective_revision,
+        result_revision=revision,
     )
+    return immutable_tile_response(tile_path)
 
+
+def immutable_tile_response(tile_path):
     return FileResponse(tile_path, media_type="application/geo+json", headers=IMMUTABLE_RESULT_HEADERS)
+
+
+def tile_not_ready_response(prompt_id: str):
+    return JSONResponse(
+        status_code=202,
+        content={"status": "tile_not_ready", "prompt_id": prompt_id},
+        headers=NO_STORE_HEADERS,
+    )
 
 
 @router.get(

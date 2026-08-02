@@ -434,8 +434,9 @@ GET  /api/ready
 POST /api/scoring/jobs
 GET  /api/scoring/jobs/{job_id}
 POST /api/scoring/jobs/{job_id}/cancel
-GET  /api/scoring/results/{prompt_id}/manifest
-GET  /api/scoring/results/{prompt_id}/tiles/{z}/{x}/{y}.geojson
+GET  /api/scoring/results/{dataset_id}/{prompt_id}/manifest
+GET  /api/scoring/results/{dataset_id}/{prompt_id}/revisions/{revision}/tiles/{z}/{x}/{y}.geojson
+# Legacy prompt-only routes remain available for persisted layer URLs.
 GET  /api/panos/{pano_id}
 GET  /api/panos/{pano_id}/image
 GET  /api/datasets/{dataset_id}/panos/{pano_id}

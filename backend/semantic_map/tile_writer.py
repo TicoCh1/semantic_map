@@ -88,7 +88,11 @@ def write_prompt_result(
             reference_pano=result.reference_pano,
             canonical_prompt=canonical_prompt,
             prompt_key_hash=prompt_key_hash,
-            tile_url_template=storage.tile_url_template(result.prompt_id, revision=result_revision),
+            tile_url_template=storage.tile_url_template(
+                result.dataset_id,
+                result.prompt_id,
+                revision=result_revision,
+            ),
             zooms=list(tile_index.zooms),
             stats=ScoreStats(
                 count=result.count,

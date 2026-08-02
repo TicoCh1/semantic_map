@@ -5,7 +5,7 @@
 #   - job.json: latest persisted status/timing for every text or pano-reference job
 #   - manifest.json: query/model/dataset metadata for every computed result
 #   - scores.jsonl, if WRITE_SCORES_JSONL had been enabled
-#   - LOG_ROOT, demo alerts, the standard Uvicorn/access log, and optional external logs
+#   - LOG_ROOT, demo alerts, the Pod-local Uvicorn/access log, and optional external logs
 #   - redacted runtime configuration, retention notes, and inventories of large caches
 #
 # score.npy, zscore.npy, GeoJSON tiles and cached panorama images are NOT copied by
@@ -40,6 +40,11 @@ fi
 RESULT_ROOT="${RESULT_ROOT:-${WORKSPACE_ROOT}/semantic_backend/results}"
 LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
 EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-${LOG_ROOT}/query_execution}"
+POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
+UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-${POD_TEMP_LOG_ROOT}/uvicorn.log}"
+if [[ "${UVICORN_LOG_PATH}" == "${WORKSPACE_ROOT}/"* ]]; then
+  UVICORN_LOG_PATH="${POD_TEMP_LOG_ROOT}/uvicorn.log"
+fi
 ALERT_LOG_PATH="${DEMO_ALERT_LOG_PATH:-${WORKSPACE_ROOT}/semantic_backend/alerts/alerts.jsonl}"
 PANO_CACHE_ROOT="${PANO_CACHE_ROOT:-${WORKSPACE_ROOT}/semantic_backend/pano_cache}"
 INCLUDE_RESULT_DATA="${INCLUDE_RESULT_DATA:-0}"
@@ -127,6 +132,14 @@ if [ -d "${EXECUTION_LOG_ROOT}" ] && [ "${EXECUTION_LOG_ROOT}" != "${LOG_ROOT}" 
   copy_find_matches "${EXECUTION_LOG_ROOT}"
 fi
 
+# The full Uvicorn/access log lives on the Pod-local temporary disk so tile
+# requests never synchronously append to the /workspace network volume.
+for source_path in "${UVICORN_LOG_PATH}" "${UVICORN_LOG_PATH}".[1-3]; do
+  if [ -f "${source_path}" ]; then
+    copy_with_workspace_path "${source_path}"
+  fi
+done
+
 if [ "${INCLUDE_PANO_CACHE}" = "1" ]; then
   copy_find_matches "${PANO_CACHE_ROOT}"
 fi
@@ -209,8 +222,9 @@ Additional retention notes
   backend, consult LOG_ROOT/query_execution/query-execution-YYYY-MM-DD.jsonl
   for the append-only API, query and physical batch history.
 * GET job-status, manifest, tile, feature-page and pano requests plus Uvicorn
-  stdout/stderr and tracebacks are retained in LOG_ROOT/uvicorn.log. The
-  execution JSONL remains the structured source for scoring timings.
+  stdout/stderr and tracebacks are retained in the Pod-local UVICORN_LOG_PATH
+  and copied into this archive. The execution JSONL remains durable under
+  LOG_ROOT and is the structured source for scoring timings.
 * Pano cache files show that an image was materialised, but do not record every
   image request or identify a requester.
 EOF

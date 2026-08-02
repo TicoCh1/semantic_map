@@ -6,7 +6,6 @@ from pathlib import Path
 from collections.abc import Iterable
 from typing import Any
 from uuid import uuid4
-from urllib.parse import urlencode
 
 from .backend_config import BackendSettings
 from .prompt_ids import normalize_prompt
@@ -67,6 +66,11 @@ class ResultStorage:
         revision: str | None = None,
     ) -> Path:
         return self.artifact_dir(dataset_id, prompt_id, revision) / "tiles" / str(z) / str(x) / f"{y}.geojson"
+
+    def legacy_tile_path(self, dataset_id: str, prompt_id: str, z: int, x: int, y: int) -> Path:
+        """Return the pre-revision tile path without resolving current.json."""
+
+        return self.result_dir(dataset_id, prompt_id) / "tiles" / str(z) / str(x) / f"{y}.geojson"
 
     def tmp_path_for(self, path: Path) -> Path:
         return path.with_name(f"{path.name}.{uuid4().hex}.tmp")
@@ -266,16 +270,29 @@ class ResultStorage:
                 handle.write("\n")
         tmp_path.replace(path)
 
-    def tile_url_template(self, prompt_id: str, *, revision: str | None = None) -> str:
-        route = f"/api/scoring/results/{prompt_id}/tiles/{{z}}/{{x}}/{{y}}.geojson"
+    def tile_url_template(
+        self,
+        dataset_id: str,
+        prompt_id: str,
+        *,
+        revision: str | None = None,
+    ) -> str:
+        dataset_segment = safe_segment(dataset_id)
+        prompt_segment = safe_segment(prompt_id)
         if revision:
-            route = f"{route}?{urlencode({'revision': safe_segment(revision)})}"
+            revision_segment = safe_segment(revision)
+            route = (
+                f"/api/scoring/results/{dataset_segment}/{prompt_segment}"
+                f"/revisions/{revision_segment}/tiles/{{z}}/{{x}}/{{y}}.geojson"
+            )
+        else:
+            route = f"/api/scoring/results/{dataset_segment}/{prompt_segment}/tiles/{{z}}/{{x}}/{{y}}.geojson"
         if not self.settings.public_base_url:
             return route
         return f"{self.settings.public_base_url.rstrip('/')}{route}"
 
-    def manifest_url(self, prompt_id: str) -> str:
-        route = f"/api/scoring/results/{prompt_id}/manifest"
+    def manifest_url(self, dataset_id: str, prompt_id: str) -> str:
+        route = f"/api/scoring/results/{safe_segment(dataset_id)}/{safe_segment(prompt_id)}/manifest"
         if not self.settings.public_base_url:
             return route
         return f"{self.settings.public_base_url.rstrip('/')}{route}"
