@@ -16,6 +16,7 @@ import {
   patchLayer,
   reorderLayers,
   refreshAllScoringLayers,
+  refreshRemoteBackendCapabilities,
   resetExhibitState,
   resumeRemoteScoringJobs,
   saveGradient
@@ -44,6 +45,7 @@ import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
 import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
+import { cityConfigsForRemoteBackend } from "./state/cities";
 import { exhibitConfig } from "./state/exhibitConfig";
 import { runtimeConfig } from "./state/runtimeConfig";
 import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./state/staticDeployment";
@@ -192,7 +194,12 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    void getRemoteBackendConfig().then((config) => {
+    void getRemoteBackendConfig().then(async (config) => {
+      try {
+        config = await refreshRemoteBackendCapabilities(config);
+      } catch {
+        // Keep the configured fallback while the remote backend starts.
+      }
       setBackendConfig(config);
       return resumeRemoteScoringJobs();
     });
@@ -332,12 +339,27 @@ export function App() {
     setError(null);
     const nextData = await resetExhibitState();
     setData(nextData);
-    setBackendConfig(await getRemoteBackendConfig());
+    let config = await getRemoteBackendConfig();
+    try {
+      config = await refreshRemoteBackendCapabilities(config);
+    } catch {
+      // Keep the previously cached city capability list if RunPod is restarting.
+    }
+    setBackendConfig(config);
     if (showIntro) {
       setIntroVersion((version) => version + 1);
       setShowExhibitIntro(true);
     }
   }, [clearMarkedPanos]);
+
+  const handleBackendConfigChange = useCallback((config: RemoteBackendConfig) => {
+    setBackendConfig(config);
+    void refreshRemoteBackendCapabilities(config)
+      .then((updated) => setBackendConfig(updated))
+      .catch(() => undefined);
+  }, []);
+
+  const mapCities = useMemo(() => cityConfigsForRemoteBackend(backendConfig), [backendConfig]);
 
   useEffect(() => {
     if (!data || !exhibitConfig.idleResetEnabled || exhibitInitialResetRef.current) return;
@@ -840,7 +862,7 @@ export function App() {
         liveSearchAvailable={liveSearchAvailable}
         backendConfig={backendConfig}
         remoteConfigLocked={exhibitConfig.lockRunpodUrl}
-        onConfigChange={setBackendConfig}
+        onConfigChange={handleBackendConfigChange}
         onCreate={handleCreate}
         onCreateReference={handleCreateReference}
       />
@@ -887,6 +909,7 @@ export function App() {
         className={darkMode ? "theme-dark" : ""}
         left={
           <MapView
+            cities={mapCities}
             layers={data.state.layers}
             gradients={data.gradients}
             selectedLayerId={data.state.selected_layer_id}

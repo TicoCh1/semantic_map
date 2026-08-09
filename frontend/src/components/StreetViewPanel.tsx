@@ -3,6 +3,7 @@ import "@photo-sphere-viewer/core/index.css";
 import { Check, Copy, Maximize2, Minimize2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { PANO_REFERENCE_DRAG_TYPE, type MarkedPano, type PanoReference } from "../api/types";
+import { cityConfigForDataset, cityConfigForId } from "../state/cities";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type StreetViewPanelProps = {
@@ -263,11 +264,11 @@ function panoCaptureDate(pano: MarkedPano): string | number | null {
 
 function formatPanoCity(pano: MarkedPano): string {
   const city = String(pano.city_id || "").trim().toLowerCase();
-  if (city === "london") return "London";
-  if (city === "shanghai") return "Shanghai";
+  const cityName = cityConfigForId(city)?.name;
+  if (cityName) return cityName;
   const dataset = String(pano.dataset_id || "").trim().toLowerCase();
-  if (dataset.includes("london")) return "London";
-  if (dataset.includes("shanghai")) return "Shanghai";
+  const datasetCityName = cityConfigForDataset(dataset)?.name;
+  if (datasetCityName) return datasetCityName;
   return pano.dataset_id || pano.city_id || "Unknown";
 }
 

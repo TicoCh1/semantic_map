@@ -1,7 +1,7 @@
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
 import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
+import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
   getLayerFallbackGeojson,
   getLayerGeojson,
@@ -14,11 +14,13 @@ import {
 import { StreetViewPanel } from "./StreetViewPanel";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
+import { DEFAULT_CITY_CONFIGS } from "../state/cities";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type MapViewProps = {
+  cities: CityConfig[];
   layers: SemanticLayer[];
   gradients: GradientPreset[];
   selectedLayerId: string | null;
@@ -39,26 +41,10 @@ type MapViewProps = {
   liveSearchAvailable?: boolean;
 };
 
-type CityConfig = {
-  id: CityId;
-  name: string;
-  datasetId: string;
-  center: [number, number];
-  initialZoom: number;
-  bounds: {
-    west: number;
-    east: number;
-    south: number;
-    north: number;
-  };
-};
-
-type CityVisibility = Record<CityId, boolean>;
-
 const REMOTE_MAX_DETAIL_ZOOM = 13;
 const MAX_LAYER_GEOJSON_CACHE_ENTRIES = 80;
 const MAX_REMOTE_TILE_CACHE_ENTRIES = 192;
-const CITY_VISIBILITY_KEY = "semantic-map-visible-cities-v1";
+const CITY_SELECTION_KEY = "semantic-map-selected-cities-v2";
 const MOBILE_CITY_KEY = "semantic-map-mobile-city-v1";
 const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
 const MIN_CITY_SPLIT = 28;
@@ -73,7 +59,7 @@ const MOBILE_SEARCH_PLACEHOLDERS = [
   "The scene contains abundant vegetation"
 ];
 const STATIC_SEARCH_PLACEHOLDER = STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE;
-const STATIC_FALLBACK_TILE_RANGES: Record<CityId, { z: number; minX: number; maxX: number; minY: number; maxY: number }> = {
+const STATIC_FALLBACK_TILE_RANGES: Partial<Record<CityId, { z: number; minX: number; maxX: number; minY: number; maxY: number }>> = {
   london: { z: 13, minX: 4091, maxX: 4095, minY: 2721, maxY: 2725 },
   shanghai: { z: 13, minX: 6858, maxX: 6861, minY: 3345, maxY: 3348 }
 };
@@ -82,36 +68,8 @@ function isCompactMapViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
 }
 
-const CITY_CONFIGS: CityConfig[] = [
-  {
-    id: "london",
-    name: "London",
-    datasetId: "london_224_8_45",
-    center: [-0.1276, 51.5072],
-    initialZoom: 10.45,
-    bounds: {
-      west: -1.05,
-      east: 0.7,
-      south: 50.85,
-      north: 52.05
-    }
-  },
-  {
-    id: "shanghai",
-    name: "Shanghai",
-    datasetId: "shanghai_224_8_45_2B",
-    center: [121.4737, 31.2304],
-    initialZoom: 10.45,
-    bounds: {
-      west: 120.85,
-      east: 122.25,
-      south: 30.65,
-      north: 31.85
-    }
-  }
-];
-
 export const MapView = memo(function MapView({
+  cities,
   layers,
   gradients,
   selectedLayerId,
@@ -130,7 +88,7 @@ export const MapView = memo(function MapView({
   promptDisabled = false,
   liveSearchAvailable = true
 }: MapViewProps) {
-  const [cityVisibility, setCityVisibility] = useState<CityVisibility>(loadCityVisibility);
+  const [citySelection, setCitySelection] = useState<CityId[]>(loadCitySelection);
   const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
   const [citySplit, setCitySplit] = useState(loadCitySplit);
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
@@ -138,11 +96,15 @@ export const MapView = memo(function MapView({
   const [forceMaxDetail, setForceMaxDetail] = useState(() => window.localStorage.getItem("semantic-map-force-max-detail") === "true");
   const [maxDetailAutoCancelled, setMaxDetailAutoCancelled] = useState(false);
   const [sharedGroundScale, setSharedGroundScale] = useState(() =>
-    groundScaleForZoom(zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, CITY_CONFIGS[0].center[1]), CITY_CONFIGS[0].center[1])
+    groundScaleForZoom(zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, cities[0]?.center[1] ?? 0), cities[0]?.center[1] ?? 0)
   );
-  const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({ london: 10, shanghai: 10 });
+  const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({});
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
-  const activeCities = compactViewport ? CITY_CONFIGS.filter((city) => city.id === mobileCityId) : CITY_CONFIGS.filter((city) => cityVisibility[city.id]);
+  const desktopCities = useMemo(
+    () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
+    [cities, citySelection]
+  );
+  const activeCities = compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = layers.length > 0 && visibleLayerCount === 0;
@@ -158,8 +120,13 @@ export const MapView = memo(function MapView({
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(CITY_VISIBILITY_KEY, JSON.stringify(cityVisibility));
-  }, [cityVisibility]);
+    setCitySelection((current) => normaliseCitySelection(cities, current));
+    setMobileCityId((current) => (cities.some((city) => city.id === current) ? current : cities[0]?.id ?? ""));
+  }, [cities]);
+
+  useEffect(() => {
+    window.localStorage.setItem(CITY_SELECTION_KEY, JSON.stringify(citySelection));
+  }, [citySelection]);
 
   useEffect(() => {
     window.localStorage.setItem(MOBILE_CITY_KEY, mobileCityId);
@@ -167,10 +134,10 @@ export const MapView = memo(function MapView({
 
   useEffect(() => {
     if (!compactViewport || !onPriorityTileChange) return;
-    for (const city of CITY_CONFIGS) {
+    for (const city of cities) {
       if (city.id !== mobileCityId) onPriorityTileChange(city.id, null);
     }
-  }, [compactViewport, mobileCityId, onPriorityTileChange]);
+  }, [cities, compactViewport, mobileCityId, onPriorityTileChange]);
 
   useEffect(() => {
     window.localStorage.setItem(CITY_SPLIT_KEY, String(citySplit));
@@ -180,15 +147,21 @@ export const MapView = memo(function MapView({
     window.localStorage.setItem("semantic-map-force-max-detail", forceMaxDetail ? "true" : "false");
   }, [forceMaxDetail]);
 
-  const toggleCity = useCallback((cityId: CityId, visible: boolean) => {
-    setCityVisibility((current) => {
-      if (!visible) {
-        const otherVisible = CITY_CONFIGS.some((city) => city.id !== cityId && current[city.id]);
-        if (!otherVisible) return current;
+  const selectCitySlot = useCallback((slot: number, cityId: CityId) => {
+    setCitySelection((current) => {
+      const next = normaliseCitySelection(cities, current);
+      const currentSlot = next.indexOf(cityId);
+      if (currentSlot === slot) return next;
+      const displaced = next[slot];
+      if (currentSlot >= 0) {
+        next[currentSlot] = displaced;
+        next[slot] = cityId;
+        return next;
       }
-      return { ...current, [cityId]: visible };
+      next[slot] = cityId;
+      return normaliseCitySelection(cities, next);
     });
-  }, []);
+  }, [cities]);
 
   const startCitySplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -245,7 +218,7 @@ export const MapView = memo(function MapView({
           <strong>{title}</strong>
         </div>
         <div className="mobile-city-switch" aria-label="City">
-          {CITY_CONFIGS.map((city) => (
+          {cities.map((city) => (
             <button
               key={city.id}
               type="button"
@@ -256,13 +229,19 @@ export const MapView = memo(function MapView({
             </button>
           ))}
         </div>
-        <div className="city-toggle-group">
-          <span>Cities</span>
+        <div className="city-toggle-group city-source-selectors">
+          <span>Map sources</span>
           <div>
-            {CITY_CONFIGS.map((city) => (
-              <label className="city-toggle" key={city.id}>
-                <input type="checkbox" checked={cityVisibility[city.id]} onChange={(event) => toggleCity(city.id, event.target.checked)} />
-                <span>{city.name}</span>
+            {desktopCities.map((city, slot) => (
+              <label className="city-toggle" key={`${slot}-${city.id}`}>
+                <span>{slot === 0 ? "Left" : "Right"}</span>
+                <select value={city.id} onChange={(event) => selectCitySlot(slot, event.target.value)}>
+                  {cities.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.name}
+                    </option>
+                  ))}
+                </select>
               </label>
             ))}
           </div>
@@ -1170,6 +1149,7 @@ function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number, forceMaxDe
 function filterStaticFallbackTiles(cityId: CityId, tiles: Array<{ z: number; x: number; y: number }>, active: boolean): Array<{ z: number; x: number; y: number }> {
   if (!active) return tiles;
   const range = STATIC_FALLBACK_TILE_RANGES[cityId];
+  if (!range) return [];
   return tiles.filter((tile) => tile.z === range.z && tile.x >= range.minX && tile.x <= range.maxX && tile.y >= range.minY && tile.y <= range.maxY);
 }
 
@@ -1230,7 +1210,7 @@ function groundScaleForZoom(zoom: number, lat: number): number {
 
 function zoomForGroundScale(scale: number, lat: number): number {
   const scaledWorld = scale * latitudeCos(lat);
-  if (!Number.isFinite(scaledWorld) || scaledWorld <= 0) return CITY_CONFIGS[0].initialZoom;
+  if (!Number.isFinite(scaledWorld) || scaledWorld <= 0) return DEFAULT_CITY_CONFIGS[0].initialZoom;
   return clampNumber(Math.log(scaledWorld) / Math.LN2, 2, 18);
 }
 
@@ -1318,21 +1298,36 @@ function isLayerWaitingForRemoteData(layer: SemanticLayer, cityId: CityId): bool
   return layer.status === "queued" || layer.status === "running" || sourcePath.startsWith("remote://job/") || sourcePath.startsWith("remote://pending/");
 }
 
-function loadCityVisibility(): CityVisibility {
-  const fallback = { london: true, shanghai: true };
+function normaliseCitySelection(cities: CityConfig[], current: readonly CityId[]): CityId[] {
+  const available = new Set(cities.map((city) => city.id));
+  const selection = current.filter((cityId, index) => available.has(cityId) && current.indexOf(cityId) === index).slice(0, 2);
+  for (const city of cities) {
+    if (selection.length >= 2) break;
+    if (!selection.includes(city.id)) selection.push(city.id);
+  }
+  return selection;
+}
+
+function loadCitySelection(): CityId[] {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(CITY_VISIBILITY_KEY) || "") as Partial<CityVisibility>;
-    const london = parsed.london ?? fallback.london;
-    const shanghai = parsed.shanghai ?? fallback.shanghai;
-    return london || shanghai ? { london, shanghai } : fallback;
+    const parsed = JSON.parse(window.localStorage.getItem(CITY_SELECTION_KEY) || "");
+    if (Array.isArray(parsed)) return parsed.filter((cityId): cityId is CityId => typeof cityId === "string").slice(0, 2);
+
+    // Migrate the old London/Shanghai checkbox record when it is present.
+    const legacy = JSON.parse(window.localStorage.getItem("semantic-map-visible-cities-v1") || "") as Partial<Record<CityId, boolean>>;
+    const legacySelection = Object.entries(legacy)
+      .filter(([, visible]) => visible)
+      .map(([cityId]) => cityId)
+      .slice(0, 2);
+    return legacySelection.length ? legacySelection : DEFAULT_CITY_CONFIGS.slice(0, 2).map((city) => city.id);
   } catch {
-    return fallback;
+    return DEFAULT_CITY_CONFIGS.slice(0, 2).map((city) => city.id);
   }
 }
 
 function loadMobileCityId(): CityId {
   const stored = window.localStorage.getItem(MOBILE_CITY_KEY);
-  return CITY_CONFIGS.some((city) => city.id === stored) ? (stored as CityId) : "london";
+  return stored || DEFAULT_CITY_CONFIGS[0].id;
 }
 
 function loadCitySplit(): number {

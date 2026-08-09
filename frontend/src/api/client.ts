@@ -23,6 +23,7 @@ export {
   patchLayer,
   reorderLayers,
   refreshAllScoringLayers,
+  refreshRemoteBackendCapabilities,
   resetExhibitState,
   resumeRemoteScoringJobs,
   saveGradient,

@@ -21,12 +21,14 @@ import type {
 import { DEFAULT_POINT_RADIUS, clamp, layerStyleFromGradient, slugify } from "./color";
 import { reportDemoMonitorEvent } from "./demoMonitor";
 import { exhibitConfig } from "./exhibitConfig";
+import { cityConfigForDataset, cityConfigForId, cityConfigsForRemoteBackend, DEFAULT_CITY_CONFIGS, normaliseCityConfigs } from "./cities";
 import { runtimeConfig } from "./runtimeConfig";
 import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./staticDeployment";
 
 const STATE_KEY = "semantic-map-local-state-v1";
 const GRADIENTS_KEY = "semantic-map-local-gradients-v1";
 const REMOTE_BACKEND_KEY = "semantic-map-runpod-backend-v1";
+const REMOTE_BACKEND_CAPABILITIES_KEY = "semantic-map-runpod-capabilities-v1";
 const REMOTE_TILE_CACHE_DB = "semantic-map-remote-tile-cache-v1";
 const REMOTE_TILE_CACHE_STORE = "tiles";
 const MOCK_POINT_COUNT = 240;
@@ -50,25 +52,8 @@ const LAST_REMOTE_LOG_KEYS = new Map<string, string>();
 let remoteTileCacheDbPromise: Promise<IDBDatabase | null> | null = null;
 const REMOTE_TILE_CACHE_DB_VERSION = 2;
 const REMOTE_TILE_CACHE_MAX_ENTRIES = 500;
-const MAP_CITY_DATASETS: Record<CityId, string> = {
-  london: "london_224_8_45",
-  shanghai: "shanghai_224_8_45_2B"
-};
+const STATIC_FALLBACK_CITY_IDS: CityId[] = ["london", "shanghai"];
 
-const LONDON_CENTER = [-0.1276, 51.5072] as const;
-const LONDON_BOUNDS = {
-  west: -0.31,
-  east: 0.05,
-  south: 51.42,
-  north: 51.58
-};
-const SHANGHAI_CENTER = [121.4737, 31.2304] as const;
-const SHANGHAI_BOUNDS = {
-  west: 121.1,
-  east: 121.82,
-  south: 31.05,
-  north: 31.38
-};
 const STATIC_FALLBACK_PANO_IMAGES = [
   {
     datasetId: "london_224_8_45",
@@ -83,7 +68,6 @@ const STATIC_FALLBACK_PANO_IMAGES = [
     file: "shanghai-103110.jpg"
   }
 ] as const;
-type MockCityId = "london" | "shanghai";
 
 const DEFAULT_GRADIENTS: GradientPreset[] = [
   {
@@ -381,14 +365,33 @@ function remoteDatasetIds(config: RemoteBackendConfig): string[] {
     : normalizeDatasetIds(config.datasetId || DEFAULT_REMOTE_DATASET_ID);
 }
 
-function cityIdForDatasetId(datasetId: string | null | undefined): CityId | null {
-  if (!datasetId) return null;
-  const entry = Object.entries(MAP_CITY_DATASETS).find(([, value]) => value === datasetId);
-  return entry ? (entry[0] as CityId) : null;
+type CachedBackendCapabilities = {
+  datasetId: string;
+  datasetIds: string[];
+  datasetGroupId?: string;
+  cities: RemoteBackendConfig["cities"];
+};
+
+function cachedBackendCapabilities(baseUrl: string): CachedBackendCapabilities | null {
+  const all = readJson<Record<string, CachedBackendCapabilities>>(REMOTE_BACKEND_CAPABILITIES_KEY);
+  return all?.[normalizeBackendBaseUrl(baseUrl)] ?? null;
 }
 
-function datasetIdForCity(cityId: CityId): string {
-  return MAP_CITY_DATASETS[cityId];
+function withCachedBackendCapabilities(config: RemoteBackendConfig): RemoteBackendConfig {
+  const cached = cachedBackendCapabilities(config.baseUrl);
+  if (!cached?.datasetIds?.length || !cached.cities?.length) return config;
+  return {
+    ...config,
+    datasetId: cached.datasetId || cached.datasetIds[0] || config.datasetId,
+    datasetIds: cached.datasetIds,
+    datasetGroupId: cached.datasetGroupId || config.datasetGroupId,
+    cities: cached.cities
+  };
+}
+
+function cityIdForDatasetId(datasetId: string | null | undefined): CityId | null {
+  if (!datasetId) return null;
+  return cityConfigForDataset(datasetId, cityConfigsForRemoteBackend(loadRemoteBackendConfigSync()))?.id ?? null;
 }
 
 function remoteAuthHeaders(config: RemoteBackendConfig): HeadersInit | undefined {
@@ -441,6 +444,30 @@ async function fetchRemoteWithTimeout(input: RequestInfo | URL, init: RequestIni
   }
 }
 
+export async function refreshRemoteBackendCapabilities(config: RemoteBackendConfig): Promise<RemoteBackendConfig> {
+  if (!config.enabled || !isUsableRemoteBackendUrl(config.baseUrl)) return withCachedBackendCapabilities(config);
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/capabilities"), {
+    headers: remoteAuthHeaders(config),
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`RunPod capabilities request failed (${response.status})`);
+  const payload = (await response.json()) as Record<string, unknown>;
+  const datasetIds = normalizeDatasetIds(payload.dataset_ids as string[] | string | null | undefined);
+  const cities = normaliseCityConfigs(payload.cities);
+  if (!datasetIds.length || !cities.length) throw new Error("RunPod returned an empty city capability list.");
+
+  const cached: CachedBackendCapabilities = {
+    datasetId: String(payload.dataset_id || datasetIds[0]).trim() || datasetIds[0],
+    datasetIds,
+    datasetGroupId: typeof payload.dataset_group_id === "string" ? payload.dataset_group_id : undefined,
+    cities
+  };
+  const all = readJson<Record<string, CachedBackendCapabilities>>(REMOTE_BACKEND_CAPABILITIES_KEY) ?? {};
+  all[normalizeBackendBaseUrl(config.baseUrl)] = cached;
+  writeJson(REMOTE_BACKEND_CAPABILITIES_KEY, all);
+  return withCachedBackendCapabilities(config);
+}
+
 function pendingJobSource(jobId: string): string {
   return `remote://job/${encodeURIComponent(jobId)}`;
 }
@@ -455,7 +482,7 @@ function isLegacyPendingSource(sourcePath: string): boolean {
 }
 
 function layerSourcePathCandidates(layer: SemanticLayer): string[] {
-  return Array.from(new Set([layer.source_path, ...Object.values(layer.source_paths ?? {})].filter(Boolean)));
+  return Array.from(new Set([layer.source_path, ...Object.values(layer.source_paths ?? {})].filter((value): value is string => Boolean(value))));
 }
 
 function staticFallbackDataBaseUrl(): string {
@@ -468,10 +495,10 @@ function staticFallbackTileTemplate(dataKey: string, cityId: CityId): string {
 
 function staticFallbackSources(dataKey: string): Pick<SemanticLayer, "source_path" | "source_paths" | "score_property" | "status"> {
   const sourcePaths = Object.fromEntries(
-    (Object.keys(MAP_CITY_DATASETS) as CityId[]).map((cityId) => [cityId, staticFallbackTileTemplate(dataKey, cityId)])
+    STATIC_FALLBACK_CITY_IDS.map((cityId) => [cityId, staticFallbackTileTemplate(dataKey, cityId)])
   ) as Partial<Record<CityId, string>>;
   return {
-    source_path: sourcePaths.london ?? Object.values(sourcePaths)[0] ?? "",
+    source_path: Object.values(sourcePaths)[0] ?? "",
     source_paths: sourcePaths,
     score_property: "zscore",
     status: "ready"
@@ -558,38 +585,41 @@ function loadRemoteBackendConfigSync(): RemoteBackendConfig {
   const raw = readJson<Partial<RemoteBackendConfig>>(REMOTE_BACKEND_KEY);
   const urlBaseUrl = urlBackendOverride();
   if (urlBaseUrl) {
-    return {
+    return withCachedBackendCapabilities({
       baseUrl: urlBaseUrl,
       token: typeof raw?.token === "string" ? raw.token : runtimeConfig.runpodToken,
       datasetId: String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID),
       datasetIds: normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS,
       datasetGroupId: typeof raw?.datasetGroupId === "string" ? raw.datasetGroupId : DEFAULT_REMOTE_DATASET_GROUP_ID,
+      cities: normaliseCityConfigs(raw?.cities),
       enabled: true
-    };
+    });
   }
 
   if (exhibitConfig.lockRunpodUrl) {
-    return {
+    return withCachedBackendCapabilities({
       baseUrl: normalizeBackendBaseUrl(exhibitConfig.lockedRunpodUrl),
       token: exhibitConfig.lockedRunpodToken,
       datasetId: DEFAULT_REMOTE_DATASET_ID,
       datasetIds: DEFAULT_REMOTE_DATASET_IDS,
       datasetGroupId: DEFAULT_REMOTE_DATASET_GROUP_ID,
+      cities: [],
       enabled: true
-    };
+    });
   }
 
   const baseUrl = normalizeBackendBaseUrl(String(raw?.baseUrl ?? DEFAULT_REMOTE_BACKEND_URL));
   const datasetId = String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID);
   const datasetIds = normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS;
-  return {
+  return withCachedBackendCapabilities({
     baseUrl,
     token: typeof raw?.token === "string" ? raw.token : "",
     datasetId,
     datasetIds,
     datasetGroupId: typeof raw?.datasetGroupId === "string" ? raw.datasetGroupId : DEFAULT_REMOTE_DATASET_GROUP_ID,
+    cities: normaliseCityConfigs(raw?.cities),
     enabled: raw?.enabled ?? runtimeConfig.remoteBackendEnabled
-  };
+  });
 }
 
 function saveRemoteBackendConfigSync(config: RemoteBackendConfig): RemoteBackendConfig {
@@ -603,6 +633,7 @@ function saveRemoteBackendConfigSync(config: RemoteBackendConfig): RemoteBackend
     datasetId: config.datasetId.trim() || DEFAULT_REMOTE_DATASET_ID,
     datasetIds: normalizeDatasetIds(config.datasetIds).length ? normalizeDatasetIds(config.datasetIds) : DEFAULT_REMOTE_DATASET_IDS,
     datasetGroupId: config.datasetGroupId?.trim() || DEFAULT_REMOTE_DATASET_GROUP_ID,
+    cities: normaliseCityConfigs(config.cities),
     enabled: config.enabled
   };
   writeJson(REMOTE_BACKEND_KEY, normalized);
@@ -688,10 +719,7 @@ function createLayerRecord(payload: LayerCreate, existingIds: Set<string>, gradi
     order: 0,
     source_type: "geojson",
     source_path: sourcePath,
-    source_paths: fallbackSources?.source_paths ?? {
-      london: sourcePath,
-      shanghai: sourcePath
-    },
+    source_paths: fallbackSources?.source_paths ?? Object.fromEntries(STATIC_FALLBACK_CITY_IDS.map((cityId) => [cityId, sourcePath])),
     score_property: fallbackSources?.score_property ?? "zscore",
     style,
     status: fallbackSources?.status ?? "ready",
@@ -732,10 +760,7 @@ function createReferenceLayerRecord(reference: PanoReference, existingIds: Set<s
     order: 0,
     source_type: "geojson",
     source_path: sourcePath,
-    source_paths: {
-      london: sourcePath,
-      shanghai: sourcePath
-    },
+    source_paths: Object.fromEntries(STATIC_FALLBACK_CITY_IDS.map((cityId) => [cityId, sourcePath])),
     score_property: "zscore",
     style,
     status: "ready",
@@ -760,10 +785,7 @@ function restoreLayerLocalFallbackSync(layer: SemanticLayer): SemanticLayer | nu
   return updateLayerSync(layer.id, {
     status: "ready",
     source_path: sourcePath,
-    source_paths: {
-      london: sourcePath,
-      shanghai: sourcePath
-    }
+    source_paths: Object.fromEntries(STATIC_FALLBACK_CITY_IDS.map((cityId) => [cityId, sourcePath]))
   });
 }
 
@@ -805,15 +827,13 @@ function referenceLayerPrompt(reference: PanoReference): string {
 function normalizeSourcePaths(raw: Partial<SemanticLayer>, fallback: string): Partial<Record<CityId, string>> | undefined {
   const sourcePaths: Partial<Record<CityId, string>> = {};
   const rawPaths = raw.source_paths as Partial<Record<CityId, unknown>> | undefined;
-  for (const cityId of Object.keys(MAP_CITY_DATASETS) as CityId[]) {
-    const value = rawPaths?.[cityId];
+  for (const [cityId, value] of Object.entries(rawPaths ?? {})) {
     if (typeof value === "string" && value.trim()) {
       sourcePaths[cityId] = value;
     }
   }
   if (!Object.keys(sourcePaths).length && fallback.startsWith("local://mock/")) {
-    sourcePaths.london = fallback;
-    sourcePaths.shanghai = fallback;
+    for (const cityId of STATIC_FALLBACK_CITY_IDS) sourcePaths[cityId] = fallback;
   }
   return Object.keys(sourcePaths).length ? sourcePaths : undefined;
 }
@@ -1225,9 +1245,10 @@ function tileLabel(tile: TileCoord): string {
   return `${dataset}${tile.z}/${tile.x}/${tile.y}`;
 }
 
-function priorityTilesLabel(priorityTiles?: CityPriorityTiles | null): string {
+function priorityTilesLabel(config: RemoteBackendConfig, priorityTiles?: CityPriorityTiles | null): string {
   if (!priorityTiles) return "";
-  return (Object.keys(MAP_CITY_DATASETS) as CityId[])
+  return cityConfigsForRemoteBackend(config)
+    .map((city) => city.id)
     .map((cityId) => {
       const tile = priorityTiles[cityId];
       return tile ? `${cityId} ${tileLabel(tile)}` : "";
@@ -1325,7 +1346,7 @@ async function submitRemoteScoringForLayer(
     throw new Error("Reference pano layer is missing reference metadata.");
   }
   const submittingSourcePaths = Object.fromEntries(
-    (Object.keys(MAP_CITY_DATASETS) as CityId[]).map((cityId) => [cityId, `remote://pending/${layer.id}`])
+    cityConfigsForRemoteBackend(config).map((city) => [city.id, `remote://pending/${layer.id}`])
   ) as Partial<Record<CityId, string>>;
   updateLayerSync(layer.id, {
     status: "running",
@@ -1334,7 +1355,7 @@ async function submitRemoteScoringForLayer(
   });
 
   try {
-    const priorityLabel = priorityTilesLabel(priorityTiles);
+    const priorityLabel = priorityTilesLabel(config, priorityTiles);
     const submitLabel = isReferenceLayer ? "reference pano" : "prompt";
     emitRemoteInfoLog(layer.id, prompt, priorityLabel ? `Submitting ${submitLabel} with priority tiles ${priorityLabel}.` : `Submitting ${submitLabel}.`);
     const submitted = referencePano
@@ -1350,7 +1371,7 @@ async function submitRemoteScoringForLayer(
     emitRemoteJobLog(layer.id, job, { mapOverlay: showOnMap });
     const pending = pendingJobSource(job.job_id);
     const pendingSourcePaths = Object.fromEntries(
-      (Object.keys(MAP_CITY_DATASETS) as CityId[]).map((cityId) => [cityId, pending])
+      cityConfigsForRemoteBackend(config).map((city) => [city.id, pending])
     ) as Partial<Record<CityId, string>>;
     updateLayerSync(layer.id, {
       status: job.status === "ready" ? "ready" : "running",
@@ -1469,9 +1490,9 @@ function priorityTilesForRequest(config: RemoteBackendConfig, priorityTiles?: Ci
   if (!priorityTiles) return [];
   const datasetIds = new Set(remoteDatasetIds(config));
   const tiles: TileCoord[] = [];
-  for (const cityId of Object.keys(MAP_CITY_DATASETS) as CityId[]) {
-    const datasetId = datasetIdForCity(cityId);
-    const tile = priorityTiles[cityId];
+  for (const city of cityConfigsForRemoteBackend(config)) {
+    const datasetId = city.datasetId;
+    const tile = priorityTiles[city.id];
     if (!tile || !datasetIds.has(datasetId)) continue;
     tiles.push({
       z: tile.z,
@@ -1638,7 +1659,7 @@ async function getRemoteResultManifests(config: RemoteBackendConfig, job: Scorin
 function sourcePathsFromManifests(config: RemoteBackendConfig, manifests: RemoteResultManifest[]): Partial<Record<CityId, string>> {
   const paths: Partial<Record<CityId, string>> = {};
   for (const manifest of manifests) {
-    const cityId = cityIdForDatasetId(manifest.dataset_id);
+    const cityId = cityConfigForDataset(manifest.dataset_id, cityConfigsForRemoteBackend(config))?.id ?? null;
     if (!cityId) continue;
     paths[cityId] = resolveRemoteUrl(config, manifest.tile_url_template);
   }
@@ -1731,7 +1752,7 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
         const manifests = await getRemoteResultManifests(config, job);
         const sourcePaths = sourcePathsFromManifests(config, manifests);
         const primaryManifest = manifests[0];
-        const primarySourcePath = sourcePaths.london || sourcePaths.shanghai || (primaryManifest ? resolveRemoteUrl(config, primaryManifest.tile_url_template) : "");
+        const primarySourcePath = Object.values(sourcePaths)[0] || (primaryManifest ? resolveRemoteUrl(config, primaryManifest.tile_url_template) : "");
         if (!primarySourcePath) throw new Error("RunPod job did not return a tile URL");
         updateLayerSync(layerId, {
           status: "ready",
@@ -1793,7 +1814,7 @@ export async function resumeRemoteScoringJobs(): Promise<void> {
         const showOnMap = job.status !== "ready";
         const pending = pendingJobSource(job.job_id);
         const pendingSourcePaths = Object.fromEntries(
-          (Object.keys(MAP_CITY_DATASETS) as CityId[]).map((cityId) => [cityId, pending])
+          cityConfigsForRemoteBackend(config).map((city) => [city.id, pending])
         ) as Partial<Record<CityId, string>>;
         updateLayerSync(layer.id, {
           status: job.status === "ready" ? "ready" : "running",
@@ -1960,7 +1981,7 @@ export async function getRemoteTileGeojson(sourcePath: string, z: number, x: num
   return geojson;
 }
 
-export async function getDefaultRemoteLayerGeojson(sourcePath: string, cityId: MockCityId = "london"): Promise<FeatureCollection> {
+export async function getDefaultRemoteLayerGeojson(sourcePath: string, cityId: CityId = "london"): Promise<FeatureCollection> {
   const city = mockCityConfig(cityId);
   const tileZoom = isStaticFallbackTileTemplate(sourcePath) ? 13 : 10;
   const center = lonLatToTile(city.center[1], city.center[0], tileZoom);
@@ -2027,7 +2048,7 @@ async function createLocalMockReferenceScoringJob(reference: PanoReference): Pro
   };
 }
 
-export async function getLayerGeojson(layerId: string, cityId: MockCityId = "london"): Promise<FeatureCollection> {
+export async function getLayerGeojson(layerId: string, cityId: CityId = "london"): Promise<FeatureCollection> {
   const state = loadStateSync();
   const layer = state.layers.find((item) => item.id === layerId);
   if (!layer) throw new Error("Layer not found");
@@ -2041,14 +2062,14 @@ export async function getLayerGeojson(layerId: string, cityId: MockCityId = "lon
   return makeMockGeojson(layer.prompt, layer.id, MOCK_POINT_COUNT, cityId);
 }
 
-export async function getLayerFallbackGeojson(layerId: string, cityId: MockCityId = "london"): Promise<FeatureCollection> {
+export async function getLayerFallbackGeojson(layerId: string, cityId: CityId = "london"): Promise<FeatureCollection> {
   const state = loadStateSync();
   const layer = state.layers.find((item) => item.id === layerId);
   if (!layer) throw new Error("Layer not found");
   return makeMockGeojson(layer.prompt, layer.id, MOCK_POINT_COUNT, cityId);
 }
 
-function makeMockGeojson(prompt: string, layerId: string, count: number, cityId: MockCityId = "london"): FeatureCollection {
+function makeMockGeojson(prompt: string, layerId: string, count: number, cityId: CityId = "london"): FeatureCollection {
   const city = mockCityConfig(cityId);
   const geometrySeed = Number.parseInt(hashString(`${city.datasetId}:mock-pano-geometry`).slice(0, 8), 36) || 1;
   const scoreSeed = Number.parseInt(hashString(`${city.datasetId}:${prompt}:${layerId}:mock-score`).slice(0, 8), 36) || 1;
@@ -2112,20 +2133,13 @@ function makeMockGeojson(prompt: string, layerId: string, count: number, cityId:
   return geojson as FeatureCollection;
 }
 
-function mockCityConfig(cityId: MockCityId) {
-  if (cityId === "shanghai") {
-    return {
-      datasetId: "shanghai_224_8_45_2B",
-      bounds: SHANGHAI_BOUNDS,
-      center: SHANGHAI_CENTER,
-      panoIdStart: MOCK_SHANGHAI_PANO_ID_START
-    };
-  }
+function mockCityConfig(cityId: CityId) {
+  const city = cityConfigForId(cityId) ?? DEFAULT_CITY_CONFIGS[0];
   return {
-    datasetId: "london_224_8_45",
-    bounds: LONDON_BOUNDS,
-    center: LONDON_CENTER,
-    panoIdStart: MOCK_PANO_ID_START
+    datasetId: city.datasetId,
+    bounds: city.bounds,
+    center: city.center,
+    panoIdStart: city.id === "shanghai" ? MOCK_SHANGHAI_PANO_ID_START : MOCK_PANO_ID_START
   };
 }
 

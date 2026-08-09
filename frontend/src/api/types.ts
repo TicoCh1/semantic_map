@@ -48,7 +48,22 @@ export type SemanticLayer = {
   created_at: string;
 };
 
-export type CityId = "london" | "shanghai";
+export type CityId = string;
+
+export type CityConfig = {
+  id: CityId;
+  name: string;
+  datasetId: string;
+  center: [number, number];
+  initialZoom: number;
+  bounds: {
+    west: number;
+    east: number;
+    south: number;
+    north: number;
+  };
+  liveDemo?: boolean;
+};
 
 export type TileCoord = {
   z: number;
@@ -210,6 +225,7 @@ export type RemoteBackendConfig = {
   datasetId: string;
   datasetIds: string[];
   datasetGroupId?: string;
+  cities?: CityConfig[];
   enabled: boolean;
 };
 

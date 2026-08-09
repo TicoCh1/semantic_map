@@ -2574,8 +2574,8 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .city-map-layout.has-two-cities {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) 8px minmax(0, 1fr);
+    grid-template-columns: minmax(200px, var(--city-split)) 8px minmax(200px, 1fr);
+    grid-template-rows: minmax(0, 1fr);
   }
 
   .city-map-pane[data-split-index="0"] {
@@ -2584,20 +2584,20 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .city-map-pane[data-split-index="1"] {
-    grid-column: 1;
-    grid-row: 3;
+    grid-column: 3;
+    grid-row: 1;
   }
 
   .city-split-resizer {
-    grid-column: 1;
-    grid-row: 2;
-    margin-top: 0;
-    cursor: row-resize;
+    grid-column: 2;
+    grid-row: 1;
+    margin-top: var(--map-toolbar-clearance);
+    cursor: col-resize;
   }
 
   .city-split-resizer::before {
-    width: 72px;
-    height: 4px;
+    width: 4px;
+    height: 72px;
   }
 
   .street-view-main {
