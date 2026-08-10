@@ -23,6 +23,7 @@ import { reportDemoMonitorEvent } from "./demoMonitor";
 import { exhibitConfig } from "./exhibitConfig";
 import { cityConfigForDataset, cityConfigForId, cityConfigsForRemoteBackend, DEFAULT_CITY_CONFIGS, normaliseCityConfigs } from "./cities";
 import { runtimeConfig } from "./runtimeConfig";
+import { alternatePanoDatasetId } from "./panoDatasets";
 import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./staticDeployment";
 
 const STATE_KEY = "semantic-map-local-state-v1";
@@ -50,8 +51,11 @@ export const REMOTE_LOG_EVENT = "semantic-map-remote-log";
 const ACTIVE_REMOTE_POLLS = new Set<string>();
 const LAST_REMOTE_LOG_KEYS = new Map<string, string>();
 let remoteTileCacheDbPromise: Promise<IDBDatabase | null> | null = null;
+let remoteTileCacheWritesSincePrune = 0;
+let remoteTileCachePrunePromise: Promise<void> | null = null;
 const REMOTE_TILE_CACHE_DB_VERSION = 2;
 const REMOTE_TILE_CACHE_MAX_ENTRIES = 500;
+const REMOTE_TILE_CACHE_PRUNE_EVERY_WRITES = 32;
 const STATIC_FALLBACK_CITY_IDS: CityId[] = ["london", "shanghai"];
 
 const STATIC_FALLBACK_PANO_IMAGES = [
@@ -274,6 +278,9 @@ const REMOTE_READY_INTERVAL_MS = 2000;
 const REMOTE_READY_TIMEOUT_MS = 5000;
 const REMOTE_REQUEST_TIMEOUT_MS = 12000;
 const REMOTE_SUBMIT_TIMEOUT_MS = 12000;
+const REMOTE_JOB_POLL_FAST_INTERVAL_MS = 250;
+const REMOTE_JOB_POLL_MEDIUM_INTERVAL_MS = 750;
+const REMOTE_JOB_POLL_SLOW_INTERVAL_MS = 1500;
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -806,12 +813,14 @@ function localFallbackJob(layer: SemanticLayer, message: string): ScoringJob {
 function normalizePanoReference(reference: PanoReference): PanoReference {
   const panoId = String(reference.pano_id || "").trim();
   const datasetId = String(reference.dataset_id || "").trim();
+  const panoDatasetId = String(reference.pano_dataset_id || "").trim();
   if (!panoId || !datasetId) {
     throw new Error("Reference pano requires pano id and dataset id.");
   }
   return {
     pano_id: panoId,
     dataset_id: datasetId,
+    pano_dataset_id: panoDatasetId || null,
     city_id: typeof reference.city_id === "string" ? reference.city_id : cityIdForDatasetId(datasetId) ?? null,
     lon: typeof reference.lon === "number" && Number.isFinite(reference.lon) ? reference.lon : null,
     lat: typeof reference.lat === "number" && Number.isFinite(reference.lat) ? reference.lat : null,
@@ -1602,9 +1611,9 @@ function acceptedJobFromBatchResponse(payload: ScoringJobBatchResponse): Scoring
 }
 
 async function getRemoteScoringJob(config: RemoteBackendConfig, jobId: string): Promise<ScoringJob> {
-  const response = await fetch(resolveRemoteUrl(config, `/api/scoring/jobs/${jobId}`), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, `/api/scoring/jobs/${jobId}`), {
     headers: remoteAuthHeaders(config)
-  });
+  }, REMOTE_READY_TIMEOUT_MS);
   if (!response.ok) {
     reportRemoteRequestFailure("remote_job_poll_failed", `RunPod job polling failed (${response.status})`, {
       status: response.status,
@@ -1618,7 +1627,7 @@ async function getRemoteScoringJob(config: RemoteBackendConfig, jobId: string): 
 async function getRemoteManifest(config: RemoteBackendConfig, job: ScoringJob): Promise<RemoteResultManifest> {
   const manifestUrl = job.manifest_url || (job.prompt_id ? `/api/scoring/results/${job.prompt_id}/manifest` : "");
   if (!manifestUrl) throw new Error("RunPod job did not return a manifest URL");
-  const response = await fetch(resolveRemoteUrl(config, manifestUrl), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, manifestUrl), {
     headers: remoteAuthHeaders(config),
     cache: "no-store"
   });
@@ -1635,7 +1644,7 @@ async function getRemoteManifest(config: RemoteBackendConfig, job: ScoringJob): 
 }
 
 async function getRemoteManifestByUrl(config: RemoteBackendConfig, manifestUrl: string): Promise<RemoteResultManifest> {
-  const response = await fetch(resolveRemoteUrl(config, manifestUrl), {
+  const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, manifestUrl), {
     headers: remoteAuthHeaders(config),
     cache: "no-store"
   });
@@ -1666,7 +1675,30 @@ function sourcePathsFromManifests(config: RemoteBackendConfig, manifests: Remote
   return paths;
 }
 
-export async function loadPanoImage(panoId: string, datasetId?: string | null): Promise<PanoImageResponse & { object_url?: string }> {
+function sourcePathsFromReadyJob(
+  config: RemoteBackendConfig,
+  job: ScoringJob
+): { sourcePaths: Partial<Record<CityId, string>>; primarySourcePath: string } | null {
+  if (!job.results?.length || job.results.some((result) => !result.result_revision || !result.tile_url_template)) {
+    return null;
+  }
+  const sourcePaths: Partial<Record<CityId, string>> = {};
+  for (const result of job.results) {
+    const cityId = cityConfigForDataset(result.dataset_id, cityConfigsForRemoteBackend(config))?.id ?? null;
+    if (!cityId) continue;
+    sourcePaths[cityId] = resolveRemoteUrl(config, result.tile_url_template);
+  }
+  return {
+    sourcePaths,
+    primarySourcePath: resolveRemoteUrl(config, job.results[0].tile_url_template)
+  };
+}
+
+export async function loadPanoImage(
+  panoId: string,
+  datasetId?: string | null,
+  point?: { lon: number; lat: number; date?: string | number | null }
+): Promise<PanoImageResponse & { object_url?: string }> {
   const config = loadRemoteBackendConfigSync();
   if (!config.enabled || !isUsableRemoteBackendUrl(config.baseUrl)) {
     const staticImageUrl = staticFallbackPanoImageUrl(panoId, datasetId);
@@ -1690,35 +1722,73 @@ export async function loadPanoImage(panoId: string, datasetId?: string | null): 
     });
     throw new Error(message);
   }
-  const metadataPath = datasetId
-    ? `/api/datasets/${encodeURIComponent(datasetId)}/panos/${encodeURIComponent(panoId)}`
-    : `/api/panos/${encodeURIComponent(panoId)}`;
+  const hasPointCoordinates = typeof point?.lon === "number" && Number.isFinite(point.lon)
+    && typeof point?.lat === "number" && Number.isFinite(point.lat);
+  const alternateDatasetId = hasPointCoordinates ? alternatePanoDatasetId(datasetId) : null;
+  const validatePointCoordinates = alternateDatasetId !== null;
+  const candidateDatasetIds = [datasetId ?? null, ...(alternateDatasetId ? [alternateDatasetId] : [])];
   let metadata: PanoImageResponse | null = null;
-  for (let attempt = 0; attempt < 30; attempt += 1) {
-    const metadataResponse = await fetch(resolveRemoteUrl(config, metadataPath), {
-      headers: remoteAuthHeaders(config)
-    });
-    if (!metadataResponse.ok) {
-      reportRemoteRequestFailure("remote_pano_metadata_failed", `Pano request failed (${metadataResponse.status})`, {
-        status: metadataResponse.status,
-        pano_id: panoId,
-        dataset_id: datasetId ?? null
+  let resolvedDatasetId = datasetId ?? null;
+  let lastCandidateStatus: number | null = null;
+
+  for (let candidateIndex = 0; candidateIndex < candidateDatasetIds.length; candidateIndex += 1) {
+    const candidateDatasetId = candidateDatasetIds[candidateIndex];
+    const query = new URLSearchParams();
+    if (validatePointCoordinates && point) {
+      query.set("lon", String(point.lon));
+      query.set("lat", String(point.lat));
+      if (point.date !== null && point.date !== undefined && String(point.date).trim() !== "") {
+        const numericDate = Number(point.date);
+        if (Number.isInteger(numericDate)) query.set("date", String(numericDate));
+      }
+    }
+    const metadataBasePath = candidateDatasetId
+      ? `/api/datasets/${encodeURIComponent(candidateDatasetId)}/panos/${encodeURIComponent(panoId)}`
+      : `/api/panos/${encodeURIComponent(panoId)}`;
+    const metadataPath = `${metadataBasePath}${query.toString() ? `?${query.toString()}` : ""}`;
+    let candidateMetadata: PanoImageResponse | null = null;
+    let locationRejected = false;
+
+    for (let attempt = 0; attempt < 30; attempt += 1) {
+      const metadataResponse = await fetch(resolveRemoteUrl(config, metadataPath), {
+        headers: remoteAuthHeaders(config)
       });
-      throw new Error(`Pano request failed (${metadataResponse.status})`);
+      if (!metadataResponse.ok) {
+        lastCandidateStatus = metadataResponse.status;
+        const hasFallbackCandidate = candidateIndex + 1 < candidateDatasetIds.length;
+        if (metadataResponse.status === 409 && hasFallbackCandidate) {
+          locationRejected = true;
+          break;
+        }
+        reportRemoteRequestFailure("remote_pano_metadata_failed", `Pano request failed (${metadataResponse.status})`, {
+          status: metadataResponse.status,
+          pano_id: panoId,
+          dataset_id: candidateDatasetId
+        });
+        throw new Error(`Pano request failed (${metadataResponse.status})`);
+      }
+
+      candidateMetadata = (await metadataResponse.json()) as PanoImageResponse;
+      if (candidateMetadata.status !== "unavailable") break;
+      await delay(2000);
     }
 
-    metadata = (await metadataResponse.json()) as PanoImageResponse;
-    if (metadata.status !== "unavailable") break;
-    await delay(2000);
+    if (locationRejected) continue;
+    if (candidateMetadata?.status === "missing" && candidateIndex + 1 < candidateDatasetIds.length) continue;
+    metadata = candidateMetadata;
+    resolvedDatasetId = candidateDatasetId;
+    break;
   }
 
   if (!metadata || metadata.status !== "ready" || !metadata.image_url) {
-    reportRemoteRequestFailure("remote_pano_unavailable", metadata?.message || "Pano image is unavailable", {
+    const unavailableMessage = metadata?.message
+      || (lastCandidateStatus === 409 ? "Pano ID did not match the selected map point in either New York pano dataset." : "Pano image is unavailable");
+    reportRemoteRequestFailure("remote_pano_unavailable", unavailableMessage, {
       pano_id: panoId,
-      dataset_id: datasetId ?? null,
+      dataset_id: resolvedDatasetId,
       status: metadata?.status ?? null
     });
-    throw new Error(metadata?.message || "Pano image is unavailable");
+    throw new Error(unavailableMessage);
   }
 
   const imageResponse = await fetch(resolveRemoteUrl(config, metadata.image_url), {
@@ -1729,7 +1799,7 @@ export async function loadPanoImage(panoId: string, datasetId?: string | null): 
     reportRemoteRequestFailure("remote_pano_download_failed", `Pano image download failed (${imageResponse.status})`, {
       status: imageResponse.status,
       pano_id: panoId,
-      dataset_id: datasetId ?? null,
+      dataset_id: resolvedDatasetId,
       image_url: metadata.image_url
     });
     throw new Error(`Pano image download failed (${imageResponse.status})`);
@@ -1737,6 +1807,7 @@ export async function loadPanoImage(panoId: string, datasetId?: string | null): 
   const blob = await imageResponse.blob();
   return {
     ...metadata,
+    pano_dataset_id: metadata.pano_dataset_id ?? resolvedDatasetId,
     object_url: URL.createObjectURL(blob)
   };
 }
@@ -1746,9 +1817,28 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
   ACTIVE_REMOTE_POLLS.add(layerId);
   try {
     let job = initialJob;
+    const pollingStartedAt = performance.now();
     for (let attempt = 0; attempt < 720; attempt += 1) {
       emitRemoteJobLog(layerId, job, { mapOverlay: showOnMap });
       if (job.status === "ready") {
+        const directSources = sourcePathsFromReadyJob(config, job);
+        if (directSources) {
+          updateLayerSync(layerId, {
+            status: "ready",
+            source_path: directSources.primarySourcePath,
+            source_paths: directSources.sourcePaths,
+            score_property: "zscore",
+            query_type: job.query_type || "text",
+            reference_pano: job.reference_pano || null
+          });
+          emitRemoteJobLog(
+            layerId,
+            { ...job, message: "Revision tile URLs received. Layer is ready." },
+            { mapOverlay: showOnMap }
+          );
+          return;
+        }
+
         const manifests = await getRemoteResultManifests(config, job);
         const sourcePaths = sourcePathsFromManifests(config, manifests);
         const primaryManifest = manifests[0];
@@ -1772,7 +1862,13 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
         return;
       }
 
-      await delay(1500);
+      const pollingElapsedMs = performance.now() - pollingStartedAt;
+      const pollIntervalMs = pollingElapsedMs < 4_000
+        ? REMOTE_JOB_POLL_FAST_INTERVAL_MS
+        : pollingElapsedMs < 15_000
+          ? REMOTE_JOB_POLL_MEDIUM_INTERVAL_MS
+          : REMOTE_JOB_POLL_SLOW_INTERVAL_MS;
+      await delay(pollIntervalMs);
       job = await getRemoteScoringJob(config, job.job_id);
     }
   } catch (error) {
@@ -1906,7 +2002,16 @@ async function writeCachedRemoteTile(url: string, geojson: FeatureCollection): P
     request.onerror = () => resolve();
     transaction.onerror = () => resolve();
   });
-  void pruneRemoteTileCache(db);
+  remoteTileCacheWritesSincePrune += 1;
+  if (
+    remoteTileCacheWritesSincePrune >= REMOTE_TILE_CACHE_PRUNE_EVERY_WRITES
+    && remoteTileCachePrunePromise === null
+  ) {
+    remoteTileCacheWritesSincePrune = 0;
+    remoteTileCachePrunePromise = pruneRemoteTileCache(db).finally(() => {
+      remoteTileCachePrunePromise = null;
+    });
+  }
 }
 
 async function pruneRemoteTileCache(db: IDBDatabase): Promise<void> {
@@ -1977,7 +2082,8 @@ export async function getRemoteTileGeojson(sourcePath: string, z: number, x: num
     throw new Error(`Remote tile request failed (${response.status})`);
   }
   const geojson = (await response.json()) as FeatureCollection;
-  await writeCachedRemoteTile(url, geojson);
+  // Rendering should not wait for an IndexedDB write transaction.
+  void writeCachedRemoteTile(url, geojson);
   return geojson;
 }
 

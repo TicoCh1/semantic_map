@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 
+from .city_catalog import city_ids_for_datasets
+
 
 def _parse_int_list(value: str) -> tuple[int, ...]:
     items = []
@@ -52,6 +54,8 @@ class BackendSettings:
     default_dataset_id: str
     default_dataset_ids: tuple[str, ...]
     default_dataset_group_id: str | None
+    active_city_ids: tuple[str, ...]
+    backfill_historical_queries: bool
     model_version: str
     scoring_version: str
     tile_index_version: str
@@ -112,6 +116,18 @@ def _path_env(name: str, default: Path) -> Path:
     return Path(os.getenv(name, str(default))).expanduser()
 
 
+def _default_execution_log_root(workspace_root: Path, log_root: Path) -> Path:
+    """Keep high-frequency fsync traffic off RunPod's /workspace FUSE volume."""
+
+    if workspace_root == Path("/workspace"):
+        pod_temp_log_root = _path_env(
+            "POD_TEMP_LOG_ROOT",
+            Path(os.getenv("TMPDIR", "/tmp")) / "semantic_backend" / "logs",
+        )
+        return pod_temp_log_root / "query_execution"
+    return log_root / "query_execution"
+
+
 def _default_public_base_url() -> str | None:
     raw = os.getenv("PUBLIC_BASE_URL") or os.getenv("RUNPOD_PROXY_BASE_URL")
     if raw:
@@ -127,18 +143,20 @@ def _default_public_base_url() -> str | None:
 @lru_cache(maxsize=1)
 def get_backend_settings() -> BackendSettings:
     workspace_root = _default_workspace_root()
+    log_root = _path_env("LOG_ROOT", workspace_root / "semantic_backend" / "logs")
     default_dataset_id = os.getenv("DEFAULT_DATASET_ID", "london_224_8_45")
     default_dataset_ids = _parse_str_list(os.getenv("DEFAULT_DATASET_IDS", "london_224_8_45,shanghai_224_8_45_2B")) or (default_dataset_id,)
+    active_city_ids = _parse_str_list(os.getenv("BACKEND_CITIES", "")) or city_ids_for_datasets(default_dataset_ids)
     return BackendSettings(
         workspace_root=workspace_root,
         qwen_repo_dir=_path_env("QWEN_REPO_DIR", Path("/tmp/Qwen3-VL-Embedding")),
         model_dir=_path_env("MODEL_DIR", workspace_root / "models" / "Qwen3-VL-Embedding-2B"),
         data_root=_path_env("DATA_ROOT", workspace_root / "embedding"),
         result_root=_path_env("RESULT_ROOT", workspace_root / "semantic_backend" / "results"),
-        log_root=_path_env("LOG_ROOT", workspace_root / "semantic_backend" / "logs"),
+        log_root=log_root,
         execution_log_root=_path_env(
             "EXECUTION_LOG_ROOT",
-            _path_env("LOG_ROOT", workspace_root / "semantic_backend" / "logs") / "query_execution",
+            _default_execution_log_root(workspace_root, log_root),
         ),
         execution_log_enabled=_parse_bool(os.getenv("EXECUTION_LOG_ENABLED"), default=True),
         execution_log_fsync=_parse_bool(os.getenv("EXECUTION_LOG_FSYNC"), default=True),
@@ -155,6 +173,8 @@ def get_backend_settings() -> BackendSettings:
         default_dataset_id=default_dataset_id,
         default_dataset_ids=default_dataset_ids,
         default_dataset_group_id=os.getenv("DEFAULT_DATASET_GROUP_ID", "london_shanghai" if len(default_dataset_ids) > 1 else ""),
+        active_city_ids=active_city_ids,
+        backfill_historical_queries=_parse_bool(os.getenv("BACKFILL_HISTORICAL_QUERIES"), default=True),
         model_version=os.getenv("MODEL_VERSION", "qwen3-vl-embedding-2b"),
         scoring_version=os.getenv("SCORING_VERSION", "text-cor-t-qwen-cred-v1"),
         tile_index_version=os.getenv("TILE_INDEX_VERSION", "xyz-z13-area-v1"),

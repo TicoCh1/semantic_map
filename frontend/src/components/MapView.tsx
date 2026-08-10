@@ -16,6 +16,7 @@ import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/ba
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { DEFAULT_CITY_CONFIGS } from "../state/cities";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
+import { panoDatasetIdForPoint, panoPointKey } from "../state/panoDatasets";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
@@ -831,6 +832,8 @@ function CityMapPane({
               void collectPanoLayerValues(
                 pano.pano_id,
                 pano.dataset_id ?? city.datasetId,
+                pano.lon,
+                pano.lat,
                 layersRef.current,
                 currentMap,
                 geojsonCache.current,
@@ -1011,10 +1014,13 @@ function panoPointFromFeature(feature: GeoJSON.Feature, event: MapLayerMouseEven
   const score = Number(props.score);
   const zscore = Number(props.zscore);
   const datasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : city.datasetId;
+  const explicitPanoDatasetId = typeof props.pano_dataset_id === "string" ? props.pano_dataset_id.trim() : "";
+  const panoDatasetId = explicitPanoDatasetId || panoDatasetIdForPoint(datasetId, lon, lat);
   return {
     pano_id: panoId,
-    pano_key: `${datasetId}:${panoId}`,
+    pano_key: panoPointKey(panoDatasetId, panoId, lon, lat),
     dataset_id: datasetId,
+    pano_dataset_id: panoDatasetId,
     city_id: city.id,
     lon,
     lat,
@@ -1029,6 +1035,8 @@ function panoPointFromFeature(feature: GeoJSON.Feature, event: MapLayerMouseEven
 async function collectPanoLayerValues(
   panoId: string,
   datasetId: string,
+  panoLon: number,
+  panoLat: number,
   layers: SemanticLayer[],
   map: MapLibreMap,
   layerCache: Map<string, FeatureCollection>,
@@ -1042,11 +1050,17 @@ async function collectPanoLayerValues(
       .filter((layer) => layer.status === "ready")
       .map(async (layer) => {
         const geojson = await loadLayerGeojsonForMap(layer, map, layerCache, remoteTileCache, forceMaxDetail, remoteTileZoom, cityId);
-        const feature = geojson.features.find((item) => {
+        const matchingFeatures = geojson.features.filter((item) => {
           const props = item.properties ?? {};
           const featureDatasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : datasetId;
           return featureDatasetId === datasetId && String(props.pano_id ?? props.id ?? "") === panoId;
         });
+        const feature = matchingFeatures.reduce<GeoJSON.Feature | null>((nearest, candidate) => {
+          if (!nearest) return candidate;
+          return pointFeatureDistanceSquared(candidate, panoLon, panoLat) < pointFeatureDistanceSquared(nearest, panoLon, panoLat)
+            ? candidate
+            : nearest;
+        }, null);
         if (!feature) {
           return {
             layer_id: layer.id,
@@ -1072,6 +1086,13 @@ async function collectPanoLayerValues(
       })
   );
   return values;
+}
+
+function pointFeatureDistanceSquared(feature: GeoJSON.Feature, lon: number, lat: number): number {
+  if (feature.geometry.type !== "Point") return Number.POSITIVE_INFINITY;
+  const coordinates = feature.geometry.coordinates;
+  if (typeof coordinates[0] !== "number" || typeof coordinates[1] !== "number") return Number.POSITIVE_INFINITY;
+  return (coordinates[0] - lon) ** 2 + (coordinates[1] - lat) ** 2;
 }
 
 async function loadLayerGeojsonForMap(
@@ -1341,9 +1362,9 @@ function sourceIdForCityLayer(cityId: CityId, layerId: string): string {
   return `${cityId}__${layerId}`;
 }
 
-function panoKey(pano: Pick<MarkedPano | PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "city_id">): string {
+function panoKey(pano: Pick<MarkedPano | PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "pano_dataset_id" | "city_id">): string {
   if (pano.pano_key) return pano.pano_key;
-  const scope = pano.dataset_id || pano.city_id || "default";
+  const scope = pano.pano_dataset_id || pano.dataset_id || pano.city_id || "default";
   return `${scope}:${pano.pano_id}`;
 }
 

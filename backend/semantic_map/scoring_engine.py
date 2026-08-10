@@ -239,6 +239,7 @@ class TemporarySemanticScoringEngine(SemanticScoringEngine):
                 dataset_id=effective_group_id,
                 reference_dataset_id=reference["dataset_id"],
                 reference_pano_id=reference["pano_id"],
+                reference_pano_dataset_id=reference.get("pano_dataset_id"),
                 model_version=self.settings.model_version,
                 scoring_version=effective_scoring_version,
                 tile_index_version=self.settings.tile_index_version,
@@ -265,6 +266,7 @@ class TemporarySemanticScoringEngine(SemanticScoringEngine):
                     dataset_id=dataset_id,
                     reference_dataset_id=reference["dataset_id"],
                     reference_pano_id=reference["pano_id"],
+                    reference_pano_dataset_id=reference.get("pano_dataset_id"),
                     model_version=self.settings.model_version,
                     scoring_version=effective_scoring_version,
                     tile_index_version=self.settings.tile_index_version,
@@ -331,7 +333,7 @@ def normalize_reference_dict(reference: dict) -> dict:
         "pano_id": pano_id,
         "dataset_id": dataset_id,
     }
-    for key in ("city_id", "lon", "lat", "date"):
+    for key in ("pano_dataset_id", "city_id", "lon", "lat", "date"):
         value = reference.get(key)
         if value is not None:
             normalized[key] = value

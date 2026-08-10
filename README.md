@@ -152,6 +152,10 @@ DATA_ROOT
 DEFAULT_DATASET_ID
 DEFAULT_DATASET_IDS
 DEFAULT_DATASET_GROUP_ID
+BACKEND_CITIES
+CITY_DATASET_MAP
+CITY_CATALOG_JSON
+BACKFILL_HISTORICAL_QUERIES
 RESULT_ROOT
 TILE_INDEX_ROOT
 PANO_TAR_DIR
@@ -162,6 +166,27 @@ SCORING_VERSION
 TILE_INDEX_VERSION
 WARMUP_ON_STARTUP
 EMBEDDING_DEVICE
+```
+
+`backend/start_runpod_backend.sh` accepts a comma-separated city list as its optional first parameter (or as `BACKEND_CITIES`). It accepts any number of configured city ids; the default remains `london,shanghai` to limit VRAM use:
+
+```bash
+# Default: London + Shanghai
+bash /workspace/backend/start_runpod_backend.sh
+
+# Run every listed city as one scoring group. The frontend still shows only two map slots;
+# use its source selectors to swap the visible cities.
+bash /workspace/backend/start_runpod_backend.sh london,shanghai,new_york
+```
+
+Every live query is sent to all cities loaded by the backend, not only the two currently visible on the map. On startup, `BACKFILL_HISTORICAL_QUERIES=true` (the default) scans durable result manifests and re-runs historic prompts across the current city group when the group has changed. This keeps cross-city z-scores consistent when a city is added.
+
+To register a future city without changing the launcher, set `CITY_DATASET_MAP` (`city_id=dataset_id`) and provide matching map metadata through `CITY_CATALOG_JSON`:
+
+```bash
+CITY_DATASET_MAP='berlin=berlin_224_8_45' \
+CITY_CATALOG_JSON='{"berlin":{"name":"Berlin","dataset_id":"berlin_224_8_45","center":[13.405,52.52],"initial_zoom":10.45,"bounds":{"west":13.1,"east":13.8,"south":52.3,"north":52.7}}}' \
+bash /workspace/backend/start_runpod_backend.sh berlin
 ```
 
 Demo alerting can also be configured on the backend with Gmail API or SMTP environment variables. Keep those values in RunPod secrets or local environment variables, never in Git.

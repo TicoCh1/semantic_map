@@ -1,19 +1,30 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import os
+import re
 import sqlite3
 import tarfile
 import threading
 import uuid
+from contextlib import closing
 from dataclasses import dataclass, replace
 from pathlib import Path
+from urllib.parse import urlencode
 
 from .backend_config import BackendSettings
 from .tile_index import safe_segment
 
 
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+PANO_INDEX_SCHEMA_VERSION = "3"
+PANO_COORDINATE_MATCH_MAX_METERS = 5.0
+PANO_COORDINATE_TIE_METERS = 0.5
+NEW_YORK_SCORING_DATASET_ID = "new_york_224_8_45"
+NEW_YORK_MANHATTAN_PANO_DATASET_ID = "new_york_manhattan_224_8_45"
+NEW_YORK_OUTSIDE_MANHATTAN_PANO_DATASET_ID = "new_york_outside_manhattan_224_8_45"
+_CHUNK_SUFFIX = re.compile(r"_chunk_\d+$", re.IGNORECASE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -25,11 +36,32 @@ class PanoTarRange:
 
 @dataclass(frozen=True, slots=True)
 class PanoIndexEntry:
+    entry_key: str
+    source_id: str
     pano_id: str
     tar_id: str
     member_name: str
+    lon: float | None
+    lat: float | None
+    capture_date: int | None
     offset_data: int
     byte_size: int
+
+
+@dataclass(frozen=True, slots=True)
+class PanoMemberIdentity:
+    pano_id: int
+    lon: float | None
+    lat: float | None
+    capture_date: int | None
+
+
+class AmbiguousPanoIdError(LookupError):
+    pass
+
+
+class PanoCoordinateMismatchError(LookupError):
+    pass
 
 
 class PanoService:
@@ -39,6 +71,8 @@ class PanoService:
         self._ranges = parse_pano_tar_ranges(settings.pano_tar_ranges)
         self._index_ready = False
         self._lock = threading.RLock()
+        self._index_connection: sqlite3.Connection | None = None
+        self._index_connection_lock = threading.RLock()
 
     @property
     def index_ready(self) -> bool:
@@ -64,13 +98,27 @@ class PanoService:
                 "pano_index_warmup": round(time.perf_counter() - started, 3),
             }
 
-    def ensure_pano_image(self, pano_id: str) -> tuple[PanoIndexEntry, Path] | None:
+    def ensure_pano_image(
+        self,
+        pano_id: str,
+        *,
+        lon: float | None = None,
+        lat: float | None = None,
+        capture_date: int | None = None,
+        entry_key: str | None = None,
+    ) -> tuple[PanoIndexEntry, Path] | None:
         if not self.index_ready:
             self.warmup()
         if not self.index_ready:
             return None
 
-        entry = self.lookup(pano_id)
+        entry = self.lookup(
+            pano_id,
+            lon=lon,
+            lat=lat,
+            capture_date=capture_date,
+            entry_key=entry_key,
+        )
         if entry is None:
             return None
 
@@ -93,33 +141,97 @@ class PanoService:
             tmp_path.replace(image_path)
         return entry, image_path
 
-    def lookup(self, pano_id: str) -> PanoIndexEntry | None:
-        with sqlite3.connect(self.settings.pano_index_path) as conn:
-            row = conn.execute(
-                "SELECT pano_id, tar_id, member_name, offset_data, byte_size FROM panos WHERE pano_id = ?",
-                (str(int(pano_id)),),
-            ).fetchone()
-        if row is None:
+    def lookup(
+        self,
+        pano_id: str,
+        *,
+        lon: float | None = None,
+        lat: float | None = None,
+        capture_date: int | None = None,
+        entry_key: str | None = None,
+    ) -> PanoIndexEntry | None:
+        numeric_pano_id = int(pano_id)
+        if (lon is None) != (lat is None):
+            raise ValueError("Both lon and lat are required when selecting a panorama by location")
+
+        columns = (
+            "entry_key, pano_id, tar_id, member_name, "
+            "lon, lat, capture_date, offset_data, byte_size"
+        )
+        clauses = ["pano_id = ?"]
+        params: list[str | int] = [numeric_pano_id]
+        if entry_key is not None:
+            clauses.append("entry_key = ?")
+            params.append(entry_key)
+        with self._index_connection_lock:
+            conn = self._read_index_connection()
+            rows = conn.execute(
+                f"SELECT {columns} FROM panos WHERE {' AND '.join(clauses)} "
+                "ORDER BY tar_id, member_name",
+                params,
+            ).fetchall()
+        if not rows:
             return None
-        return PanoIndexEntry(
-            pano_id=str(row[0]),
-            tar_id=str(row[1]),
-            member_name=str(row[2]),
-            offset_data=int(row[3]),
-            byte_size=int(row[4]),
+        candidates = [pano_index_entry_from_row(row) for row in rows]
+
+        if entry_key is not None:
+            if len(candidates) != 1:
+                raise AmbiguousPanoIdError(f"Panorama entry key {entry_key!r} is not unique")
+            return candidates[0]
+
+        if capture_date is not None:
+            date_matches = [entry for entry in candidates if entry.capture_date == capture_date]
+            if date_matches:
+                candidates = date_matches
+
+        if lon is not None and lat is not None:
+            located = [entry for entry in candidates if entry.lon is not None and entry.lat is not None]
+            if not located:
+                raise PanoCoordinateMismatchError(
+                    f"Panorama {numeric_pano_id} has no indexed coordinates for location matching"
+                )
+            ranked = sorted(
+                (
+                    (pano_coordinate_distance_m(lon, lat, float(entry.lon), float(entry.lat)), entry)
+                    for entry in located
+                ),
+                key=lambda item: (item[0], item[1].source_id, item[1].entry_key),
+            )
+            nearest_distance, nearest = ranked[0]
+            if nearest_distance > PANO_COORDINATE_MATCH_MAX_METERS:
+                raise PanoCoordinateMismatchError(
+                    f"Panorama {numeric_pano_id} nearest indexed image is {nearest_distance:.1f} m from the map point"
+                )
+            if len(ranked) > 1 and abs(ranked[1][0] - nearest_distance) <= PANO_COORDINATE_TIE_METERS:
+                raise AmbiguousPanoIdError(
+                    f"Panorama {numeric_pano_id} has multiple images at the requested location; source_id is required"
+                )
+            return nearest
+
+        if len(candidates) == 1:
+            return candidates[0]
+        sources = ", ".join(sorted({entry.source_id for entry in candidates}))
+        raise AmbiguousPanoIdError(
+            f"Panorama {numeric_pano_id} exists in multiple source mappings ({sources}); lon and lat are required"
         )
 
     def image_path(self, entry: PanoIndexEntry) -> Path:
         suffix = Path(entry.member_name).suffix.lower()
         if suffix not in IMG_EXTENSIONS:
             suffix = ".jpg"
-        return self.settings.pano_cache_root / safe_segment(entry.tar_id) / f"{safe_segment(entry.pano_id)}{suffix}"
+        return (
+            self.settings.pano_cache_root
+            / safe_segment(entry.source_id)
+            / safe_segment(entry.tar_id)
+            / f"{safe_segment(entry.pano_id)}-{entry.entry_key}{suffix}"
+        )
 
-    def image_url(self, pano_id: str) -> str:
+    def image_url(self, entry: PanoIndexEntry) -> str:
         if self.dataset_id:
-            route = f"/api/datasets/{safe_segment(self.dataset_id)}/panos/{safe_segment(pano_id)}/image"
+            route = f"/api/datasets/{safe_segment(self.dataset_id)}/panos/{safe_segment(entry.pano_id)}/image"
         else:
-            route = f"/api/panos/{safe_segment(pano_id)}/image"
+            route = f"/api/panos/{safe_segment(entry.pano_id)}/image"
+        route = f"{route}?{urlencode({'entry_key': entry.entry_key})}"
         if not self.settings.public_base_url:
             return route
         return f"{self.settings.public_base_url.rstrip('/')}{route}"
@@ -129,14 +241,21 @@ class PanoService:
         if not path.exists():
             return False
         try:
-            with sqlite3.connect(path) as conn:
+            with closing(sqlite3.connect(path)) as conn:
                 conn.execute("SELECT 1 FROM panos LIMIT 1").fetchone()
                 fingerprint = conn.execute("SELECT value FROM meta WHERE key = 'fingerprint'").fetchone()
-                return fingerprint is not None and fingerprint[0] == self._fingerprint()
+                schema_version = conn.execute("SELECT value FROM meta WHERE key = 'schema_version'").fetchone()
+                return (
+                    schema_version is not None
+                    and schema_version[0] == PANO_INDEX_SCHEMA_VERSION
+                    and fingerprint is not None
+                    and fingerprint[0] == self._fingerprint()
+                )
         except sqlite3.Error:
             return False
 
     def _build_index(self) -> int:
+        self._close_index_connection()
         index_path = self.settings.pano_index_path
         index_path.parent.mkdir(parents=True, exist_ok=True)
         tmp_path = index_path.with_name(f"{index_path.name}.{os.getpid()}.{uuid.uuid4().hex}.tmp")
@@ -144,17 +263,23 @@ class PanoService:
             tmp_path.unlink()
 
         row_count = 0
-        with sqlite3.connect(tmp_path) as conn:
+        with closing(sqlite3.connect(tmp_path)) as conn:
             conn.execute("PRAGMA journal_mode = OFF")
             conn.execute("PRAGMA synchronous = OFF")
             conn.execute(
                 "CREATE TABLE panos ("
-                "pano_id INTEGER PRIMARY KEY, "
+                "entry_key TEXT PRIMARY KEY, "
+                "pano_id INTEGER NOT NULL, "
                 "tar_id TEXT NOT NULL, "
                 "member_name TEXT NOT NULL, "
+                "lon REAL, "
+                "lat REAL, "
+                "capture_date INTEGER, "
                 "offset_data INTEGER NOT NULL, "
-                "byte_size INTEGER NOT NULL)"
+                "byte_size INTEGER NOT NULL, "
+                "UNIQUE (tar_id, member_name)) WITHOUT ROWID"
             )
+            conn.execute("CREATE INDEX panos_pano_idx ON panos (pano_id)")
             conn.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
 
             batch = []
@@ -165,6 +290,7 @@ class PanoService:
                     continue
                 tar_started_count = row_count + len(batch)
                 print(f"Pano index scanning {tar_path}", flush=True)
+                tar_stat = tar_path.stat()
                 with tarfile.open(tar_path, "r:") as tf:
                     for member in tf:
                         if not member.isfile():
@@ -172,28 +298,67 @@ class PanoService:
                         suffix = Path(member.name).suffix.lower()
                         if suffix not in IMG_EXTENSIONS:
                             continue
-                        pano_id = pano_id_from_member_name(member.name)
-                        if pano_id is None or not pano_range_contains(pano_range, pano_id):
+                        identity = pano_member_identity_from_name(member.name)
+                        if identity is None or not pano_range_contains(pano_range, identity.pano_id):
                             continue
-                        batch.append((pano_id, pano_range.tar_id, member.name, int(member.offset_data), int(member.size)))
+                        entry_key = pano_entry_key(
+                            pano_range.tar_id,
+                            member.name,
+                            offset_data=int(member.offset_data),
+                            byte_size=int(member.size),
+                            tar_size=int(tar_stat.st_size),
+                            tar_mtime_ns=int(tar_stat.st_mtime_ns),
+                        )
+                        batch.append(
+                            (
+                                entry_key,
+                                identity.pano_id,
+                                pano_range.tar_id,
+                                member.name,
+                                identity.lon,
+                                identity.lat,
+                                identity.capture_date,
+                                int(member.offset_data),
+                                int(member.size),
+                            )
+                        )
                         if len(batch) >= 5000:
-                            conn.executemany("INSERT OR REPLACE INTO panos VALUES (?, ?, ?, ?, ?)", batch)
+                            conn.executemany("INSERT INTO panos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", batch)
                             row_count += len(batch)
                             batch.clear()
                 print(f"Pano index scanned {tar_path}: {row_count + len(batch) - tar_started_count} rows", flush=True)
             if batch:
-                conn.executemany("INSERT OR REPLACE INTO panos VALUES (?, ?, ?, ?, ?)", batch)
+                conn.executemany("INSERT INTO panos VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", batch)
                 row_count += len(batch)
 
             conn.execute("INSERT OR REPLACE INTO meta VALUES ('fingerprint', ?)", (self._fingerprint(),))
             conn.execute("INSERT OR REPLACE INTO meta VALUES ('ranges', ?)", (self.settings.pano_tar_ranges,))
+            conn.execute("INSERT OR REPLACE INTO meta VALUES ('schema_version', ?)", (PANO_INDEX_SCHEMA_VERSION,))
             conn.commit()
 
         tmp_path.replace(index_path)
         return row_count
 
+    def close(self) -> None:
+        self._close_index_connection()
+
+    def _read_index_connection(self) -> sqlite3.Connection:
+        if self._index_connection is None:
+            uri = f"{self.settings.pano_index_path.resolve().as_uri()}?mode=ro&immutable=1"
+            self._index_connection = sqlite3.connect(uri, uri=True, check_same_thread=False)
+            self._index_connection.execute("PRAGMA query_only = ON")
+        return self._index_connection
+
+    def _close_index_connection(self) -> None:
+        with self._index_connection_lock:
+            if self._index_connection is not None:
+                self._index_connection.close()
+                self._index_connection = None
+
     def _fingerprint(self) -> str:
         digest = hashlib.blake2b(digest_size=16)
+        digest.update(PANO_INDEX_SCHEMA_VERSION.encode("ascii"))
+        digest.update(b"\n")
         digest.update(self.settings.pano_tar_ranges.encode("utf-8"))
         for pano_range in self._ranges:
             tar_path = self._tar_path(pano_range.tar_id)
@@ -223,7 +388,15 @@ class PanoServiceRegistry:
         self._lock = threading.RLock()
 
     def allowed_dataset_ids(self) -> set[str]:
-        return set(dict.fromkeys((*self.settings.default_dataset_ids, self.settings.default_dataset_id)))
+        dataset_ids = set(dict.fromkeys((*self.settings.default_dataset_ids, self.settings.default_dataset_id)))
+        if NEW_YORK_SCORING_DATASET_ID in dataset_ids:
+            dataset_ids.update(
+                {
+                    NEW_YORK_MANHATTAN_PANO_DATASET_ID,
+                    NEW_YORK_OUTSIDE_MANHATTAN_PANO_DATASET_ID,
+                }
+            )
+        return dataset_ids
 
     def service_for(self, dataset_id: str | None = None) -> PanoService:
         if dataset_id is not None and dataset_id not in self.allowed_dataset_ids():
@@ -241,14 +414,20 @@ class PanoServiceRegistry:
 
     def warmup(self) -> dict[str, float | int | str]:
         timings: dict[str, float | int | str] = {}
-        for dataset_id in self.allowed_dataset_ids():
-            suffix = dataset_env_suffix(dataset_id)
-            if dataset_id != self.settings.default_dataset_id and not pano_tar_ranges_for_dataset(self.settings, dataset_id):
+        for dataset_id in sorted(self.allowed_dataset_ids()):
+            if not pano_tar_ranges_for_dataset(self.settings, dataset_id):
                 timings[f"{dataset_id}:pano_index_status"] = "not_configured"
                 continue
             result = self.service_for(dataset_id).warmup()
             timings.update({f"{dataset_id}:{key}": value for key, value in result.items()})
         return timings
+
+    def close(self) -> None:
+        with self._lock:
+            services = tuple(self._services.values())
+            self._services.clear()
+        for service in services:
+            service.close()
 
 
 def pano_settings_for_dataset(settings: BackendSettings, dataset_id: str | None) -> BackendSettings:
@@ -275,10 +454,19 @@ def dataset_env_suffix(dataset_id: str) -> str:
 
 
 def pano_tar_ranges_for_dataset(settings: BackendSettings, dataset_id: str) -> str:
+    # New York scoring combines two embedding sets, but street-view archives use
+    # separate dataset namespaces so overlapping numeric pano IDs can never
+    # overwrite one another in SQLite.
+    if dataset_id == NEW_YORK_SCORING_DATASET_ID:
+        return ""
     suffix = dataset_env_suffix(dataset_id)
     configured = os.getenv(f"PANO_TAR_RANGES_{suffix}")
     if configured:
         return configured
+    if dataset_id == NEW_YORK_MANHATTAN_PANO_DATASET_ID:
+        return ",".join(f"New_York_Manhattan_chunk_{chunk}.tar" for chunk in range(5))
+    if dataset_id == NEW_YORK_OUTSIDE_MANHATTAN_PANO_DATASET_ID:
+        return ",".join(f"New_York_Option_A_outside_Manhattan_chunk_{chunk}.tar" for chunk in range(5))
     if dataset_id == settings.default_dataset_id:
         return settings.pano_tar_ranges
     if dataset_id == "shanghai_224_8_45_2B":
@@ -306,12 +494,72 @@ def parse_pano_tar_ranges(raw: str) -> tuple[PanoTarRange, ...]:
 
 
 def pano_id_from_member_name(name: str) -> int | None:
+    identity = pano_member_identity_from_name(name)
+    return identity.pano_id if identity is not None else None
+
+
+def pano_member_identity_from_name(name: str) -> PanoMemberIdentity | None:
     stem = Path(name).stem
-    raw = stem.replace(",", "_").split("_", 1)[0]
+    parts = stem.replace(",", "_").split("_")
     try:
-        return int(raw)
+        pano_id = int(parts[0])
     except ValueError:
         return None
+    if len(parts) < 4:
+        return PanoMemberIdentity(pano_id=pano_id, lon=None, lat=None, capture_date=None)
+    try:
+        return PanoMemberIdentity(
+            pano_id=pano_id,
+            lon=float(parts[1]),
+            lat=float(parts[2]),
+            capture_date=int(parts[3]),
+        )
+    except ValueError:
+        return PanoMemberIdentity(pano_id=pano_id, lon=None, lat=None, capture_date=None)
+
+
+def pano_source_id_from_tar_id(tar_id: str) -> str:
+    stem = Path(tar_id).stem
+    source = _CHUNK_SUFFIX.sub("", stem).lower()
+    return safe_segment(source)
+
+
+def pano_entry_key(
+    tar_id: str,
+    member_name: str,
+    *,
+    offset_data: int,
+    byte_size: int,
+    tar_size: int,
+    tar_mtime_ns: int,
+) -> str:
+    digest = hashlib.blake2b(digest_size=12)
+    for value in (tar_id, member_name, offset_data, byte_size, tar_size, tar_mtime_ns):
+        digest.update(str(value).encode("utf-8"))
+        digest.update(b"\x1f")
+    return digest.hexdigest()
+
+
+def pano_index_entry_from_row(row: tuple[object, ...]) -> PanoIndexEntry:
+    return PanoIndexEntry(
+        entry_key=str(row[0]),
+        source_id=pano_source_id_from_tar_id(str(row[2])),
+        pano_id=str(row[1]),
+        tar_id=str(row[2]),
+        member_name=str(row[3]),
+        lon=float(row[4]) if row[4] is not None else None,
+        lat=float(row[5]) if row[5] is not None else None,
+        capture_date=int(row[6]) if row[6] is not None else None,
+        offset_data=int(row[7]),
+        byte_size=int(row[8]),
+    )
+
+
+def pano_coordinate_distance_m(lon_a: float, lat_a: float, lon_b: float, lat_b: float) -> float:
+    mean_latitude = math.radians((lat_a + lat_b) / 2.0)
+    delta_lon_m = (lon_a - lon_b) * math.cos(mean_latitude) * 111_320.0
+    delta_lat_m = (lat_a - lat_b) * 110_540.0
+    return math.hypot(delta_lon_m, delta_lat_m)
 
 
 def pano_range_contains(pano_range: PanoTarRange, pano_id: int) -> bool:

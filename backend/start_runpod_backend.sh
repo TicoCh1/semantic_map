@@ -11,8 +11,18 @@ fi
 
 BACKEND_DIR="${BACKEND_DIR:-${WORKSPACE_ROOT}/backend}"
 ENV_FILE="${BACKEND_DIR}/.runpod_backend.env"
+if [ "$#" -gt 1 ]; then
+  echo "Usage: bash $0 [city_id,city_id,...]" >&2
+  exit 2
+fi
 CALLER_PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
 CALLER_UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-}"
+CALLER_EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-}"
+CALLER_EXECUTION_LOG_FSYNC="${EXECUTION_LOG_FSYNC:-}"
+CALLER_BACKEND_CITIES="${1:-${BACKEND_CITIES:-}}"
+CALLER_CITY_DATASET_MAP="${CITY_DATASET_MAP:-}"
+CALLER_CITY_CATALOG_JSON="${CITY_CATALOG_JSON:-}"
+CALLER_BACKFILL_HISTORICAL_QUERIES="${BACKFILL_HISTORICAL_QUERIES:-}"
 
 if [ -f "${ENV_FILE}" ]; then
   # shellcheck disable=SC1090
@@ -25,25 +35,49 @@ fi
 if [ -n "${CALLER_UVICORN_LOG_PATH}" ]; then
   export UVICORN_LOG_PATH="${CALLER_UVICORN_LOG_PATH}"
 fi
+if [ -n "${CALLER_EXECUTION_LOG_ROOT}" ]; then
+  export EXECUTION_LOG_ROOT="${CALLER_EXECUTION_LOG_ROOT}"
+fi
+if [ -n "${CALLER_EXECUTION_LOG_FSYNC}" ]; then
+  export EXECUTION_LOG_FSYNC="${CALLER_EXECUTION_LOG_FSYNC}"
+fi
+if [ -n "${CALLER_BACKEND_CITIES}" ]; then
+  export BACKEND_CITIES="${CALLER_BACKEND_CITIES}"
+fi
+if [ -n "${CALLER_CITY_DATASET_MAP}" ]; then
+  export CITY_DATASET_MAP="${CALLER_CITY_DATASET_MAP}"
+fi
+if [ -n "${CALLER_CITY_CATALOG_JSON}" ]; then
+  export CITY_CATALOG_JSON="${CALLER_CITY_CATALOG_JSON}"
+fi
+if [ -n "${CALLER_BACKFILL_HISTORICAL_QUERIES}" ]; then
+  export BACKFILL_HISTORICAL_QUERIES="${CALLER_BACKFILL_HISTORICAL_QUERIES}"
+fi
 
 QWEN_REPO_DIR="${QWEN_REPO_DIR:-/tmp/Qwen3-VL-Embedding}"
 PORT="${PORT:-8000}"
 HOST="${HOST:-0.0.0.0}"
 LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
+POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
 EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-${LOG_ROOT}/query_execution}"
 EXECUTION_LOG_ENABLED="${EXECUTION_LOG_ENABLED:-true}"
 EXECUTION_LOG_FSYNC="${EXECUTION_LOG_FSYNC:-true}"
-POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
 UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-${POD_TEMP_LOG_ROOT}/uvicorn.log}"
 UVICORN_LOG_MAX_BYTES="${UVICORN_LOG_MAX_BYTES:-104857600}"
+if [[ "${EXECUTION_LOG_ROOT}" == "${WORKSPACE_ROOT}/"* ]]; then
+  echo "Remapping execution audit log from network volume ${EXECUTION_LOG_ROOT} to ${POD_TEMP_LOG_ROOT}/query_execution."
+  EXECUTION_LOG_ROOT="${POD_TEMP_LOG_ROOT}/query_execution"
+fi
 if [[ "${UVICORN_LOG_PATH}" == "${WORKSPACE_ROOT}/"* ]]; then
   echo "Remapping Uvicorn access log from network volume ${UVICORN_LOG_PATH} to ${POD_TEMP_LOG_ROOT}/uvicorn.log."
   UVICORN_LOG_PATH="${POD_TEMP_LOG_ROOT}/uvicorn.log"
 fi
 DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/embedding}"
-DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID:-london_224_8_45}"
-DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS:-london_224_8_45,shanghai_224_8_45_2B}"
-DEFAULT_DATASET_GROUP_ID="${DEFAULT_DATASET_GROUP_ID:-london_shanghai}"
+BACKEND_CITIES="${BACKEND_CITIES:-london,shanghai}"
+CITY_DATASET_MAP="${CITY_DATASET_MAP:-}"
+# shellcheck source=backend/city_catalog.sh
+source "${BACKEND_DIR}/city_catalog.sh"
+backend_configure_cities
 RESULT_ROOT="${RESULT_ROOT:-${WORKSPACE_ROOT}/semantic_backend/results}"
 TILE_INDEX_ROOT="${TILE_INDEX_ROOT:-${WORKSPACE_ROOT}/semantic_backend/tile_index}"
 PANO_TAR_DIR="${PANO_TAR_DIR:-${WORKSPACE_ROOT}/pano}"
@@ -51,9 +85,12 @@ PANO_CACHE_ROOT="${PANO_CACHE_ROOT:-${WORKSPACE_ROOT}/semantic_backend/pano_cach
 PANO_INDEX_PATH="${PANO_INDEX_PATH:-${WORKSPACE_ROOT}/semantic_backend/pano_index/pano_index.sqlite}"
 PANO_TAR_RANGES="${PANO_TAR_RANGES:-01:10002:100005,02:100006:200001,03:200002:300001,04:300002:400001,05:400002:500001,06:500002:}"
 PANO_TAR_RANGES_SHANGHAI_224_8_45_2B="${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B:-shanghai_rootless}"
+PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45:-New_York_Manhattan_chunk_0.tar,New_York_Manhattan_chunk_1.tar,New_York_Manhattan_chunk_2.tar,New_York_Manhattan_chunk_3.tar,New_York_Manhattan_chunk_4.tar}"
+PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45:-New_York_Option_A_outside_Manhattan_chunk_0.tar,New_York_Option_A_outside_Manhattan_chunk_1.tar,New_York_Option_A_outside_Manhattan_chunk_2.tar,New_York_Option_A_outside_Manhattan_chunk_3.tar,New_York_Option_A_outside_Manhattan_chunk_4.tar}"
 SCORING_VERSION="${SCORING_VERSION:-text-cor-t-qwen-cred-v1}"
 TILE_INDEX_VERSION="${TILE_INDEX_VERSION:-xyz-z13-area-v1}"
 WARMUP_ON_STARTUP="${WARMUP_ON_STARTUP:-true}"
+BACKFILL_HISTORICAL_QUERIES="${BACKFILL_HISTORICAL_QUERIES:-true}"
 EMBEDDING_DEVICE="${EMBEDDING_DEVICE:-cuda}"
 TILE_ZOOMS="${TILE_ZOOMS:-10,11,12,13}"
 if [ "${TILE_ZOOMS}" != "10,11,12,13" ]; then
@@ -88,6 +125,9 @@ export WORKSPACE_ROOT
 export BACKEND_DIR
 export QWEN_REPO_DIR
 export DATA_ROOT
+export BACKEND_CITIES
+export CITY_DATASET_MAP
+export CITY_CATALOG_JSON
 export DEFAULT_DATASET_ID
 export DEFAULT_DATASET_IDS
 export DEFAULT_DATASET_GROUP_ID
@@ -105,10 +145,13 @@ export PANO_CACHE_ROOT
 export PANO_INDEX_PATH
 export PANO_TAR_RANGES
 export PANO_TAR_RANGES_SHANGHAI_224_8_45_2B
+export PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45
+export PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45
 export SCORING_VERSION
 export TILE_INDEX_VERSION
 export TILE_ZOOMS
 export WARMUP_ON_STARTUP
+export BACKFILL_HISTORICAL_QUERIES
 export EMBEDDING_DEVICE
 export TEMPORARY_SCORER_ENABLED
 export DEMO_ALERT_ENABLED
@@ -164,6 +207,7 @@ echo "Starting Semantic Tile Service"
 echo "Backend module: backend.main:app"
 echo "Dataset:        ${DATA_ROOT}/${DEFAULT_DATASET_ID}"
 echo "Dataset group:  ${DEFAULT_DATASET_IDS}"
+echo "Cities:         ${BACKEND_CITIES}"
 echo "Group id:       ${DEFAULT_DATASET_GROUP_ID:-<auto>}"
 echo "Results:        ${RESULT_ROOT}"
 echo "Execution logs: ${EXECUTION_LOG_ROOT} (enabled: ${EXECUTION_LOG_ENABLED}, fsync: ${EXECUTION_LOG_FSYNC})"
@@ -171,11 +215,14 @@ echo "Server log:     ${UVICORN_LOG_PATH}"
 echo "Tile index:     ${TILE_INDEX_ROOT}"
 echo "Pano tar dir:   ${PANO_TAR_DIR}"
 echo "Shanghai pano:  ${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B}"
+echo "NY Manhattan:   ${PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45}"
+echo "NY outside:     ${PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45}"
 echo "Scoring:        ${SCORING_VERSION}"
 echo "Temporary:      ${TEMPORARY_SCORER_ENABLED}"
 echo "Tile zooms:     ${TILE_ZOOMS}"
 echo "Tile version:   ${TILE_INDEX_VERSION}"
 echo "Startup warmup: ${WARMUP_ON_STARTUP}"
+echo "Backfill:       ${BACKFILL_HISTORICAL_QUERIES}"
 echo "Embedding dev:  ${EMBEDDING_DEVICE}"
 echo "Demo alerts:    ${DEMO_ALERT_ENABLED} (channel: ${DEMO_ALERT_CHANNEL}, to: ${DEMO_ALERT_EMAIL_TO:-<not set>})"
 echo "Public URL:     ${PUBLIC_BASE_URL:-<not set>}"

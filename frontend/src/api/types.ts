@@ -105,6 +105,7 @@ export type PanoMapPoint = {
   pano_id: string;
   pano_key?: string;
   dataset_id?: string | null;
+  pano_dataset_id?: string | null;
   city_id?: CityId | string | null;
   lon: number;
   lat: number;
@@ -119,6 +120,7 @@ export type PanoMapPoint = {
 export type PanoReference = {
   pano_id: string;
   dataset_id: string;
+  pano_dataset_id?: string | null;
   city_id?: CityId | string | null;
   lon?: number | null;
   lat?: number | null;
@@ -140,6 +142,8 @@ export type MarkedPano = PanoMapPoint & {
   object_url?: string | null;
   member_name?: string | null;
   tar_id?: string | null;
+  source_id?: string | null;
+  entry_key?: string | null;
   message?: string | null;
 };
 
@@ -147,6 +151,9 @@ export type PanoImageResponse = {
   pano_id: string;
   status: "ready" | "missing" | "unavailable";
   image_url?: string | null;
+  pano_dataset_id?: string | null;
+  source_id?: string | null;
+  entry_key?: string | null;
   member_name?: string | null;
   tar_id?: string | null;
   byte_size?: number | null;
@@ -199,6 +206,7 @@ export type ScoringResultRef = {
   prompt_id: string;
   manifest_url: string;
   tile_url_template: string;
+  result_revision?: string | null;
   priority_tile?: TileCoord | null;
 };
 

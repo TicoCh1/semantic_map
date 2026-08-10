@@ -13,11 +13,13 @@ from fastapi.responses import FileResponse, JSONResponse
 
 from .auth import require_backend_token
 from .backend_config import get_backend_settings
+from .city_catalog import active_city_configs, city_id_for_dataset as catalog_city_id_for_dataset
+from .dataset_groups import dataset_group_id_for
 from .demo_alerts import DemoAlertManager
 from .execution_log import utc_now_precise
 from .job_service import PromptBatchService
 from .job_service import job_timestamp_seconds
-from .pano_service import PanoServiceRegistry
+from .pano_service import AmbiguousPanoIdError, PanoCoordinateMismatchError, PanoServiceRegistry
 from .remote_schemas import (
     ArcGISFeature,
     ArcGISFeatureField,
@@ -53,6 +55,7 @@ storage = ResultStorage(settings)
 pano_registry = PanoServiceRegistry(settings)
 demo_alert_manager = DemoAlertManager(settings)
 pano_warmup_task: asyncio.Task[None] | None = None
+history_backfill_task: asyncio.Task[None] | None = None
 demo_monitor_task: asyncio.Task[None] | None = None
 pano_warmup_started_at: float | None = None
 active_frontend_stale_sessions: set[str] = set()
@@ -90,7 +93,7 @@ ARCGIS_FEATURE_FIELDS = [
 
 
 async def start_prompt_batch_service() -> None:
-    global demo_monitor_task, pano_warmup_started_at, pano_warmup_task
+    global demo_monitor_task, history_backfill_task, pano_warmup_started_at, pano_warmup_task
     if demo_alert_manager.enabled and not demo_alert_manager.email_configured:
         print(f"Demo alert monitor is enabled, but {demo_alert_manager.alert_channel} email settings are incomplete.", flush=True)
     try:
@@ -106,6 +109,8 @@ async def start_prompt_batch_service() -> None:
     if pano_warmup_task is None or pano_warmup_task.done():
         pano_warmup_started_at = time.time()
         pano_warmup_task = asyncio.create_task(warmup_pano_index_background())
+    if settings.backfill_historical_queries and (history_backfill_task is None or history_backfill_task.done()):
+        history_backfill_task = asyncio.create_task(backfill_historical_queries())
     if demo_alert_manager.enabled and (demo_monitor_task is None or demo_monitor_task.done()):
         demo_monitor_task = asyncio.create_task(demo_monitor_loop())
         await record_backend_alert(
@@ -145,7 +150,7 @@ async def warmup_pano_index_background() -> None:
 
 
 async def stop_prompt_batch_service() -> None:
-    global demo_monitor_task
+    global demo_monitor_task, history_backfill_task
     if demo_monitor_task is not None and not demo_monitor_task.done():
         demo_monitor_task.cancel()
         try:
@@ -155,7 +160,114 @@ async def stop_prompt_batch_service() -> None:
     demo_monitor_task = None
     if pano_warmup_task is not None and not pano_warmup_task.done():
         pano_warmup_task.cancel()
+    if history_backfill_task is not None and not history_backfill_task.done():
+        history_backfill_task.cancel()
     await prompt_batch_service.stop()
+
+
+def historical_query_key(manifest: dict) -> tuple[str, ...] | None:
+    query_type = str(manifest.get("query_type") or "text")
+    if query_type == "pano_reference":
+        reference = manifest.get("reference_pano")
+        if not isinstance(reference, dict):
+            return None
+        dataset_id = str(reference.get("dataset_id") or "").strip()
+        pano_id = str(reference.get("pano_id") or "").strip()
+        pano_dataset_id = str(reference.get("pano_dataset_id") or dataset_id).strip()
+        return (query_type, dataset_id, pano_dataset_id, pano_id) if dataset_id and pano_id else None
+    prompt = str(manifest.get("canonical_prompt") or manifest.get("prompt") or "").strip()
+    return ("text", prompt) if prompt else None
+
+
+async def backfill_historical_queries() -> None:
+    """Fill prompt-tree city gaps for datasets loaded by this process."""
+
+    try:
+        # Yield once so FastAPI can complete its startup lifecycle and accept
+        # readiness requests before queuing historical work.
+        await asyncio.sleep(0)
+        active_dataset_ids = tuple(dict.fromkeys(settings.default_dataset_ids))
+        missing_prompt_nodes = prompt_batch_service.storage.prompts_missing_results(active_dataset_ids)
+
+        queued = 0
+        skipped = 0
+        for coverage in missing_prompt_nodes:
+            missing_dataset_ids = coverage.missing_dataset_ids
+            payload = ScoringJobCreate(
+                dataset_ids=list(missing_dataset_ids),
+                dataset_group_id=dataset_group_id_for(missing_dataset_ids),
+                prompt=coverage.prompt,
+                force_override=False,
+            )
+            job = await prompt_batch_service.submit(
+                payload,
+                request_id=f"startup_backfill_{uuid4().hex}",
+                received_at=utc_now_precise(),
+                entrypoint="startup_prompt_tree_backfill",
+            )
+            if job.status == "ready":
+                skipped += 1
+            else:
+                queued += 1
+            await asyncio.sleep(0)
+
+        # Pano-reference history is not part of the plaintext prompt tree. Keep
+        # its existing backfill behavior using manifests captured by the same
+        # startup scan, rather than walking the result tree a second time.
+        pano_existing_by_dataset: dict[str, dict[tuple[str, ...], set[str | None]]] = {
+            dataset_id: {} for dataset_id in active_dataset_ids
+        }
+        historical_pano: dict[tuple[str, ...], dict] = {}
+        pano_manifests = prompt_batch_service.storage.startup_pano_manifests()
+        for dataset_id, _prompt_id, manifest in pano_manifests:
+            key = historical_query_key(manifest)
+            if key is None or key[0] != "pano_reference":
+                continue
+            historical_pano.setdefault(key, manifest)
+            if dataset_id in pano_existing_by_dataset:
+                pano_existing_by_dataset[dataset_id].setdefault(key, set()).add(manifest.get("dataset_group_id"))
+
+        pano_queued = 0
+        pano_skipped = 0
+        for key, manifest in historical_pano.items():
+            current_group_id = settings.default_dataset_group_id if len(active_dataset_ids) > 1 else active_dataset_ids[0]
+            current_group_ready = all(
+                current_group_id in pano_existing_by_dataset[dataset_id].get(key, set())
+                for dataset_id in active_dataset_ids
+            )
+            if current_group_ready:
+                pano_skipped += 1
+                continue
+            reference = manifest.get("reference_pano")
+            if not isinstance(reference, dict) or str(reference.get("dataset_id") or "") not in active_dataset_ids:
+                pano_skipped += 1
+                continue
+            payload = ScoringJobCreate(
+                dataset_ids=list(active_dataset_ids),
+                prompt=str(manifest.get("canonical_prompt") or manifest.get("prompt") or ""),
+                query_type="pano_reference",
+                reference_pano=reference,
+                force_override=True,
+            )
+            await prompt_batch_service.submit(
+                payload,
+                request_id=f"startup_backfill_{uuid4().hex}",
+                received_at=utc_now_precise(),
+                entrypoint="startup_pano_history_backfill",
+            )
+            pano_queued += 1
+            await asyncio.sleep(0)
+
+        print(
+            f"Prompt-tree backfill: {queued} missing-city text query(ies) queued, "
+            f"{skipped} resolved concurrently, {len(missing_prompt_nodes)} incomplete prompt node(s) checked; "
+            f"pano history queued={pano_queued}, skipped={pano_skipped}, captured={len(historical_pano)}.",
+            flush=True,
+        )
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        print(f"Historical query backfill skipped: {type(exc).__name__}: {exc}", flush=True)
 
 
 async def demo_monitor_loop() -> None:
@@ -453,6 +565,18 @@ def ready() -> ReadyResponse:
         token_configured=bool(settings.backend_token),
         temporary_scorer_enabled=settings.temporary_scorer_enabled,
     )
+
+
+@router.get("/api/capabilities")
+def capabilities() -> dict:
+    """Describe exactly the city datasets loaded by this backend process."""
+
+    return {
+        "dataset_id": settings.default_dataset_id,
+        "dataset_ids": list(settings.default_dataset_ids),
+        "dataset_group_id": settings.default_dataset_group_id,
+        "cities": active_city_configs(settings),
+    }
 
 
 @router.post(
@@ -1041,12 +1165,7 @@ def record_in_bbox(record: PanoRecord, bbox: tuple[float, float, float, float]) 
 
 
 def city_id_for_dataset(dataset_id: str) -> str:
-    lowered = dataset_id.lower()
-    if "shanghai" in lowered:
-        return "shanghai"
-    if "london" in lowered:
-        return "london"
-    return ""
+    return catalog_city_id_for_dataset(dataset_id)
 
 
 def arcgis_feature_from_record(
@@ -1240,8 +1359,13 @@ def tile_not_ready_response(prompt_id: str):
     response_model=PanoImageResponse,
     dependencies=[Depends(require_backend_token)],
 )
-def get_pano_image_metadata(pano_id: str) -> PanoImageResponse:
-    return get_pano_image_metadata_for_dataset(None, pano_id)
+def get_pano_image_metadata(
+    pano_id: str,
+    lon: float | None = Query(default=None, ge=-180.0, le=180.0),
+    lat: float | None = Query(default=None, ge=-90.0, le=90.0),
+    date: int | None = Query(default=None),
+) -> PanoImageResponse:
+    return get_pano_image_metadata_for_dataset(None, pano_id, lon=lon, lat=lat, capture_date=date)
 
 
 @router.get(
@@ -1249,29 +1373,64 @@ def get_pano_image_metadata(pano_id: str) -> PanoImageResponse:
     response_model=PanoImageResponse,
     dependencies=[Depends(require_backend_token)],
 )
-def get_dataset_pano_image_metadata(dataset_id: str, pano_id: str) -> PanoImageResponse:
-    return get_pano_image_metadata_for_dataset(dataset_id, pano_id)
+def get_dataset_pano_image_metadata(
+    dataset_id: str,
+    pano_id: str,
+    lon: float | None = Query(default=None, ge=-180.0, le=180.0),
+    lat: float | None = Query(default=None, ge=-90.0, le=90.0),
+    date: int | None = Query(default=None),
+) -> PanoImageResponse:
+    return get_pano_image_metadata_for_dataset(dataset_id, pano_id, lon=lon, lat=lat, capture_date=date)
 
 
-def get_pano_image_metadata_for_dataset(dataset_id: str | None, pano_id: str) -> PanoImageResponse:
+def get_pano_image_metadata_for_dataset(
+    dataset_id: str | None,
+    pano_id: str,
+    *,
+    lon: float | None = None,
+    lat: float | None = None,
+    capture_date: int | None = None,
+) -> PanoImageResponse:
     try:
         service = pano_registry.service_for(dataset_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
     if pano_index_is_warming(dataset_id):
-        return PanoImageResponse(pano_id=pano_id, status="unavailable", message="Pano index is warming up. Try again shortly.")
+        return PanoImageResponse(
+            pano_id=pano_id,
+            pano_dataset_id=dataset_id,
+            status="unavailable",
+            message="Pano index is warming up. Try again shortly.",
+        )
     try:
-        result = service.ensure_pano_image(pano_id)
+        result = service.ensure_pano_image(
+            pano_id,
+            lon=lon,
+            lat=lat,
+            capture_date=capture_date,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc) or "Invalid pano id") from None
+    except AmbiguousPanoIdError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
+    except PanoCoordinateMismatchError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     if result is None:
-        return PanoImageResponse(pano_id=pano_id, status="missing", message="Pano not found in configured tar index.")
+        return PanoImageResponse(
+            pano_id=pano_id,
+            pano_dataset_id=dataset_id,
+            status="missing",
+            message="Pano not found in configured tar index.",
+        )
 
     entry, image_path = result
     return PanoImageResponse(
         pano_id=entry.pano_id,
         status="ready",
-        image_url=service.image_url(entry.pano_id),
+        image_url=service.image_url(entry),
+        pano_dataset_id=dataset_id,
+        source_id=entry.source_id,
+        entry_key=entry.entry_key,
         member_name=entry.member_name,
         tar_id=entry.tar_id,
         byte_size=image_path.stat().st_size,
@@ -1283,19 +1442,23 @@ def get_pano_image_metadata_for_dataset(dataset_id: str | None, pano_id: str) ->
     "/api/panos/{pano_id}/image",
     dependencies=[Depends(require_backend_token)],
 )
-def get_pano_image_file(pano_id: str):
-    return get_pano_image_file_for_dataset(None, pano_id)
+def get_pano_image_file(pano_id: str, entry_key: str | None = Query(default=None, min_length=1, max_length=64)):
+    return get_pano_image_file_for_dataset(None, pano_id, entry_key=entry_key)
 
 
 @router.get(
     "/api/datasets/{dataset_id}/panos/{pano_id}/image",
     dependencies=[Depends(require_backend_token)],
 )
-def get_dataset_pano_image_file(dataset_id: str, pano_id: str):
-    return get_pano_image_file_for_dataset(dataset_id, pano_id)
+def get_dataset_pano_image_file(
+    dataset_id: str,
+    pano_id: str,
+    entry_key: str | None = Query(default=None, min_length=1, max_length=64),
+):
+    return get_pano_image_file_for_dataset(dataset_id, pano_id, entry_key=entry_key)
 
 
-def get_pano_image_file_for_dataset(dataset_id: str | None, pano_id: str):
+def get_pano_image_file_for_dataset(dataset_id: str | None, pano_id: str, *, entry_key: str | None = None):
     try:
         service = pano_registry.service_for(dataset_id)
     except ValueError as exc:
@@ -1303,9 +1466,11 @@ def get_pano_image_file_for_dataset(dataset_id: str | None, pano_id: str):
     if pano_index_is_warming(dataset_id):
         raise HTTPException(status_code=503, detail="Pano index is warming up")
     try:
-        result = service.ensure_pano_image(pano_id)
+        result = service.ensure_pano_image(pano_id, entry_key=entry_key)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc) or "Invalid pano id") from None
+    except AmbiguousPanoIdError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from None
     if result is None:
         raise HTTPException(status_code=404, detail="Pano not found")
     _entry, image_path = result

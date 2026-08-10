@@ -59,6 +59,7 @@ def make_reference_prompt_key_hash(
     dataset_id: str,
     reference_dataset_id: str,
     reference_pano_id: str,
+    reference_pano_dataset_id: str | None = None,
     model_version: str,
     scoring_version: str,
     tile_index_version: str | None = None,
@@ -68,6 +69,7 @@ def make_reference_prompt_key_hash(
             "pano_reference",
             dataset_id,
             reference_dataset_id,
+            reference_pano_dataset_id or reference_dataset_id,
             str(reference_pano_id),
             model_version,
             scoring_version,
@@ -114,6 +116,7 @@ def make_reference_prompt_id(
     dataset_id: str,
     reference_dataset_id: str,
     reference_pano_id: str,
+    reference_pano_dataset_id: str | None = None,
     model_version: str,
     scoring_version: str,
     tile_index_version: str | None = None,
@@ -122,11 +125,12 @@ def make_reference_prompt_id(
         dataset_id=dataset_id,
         reference_dataset_id=reference_dataset_id,
         reference_pano_id=reference_pano_id,
+        reference_pano_dataset_id=reference_pano_dataset_id,
         model_version=model_version,
         scoring_version=scoring_version,
         tile_index_version=tile_index_version,
     )
-    reference_label = f"reference pano {reference_dataset_id} {reference_pano_id}"
+    reference_label = f"reference pano {reference_pano_dataset_id or reference_dataset_id} {reference_pano_id}"
     return f"{prompt_slug(reference_label)}--{digest[:12]}"
 
 

@@ -9,15 +9,14 @@ from datetime import datetime
 from uuid import uuid4
 
 from .backend_config import BackendSettings
+from .city_catalog import city_catalog, city_id_for_dataset
 from .dataset_groups import dataset_group_id_for, scoring_version_for_dataset_group, unique_dataset_ids
 from .execution_log import ExecutionAuditLog, utc_now_precise
 from .prompt_ids import (
     make_job_id,
-    make_legacy_prompt_id,
     make_prompt_id,
     make_reference_prompt_id,
     normalize_prompt,
-    normalize_prompt_legacy,
     utc_now,
 )
 from .remote_schemas import PanoReference, QueryType, ScoringJobCreate, ScoringJobResponse, ScoringResultRef, TileCoord
@@ -30,10 +29,6 @@ from .tile_writer import result_tile_write_queue, write_prompt_result
 
 TERMINAL_JOB_STATUSES = {"ready", "failed", "cancelled"}
 PANO_REFERENCE_SCORING_SUFFIX = "pano-reference-aligned-v1"
-DEFAULT_PRIORITY_CENTRES = {
-    "london": (51.5072, -0.1276),
-    "shanghai": (31.2304, 121.4737),
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +36,7 @@ class DatasetTarget:
     prompt_id: str
     dataset_id: str
     priority_tile: TileCoord | None
+    result_revision: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -59,6 +55,7 @@ class QueuedSubmission:
     zooms: tuple[int, ...]
     scoring_version: str
     force_override: bool
+    background: bool
 
     @property
     def prompt_id(self) -> str:
@@ -77,10 +74,26 @@ class PromptBatchService:
     def __init__(self, settings: BackendSettings, engine: SemanticScoringEngine | None = None) -> None:
         self.settings = settings
         self.storage = ResultStorage(settings)
+        known_dataset_ids = (
+            *(str(city.get("dataset_id") or "").strip() for city in city_catalog().values()),
+            *settings.default_dataset_ids,
+            settings.default_dataset_id,
+        )
+        self._prompt_catalog_dataset_ids = tuple(
+            dict.fromkeys(dataset_id for dataset_id in known_dataset_ids if dataset_id)
+        )
         self.engine = engine or TemporarySemanticScoringEngine(settings)
-        self._queue: asyncio.Queue[QueuedSubmission] = asyncio.Queue(maxsize=max(0, settings.prompt_queue_max_size))
+        queue_max_size = max(0, settings.prompt_queue_max_size)
+        self._queue: asyncio.Queue[QueuedSubmission] = asyncio.Queue(maxsize=queue_max_size)
+        self._background_queue: asyncio.Queue[QueuedSubmission] = asyncio.Queue(maxsize=queue_max_size)
+        self._queue_available = asyncio.Event()
+        self._background_queued_job_ids: set[str] = set()
         self._jobs: dict[str, ScoringJobResponse] = {}
         self._worker_task: asyncio.Task[None] | None = None
+        self._job_persist_task: asyncio.Task[None] | None = None
+        self._job_persist_pending: dict[str, ScoringJobResponse] = {}
+        self._prompt_catalog_persist_task: asyncio.Task[None] | None = None
+        self._prompt_catalog_persist_requested = False
         self._lock = asyncio.Lock()
         self._tile_indexes: dict[tuple[str, tuple[int, ...]], TileIndex] = {}
         self._warmed_up = False
@@ -90,6 +103,11 @@ class PromptBatchService:
     async def start(self) -> None:
         if self.settings.warmup_on_startup and not self._warmed_up:
             await self.warmup()
+        if not self.storage.prompt_catalog_ready:
+            await asyncio.to_thread(
+                self.storage.rebuild_prompt_catalog,
+                known_dataset_ids=self._prompt_catalog_dataset_ids,
+            )
         if self._worker_task is None or self._worker_task.done():
             self._worker_task = asyncio.create_task(self._worker_loop())
 
@@ -118,20 +136,40 @@ class PromptBatchService:
             await asyncio.to_thread(self._get_tile_index, dataset_id, zooms, records, scoped_settings)
         timings["warmup_tile_index"] = round(time.perf_counter() - stage_start, 3)
 
+        stage_start = time.perf_counter()
+        prompt_catalog_entries = await asyncio.to_thread(
+            self.storage.rebuild_prompt_catalog,
+            known_dataset_ids=self._prompt_catalog_dataset_ids,
+        )
+        timings["warmup_prompt_catalog"] = round(time.perf_counter() - stage_start, 3)
+        print(
+            f"Prompt catalog warmup indexed {self.storage.prompt_catalog_prompt_count} plaintext prompt(s) "
+            f"and {prompt_catalog_entries} active city result(s).",
+            flush=True,
+        )
+
         self._warmup_timings = timings.copy()
         self._warmed_up = True
         print(f"Startup warmup complete for {dataset_group_id} ({','.join(dataset_ids)}): {timings}", flush=True)
         return timings
 
     async def stop(self) -> None:
-        if self._worker_task is None:
-            return
-        self._worker_task.cancel()
-        try:
-            await self._worker_task
-        except asyncio.CancelledError:
-            pass
-        self._worker_task = None
+        if self._worker_task is not None:
+            self._worker_task.cancel()
+            try:
+                await self._worker_task
+            except asyncio.CancelledError:
+                pass
+            self._worker_task = None
+
+        # Admission and progress updates are intentionally decoupled from
+        # /workspace I/O. Drain their latest coalesced snapshots only during
+        # orderly shutdown.
+        while self._job_persist_task is not None:
+            await self._job_persist_task
+        while self._prompt_catalog_persist_task is not None:
+            await self._prompt_catalog_persist_task
+        await asyncio.to_thread(self.audit_log.close)
 
     async def submit(
         self,
@@ -197,6 +235,7 @@ class PromptBatchService:
         )
 
         results: list[ScoringJobResponse | ValueError] = []
+        background = entrypoint.startswith("startup_")
         for index, payload in enumerate(payloads):
             try:
                 results.append(
@@ -206,6 +245,7 @@ class PromptBatchService:
                         received_at=effective_received_at,
                         received_monotonic=effective_received_monotonic,
                         request_payload=payload_list[index],
+                        background=background,
                     )
                 )
             except ValueError as exc:
@@ -229,6 +269,7 @@ class PromptBatchService:
         received_at: str,
         received_monotonic: float,
         request_payload: dict,
+        background: bool,
     ) -> ScoringJobResponse:
         dataset_ids = self._payload_dataset_ids(payload)
         default_group_id = self.settings.default_dataset_group_id if len(dataset_ids) > 1 else None
@@ -245,43 +286,20 @@ class PromptBatchService:
                 received_at=received_at,
                 received_monotonic=received_monotonic,
                 request_payload=request_payload,
+                background=background,
             )
         if query_type != "text":
             raise ValueError(f"Unsupported scoring query_type: {query_type}")
-        raw_prompt = payload.prompt
-        prompt = normalize_prompt(raw_prompt)
+        prompt = normalize_prompt(payload.prompt)
         if not prompt:
             raise ValueError("Prompt is required for text scoring jobs.")
         zooms = tuple(int(z) for z in payload.zooms) if payload.zooms else self.settings.tile_zooms
         priority_tiles = self._priority_tiles_by_dataset(payload, dataset_ids, zooms)
-        targets = tuple(
-            DatasetTarget(
-                dataset_id=dataset_id,
-                prompt_id=make_prompt_id(
-                    dataset_id=dataset_id,
-                    prompt=prompt,
-                    model_version=self.settings.model_version,
-                    scoring_version=scoring_version,
-                    tile_index_version=self.settings.tile_index_version,
-                ),
-                priority_tile=priority_tiles.get(dataset_id),
-            )
-            for dataset_id in dataset_ids
-        )
 
-        active_prompt_ids = [target.prompt_id for target in targets]
-        if len(targets) == 1:
-            active_prompt_ids.extend(
-                make_legacy_prompt_id(
-                    dataset_id=targets[0].dataset_id,
-                    prompt=legacy_prompt,
-                    model_version=self.settings.model_version,
-                    scoring_version=scoring_version,
-                    tile_index_version=self.settings.tile_index_version,
-                )
-                for legacy_prompt in (prompt, normalize_prompt_legacy(raw_prompt))
-            )
-        active_job = await self._find_active_job_by_prompt_ids(active_prompt_ids)
+        active_job = await self._find_active_text_job(prompt, dataset_ids)
+        if active_job is not None and not background:
+            if await self._supersede_queued_background_job(active_job.job_id):
+                active_job = None
         if active_job is not None:
             self._record_query_event(
                 "query_active_deduplicated",
@@ -297,49 +315,21 @@ class PromptBatchService:
             )
             return active_job
 
-        existing_targets = []
+        existing_targets: list[DatasetTarget] = []
         all_existing = not payload.force_override
         if not payload.force_override:
-            for target in targets:
-                existing_prompt_id = target.prompt_id
-                existing_manifest = self.storage.manifest_path(target.dataset_id, target.prompt_id)
-                if len(targets) == 1:
-                    legacy_prompt_ids = tuple(
-                        dict.fromkeys(
-                            make_legacy_prompt_id(
-                                dataset_id=target.dataset_id,
-                                prompt=legacy_prompt,
-                                model_version=self.settings.model_version,
-                                scoring_version=scoring_version,
-                                tile_index_version=self.settings.tile_index_version,
-                            )
-                            for legacy_prompt in (prompt, normalize_prompt_legacy(raw_prompt))
-                        )
-                    )
-                    for legacy_prompt_id in legacy_prompt_ids:
-                        if existing_manifest.exists() or legacy_prompt_id == target.prompt_id:
-                            continue
-                        legacy_manifest = self.storage.manifest_path(target.dataset_id, legacy_prompt_id)
-                        if legacy_manifest.exists():
-                            existing_prompt_id = legacy_prompt_id
-                            existing_manifest = legacy_manifest
-                            break
-
-                matching_manifest = self.storage.find_manifest_for_prompt(
-                    dataset_id=target.dataset_id,
-                    canonical_prompt=prompt,
-                    model_version=self.settings.model_version,
-                    scoring_version=scoring_version,
-                    tile_index_version=self.settings.tile_index_version,
+            for dataset_id in dataset_ids:
+                existing_entry = self.storage.find_prompt_result_entry(
+                    dataset_id=dataset_id,
+                    prompt=prompt,
                 )
-                if not existing_manifest.exists() and matching_manifest is not None:
-                    existing_prompt_id, existing_manifest = matching_manifest
-                if existing_manifest.exists():
+                if existing_entry is not None:
                     existing_targets.append(
                         DatasetTarget(
-                            dataset_id=target.dataset_id,
-                            prompt_id=existing_prompt_id,
-                            priority_tile=target.priority_tile,
+                            dataset_id=dataset_id,
+                            prompt_id=existing_entry.prompt_id,
+                            priority_tile=priority_tiles.get(dataset_id),
+                            result_revision=existing_entry.result_revision,
                         )
                     )
                 else:
@@ -348,9 +338,8 @@ class PromptBatchService:
 
         now = utc_now()
         ready_targets = tuple(existing_targets)
-        queued_targets = targets
-        job_id = f"{make_job_id(now, ready_targets[0].prompt_id if all_existing and ready_targets else targets[0].prompt_id)}_{uuid4().hex[:8]}"
         if all_existing:
+            job_id = f"{make_job_id(now, ready_targets[0].prompt_id)}_{uuid4().hex[:8]}"
             job = self._make_job_response(
                 job_id=job_id,
                 targets=ready_targets,
@@ -386,6 +375,29 @@ class PromptBatchService:
             )
             return job
 
+        # Result IDs are only opaque, path-safe storage handles for newly
+        # created work. They never participate in the cache-hit decision.
+        prompt_tree_changed = self.storage.register_prompt(
+            prompt=prompt,
+            known_dataset_ids=self._prompt_catalog_dataset_ids,
+        )
+        if prompt_tree_changed:
+            self._schedule_prompt_catalog_persist()
+        queued_targets = tuple(
+            DatasetTarget(
+                dataset_id=dataset_id,
+                prompt_id=make_prompt_id(
+                    dataset_id=dataset_id,
+                    prompt=prompt,
+                    model_version=self.settings.model_version,
+                    scoring_version=scoring_version,
+                    tile_index_version=self.settings.tile_index_version,
+                ),
+                priority_tile=priority_tiles.get(dataset_id),
+            )
+            for dataset_id in dataset_ids
+        )
+        job_id = f"{make_job_id(now, queued_targets[0].prompt_id)}_{uuid4().hex[:8]}"
         job = self._make_job_response(
             job_id=job_id,
             targets=queued_targets,
@@ -419,7 +431,7 @@ class PromptBatchService:
             cache_status=job.cache_status,
             priority_tiles=job.priority_tiles,
         )
-        await self._queue.put(
+        await self._enqueue_submission(
             QueuedSubmission(
                 job_id=job_id,
                 request_id=request_id,
@@ -435,6 +447,7 @@ class PromptBatchService:
                 zooms=zooms,
                 scoring_version=scoring_version,
                 force_override=payload.force_override,
+                background=background,
             )
         )
         return job
@@ -450,6 +463,7 @@ class PromptBatchService:
         received_at: str,
         received_monotonic: float,
         request_payload: dict,
+        background: bool,
     ) -> ScoringJobResponse:
         reference = normalize_reference_pano(payload.reference_pano)
         self._validate_dataset_ids((reference["dataset_id"],))
@@ -464,6 +478,7 @@ class PromptBatchService:
                     dataset_id=dataset_id,
                     reference_dataset_id=reference["dataset_id"],
                     reference_pano_id=reference["pano_id"],
+                    reference_pano_dataset_id=reference.get("pano_dataset_id"),
                     model_version=self.settings.model_version,
                     scoring_version=scoring_version,
                     tile_index_version=self.settings.tile_index_version,
@@ -474,6 +489,9 @@ class PromptBatchService:
         )
 
         active_job = await self._find_active_job_by_prompt_ids([target.prompt_id for target in targets])
+        if active_job is not None and not background:
+            if await self._supersede_queued_background_job(active_job.job_id):
+                active_job = None
         if active_job is not None:
             self._record_query_event(
                 "query_active_deduplicated",
@@ -576,7 +594,7 @@ class PromptBatchService:
             cache_status=job.cache_status,
             priority_tiles=job.priority_tiles,
         )
-        await self._queue.put(
+        await self._enqueue_submission(
             QueuedSubmission(
                 job_id=job_id,
                 request_id=request_id,
@@ -592,6 +610,7 @@ class PromptBatchService:
                 zooms=zooms,
                 scoring_version=scoring_version,
                 force_override=payload.force_override,
+                background=background,
             )
         )
         return job
@@ -643,11 +662,10 @@ class PromptBatchService:
     def _default_priority_tile(self, dataset_id: str, zooms: tuple[int, ...]) -> TileCoord:
         """Use a deterministic city-centre tile whenever the client omits priority."""
 
-        lowered = dataset_id.lower()
-        if "london" in lowered:
-            lat, lon = DEFAULT_PRIORITY_CENTRES["london"]
-        elif "shanghai" in lowered:
-            lat, lon = DEFAULT_PRIORITY_CENTRES["shanghai"]
+        city = city_catalog().get(city_id_for_dataset(dataset_id), {})
+        center = city.get("center")
+        if isinstance(center, list) and len(center) == 2:
+            lon, lat = center
         else:
             lat, lon = 0.0, 0.0
         key = latlon_to_tile(lat, lon, max(zooms))
@@ -682,7 +700,12 @@ class PromptBatchService:
                 dataset_id=target.dataset_id,
                 prompt_id=target.prompt_id,
                 manifest_url=self.storage.manifest_url(target.dataset_id, target.prompt_id),
-                tile_url_template=self.storage.tile_url_template(target.dataset_id, target.prompt_id),
+                tile_url_template=self.storage.tile_url_template(
+                    target.dataset_id,
+                    target.prompt_id,
+                    revision=target.result_revision,
+                ),
+                result_revision=target.result_revision,
                 priority_tile=target.priority_tile,
             )
             for target in targets
@@ -745,20 +768,20 @@ class PromptBatchService:
                 return job
             updated = job.model_copy(update={"status": "cancelled", "message": "Cancelled.", "updated_at": utc_now()})
             self._jobs[job_id] = updated
-            self._write_job_file(updated)
             self._prune_jobs_locked()
-            self.audit_log.record(
-                "query_cancelled",
-                job_id=updated.job_id,
-                request_id=updated.request_id,
-                execution_batch_id=updated.execution_batch_id,
-                cancelled_at=utc_now_precise(),
-                received_at=updated.received_at,
-                prompt=updated.prompt,
-                query_type=updated.query_type,
-                dataset_ids=updated.dataset_ids,
-            )
-            return updated
+        self._schedule_job_persist(updated)
+        self.audit_log.record(
+            "query_cancelled",
+            job_id=updated.job_id,
+            request_id=updated.request_id,
+            execution_batch_id=updated.execution_batch_id,
+            cancelled_at=utc_now_precise(),
+            received_at=updated.received_at,
+            prompt=updated.prompt,
+            query_type=updated.query_type,
+            dataset_ids=updated.dataset_ids,
+        )
+        return updated
 
     async def _find_active_job_by_prompt_ids(self, prompt_ids) -> ScoringJobResponse | None:
         prompt_id_set = set(prompt_ids)
@@ -769,27 +792,124 @@ class PromptBatchService:
                     return job
         return None
 
+    async def _find_active_text_job(
+        self,
+        prompt: str,
+        dataset_ids: tuple[str, ...],
+    ) -> ScoringJobResponse | None:
+        """Deduplicate active text work by canonical plaintext prompt and datasets."""
+
+        requested_datasets = set(dataset_ids)
+        async with self._lock:
+            for job in self._jobs.values():
+                job_datasets = set(job.dataset_ids or [job.dataset_id])
+                if (
+                    job.query_type == "text"
+                    and normalize_prompt(job.prompt) == prompt
+                    and job_datasets == requested_datasets
+                    and job.status not in TERMINAL_JOB_STATUSES
+                ):
+                    return job
+        return None
+
+    async def _supersede_queued_background_job(self, job_id: str) -> bool:
+        """Cancel background work that has not reached the worker yet."""
+
+        async with self._lock:
+            if job_id not in self._background_queued_job_ids:
+                return False
+            job = self._jobs.get(job_id)
+            if job is None or job.status in TERMINAL_JOB_STATUSES:
+                return False
+            updated = job.model_copy(
+                update={
+                    "status": "cancelled",
+                    "message": "Superseded by an interactive request.",
+                    "updated_at": utc_now(),
+                }
+            )
+            self._jobs[job_id] = updated
+            self._prune_jobs_locked()
+        self._schedule_job_persist(updated)
+        return True
+
+    async def _enqueue_submission(self, submission: QueuedSubmission) -> None:
+        queue = self._background_queue if submission.background else self._queue
+        if submission.background:
+            self._background_queued_job_ids.add(submission.job_id)
+        try:
+            await queue.put(submission)
+        except BaseException:
+            if submission.background:
+                self._background_queued_job_ids.discard(submission.job_id)
+            raise
+        self._queue_available.set()
+
+    def _get_submission_nowait(self) -> tuple[QueuedSubmission, asyncio.Queue[QueuedSubmission]] | None:
+        for queue in (self._queue, self._background_queue):
+            try:
+                submission = queue.get_nowait()
+            except asyncio.QueueEmpty:
+                continue
+            if submission.background:
+                self._background_queued_job_ids.discard(submission.job_id)
+            return submission, queue
+        return None
+
+    def _get_interactive_submission_nowait(
+        self,
+    ) -> tuple[QueuedSubmission, asyncio.Queue[QueuedSubmission]] | None:
+        try:
+            submission = self._queue.get_nowait()
+        except asyncio.QueueEmpty:
+            return None
+        return submission, self._queue
+
+    async def _get_submission(self) -> tuple[QueuedSubmission, asyncio.Queue[QueuedSubmission]]:
+        while True:
+            queued = self._get_submission_nowait()
+            if queued is not None:
+                return queued
+            self._queue_available.clear()
+            # Recheck after clearing so a producer cannot set the event in the
+            # narrow interval between the empty check and Event.wait().
+            queued = self._get_submission_nowait()
+            if queued is not None:
+                return queued
+            await self._queue_available.wait()
+
     async def _worker_loop(self) -> None:
         while True:
-            first = await self._queue.get()
-            batch = [first]
-            await asyncio.sleep(self.settings.prompt_batch_window_ms / 1000)
-            while len(batch) < self.settings.prompt_batch_max_size:
-                try:
-                    batch.append(self._queue.get_nowait())
-                except asyncio.QueueEmpty:
-                    break
+            batch_entries = [await self._get_submission()]
+            try:
+                await asyncio.sleep(self.settings.prompt_batch_window_ms / 1000)
+                while len(batch_entries) < self.settings.prompt_batch_max_size:
+                    # Batch interactive prompts together, but admit only one
+                    # background prompt per execution cycle. This bounds the
+                    # amount of non-interruptible backfill work a new request
+                    # can land behind.
+                    queued = self._get_interactive_submission_nowait()
+                    if queued is None:
+                        break
+                    batch_entries.append(queued)
 
-            groups: dict[tuple[tuple[str, ...], tuple[int, ...], str, QueryType], list[QueuedSubmission]] = defaultdict(list)
-            for item in batch:
-                groups[item.batch_key].append(item)
+                # A user query that arrived during the batching window must be
+                # processed before startup backfill, even if backfill woke the
+                # worker first.
+                batch_entries.sort(key=lambda entry: entry[0].background)
+                groups: dict[
+                    tuple[bool, tuple[tuple[str, ...], tuple[int, ...], str, QueryType]],
+                    list[QueuedSubmission],
+                ] = defaultdict(list)
+                for item, _source_queue in batch_entries:
+                    groups[(item.background, item.batch_key)].append(item)
 
-            for submissions in groups.values():
-                execution_batch_id = f"batch_{uuid4().hex}"
-                await self._process_batch(submissions, execution_batch_id=execution_batch_id)
-
-            for _item in batch:
-                self._queue.task_done()
+                for submissions in groups.values():
+                    execution_batch_id = f"batch_{uuid4().hex}"
+                    await self._process_batch(submissions, execution_batch_id=execution_batch_id)
+            finally:
+                for _item, source_queue in batch_entries:
+                    source_queue.task_done()
 
     async def _process_batch(self, submissions: list[QueuedSubmission], *, execution_batch_id: str) -> None:
         active = []
@@ -952,7 +1072,7 @@ class PromptBatchService:
                     execution_batch_id=execution_batch_id,
                 )
 
-            written_result_keys: set[tuple[str, str]] = set()
+            written_result_refs: dict[tuple[str, str], ScoringResultRef] = {}
             tile_stage_started_at = utc_now_precise()
             tile_stage_started_monotonic = time.perf_counter()
             for submission in active:
@@ -967,7 +1087,7 @@ class PromptBatchService:
                 dataset_tile_timings: list[dict] = []
                 for target in submission.targets:
                     result_key = (target.dataset_id, target.prompt_id)
-                    if result_key in written_result_keys:
+                    if result_key in written_result_refs:
                         completed_tiles += self._expected_target_tile_write_count(target, tile_indexes[target.dataset_id], scoped_settings)
                         continue
                     result = results_by_key[result_key]
@@ -1038,7 +1158,7 @@ class PromptBatchService:
                             lambda job_id=submission.job_id, patch=patch: asyncio.create_task(self._update_job(job_id, **patch))
                         )
 
-                    await asyncio.to_thread(
+                    manifest = await asyncio.to_thread(
                         write_prompt_result,
                         result=result,
                         tile_index=tile_index,
@@ -1047,6 +1167,14 @@ class PromptBatchService:
                         priority_tile=target.priority_tile,
                         result_revision=result_revision,
                         progress_callback=progress_callback,
+                    )
+                    written_result_refs[result_key] = ScoringResultRef(
+                        dataset_id=target.dataset_id,
+                        prompt_id=target.prompt_id,
+                        manifest_url=self.storage.manifest_url(target.dataset_id, target.prompt_id),
+                        tile_url_template=manifest.tile_url_template,
+                        result_revision=manifest.result_revision,
+                        priority_tile=target.priority_tile,
                     )
                     target_tile_count = self._expected_target_tile_write_count(target, tile_index, scoped_settings)
                     completed_tiles += target_tile_count
@@ -1120,7 +1248,8 @@ class PromptBatchService:
                                 exception_message=str(cleanup_exc),
                                 traceback=cleanup_traceback,
                             )
-                    written_result_keys.add(result_key)
+                if submission.query_type == "text":
+                    self._schedule_prompt_catalog_persist()
                 query_completed_at = utc_now_precise()
                 query_backend_elapsed = round(time.perf_counter() - submission.received_monotonic, 6)
                 query_tile_writing = round(time.perf_counter() - query_tile_stage_start, 6)
@@ -1132,6 +1261,10 @@ class PromptBatchService:
                         for item in dataset_tile_timings
                     },
                 }
+                ready_results = [
+                    written_result_refs[(target.dataset_id, target.prompt_id)]
+                    for target in submission.targets
+                ]
                 await self._update_job(
                     submission.job_id,
                     status="ready",
@@ -1141,6 +1274,9 @@ class PromptBatchService:
                     stage_timings=query_timings,
                     message="Ready.",
                     execution_batch_id=execution_batch_id,
+                    results=ready_results,
+                    manifest_url=ready_results[0].manifest_url,
+                    tile_url_template=ready_results[0].tile_url_template,
                 )
                 self.audit_log.record(
                     "query_execution_complete",
@@ -1277,18 +1413,66 @@ class PromptBatchService:
     async def _update_job(self, job_id: str, **patch) -> None:
         async with self._lock:
             job = self._jobs.get(job_id)
-            if job is None or job.status == "cancelled":
+            if job is None or job.status in TERMINAL_JOB_STATUSES:
                 return
             updated = job.model_copy(update={**patch, "updated_at": utc_now()})
             self._jobs[job_id] = updated
-            self._write_job_file(updated)
             self._prune_jobs_locked()
+        self._schedule_job_persist(updated)
 
     async def _save_job(self, job: ScoringJobResponse) -> None:
         async with self._lock:
             self._jobs[job.job_id] = job
-            self._write_job_file(job)
             self._prune_jobs_locked()
+        self._schedule_job_persist(job)
+
+    def _schedule_job_persist(self, job: ScoringJobResponse) -> None:
+        # Runtime reads come from self._jobs. Persist only the newest snapshot
+        # for each job in the background so admission and polling never wait on
+        # RunPod's network/FUSE-backed /workspace volume.
+        self._job_persist_pending[job.job_id] = job
+        if self._job_persist_task is None or self._job_persist_task.done():
+            self._job_persist_task = asyncio.create_task(self._persist_jobs_loop())
+
+    async def _persist_jobs_loop(self) -> None:
+        try:
+            while self._job_persist_pending:
+                snapshots = tuple(self._job_persist_pending.values())
+                self._job_persist_pending.clear()
+                await asyncio.to_thread(self._write_job_files, snapshots)
+        finally:
+            self._job_persist_task = None
+            if self._job_persist_pending:
+                self._job_persist_task = asyncio.create_task(self._persist_jobs_loop())
+
+    def _write_job_files(self, jobs: tuple[ScoringJobResponse, ...]) -> None:
+        for job in jobs:
+            try:
+                self._write_job_file(job)
+            except Exception as exc:
+                print(
+                    f"Job snapshot persistence skipped for {job.job_id}: "
+                    f"{type(exc).__name__}: {exc}",
+                    flush=True,
+                )
+
+    def _schedule_prompt_catalog_persist(self) -> None:
+        self._prompt_catalog_persist_requested = True
+        if self._prompt_catalog_persist_task is None or self._prompt_catalog_persist_task.done():
+            self._prompt_catalog_persist_task = asyncio.create_task(self._persist_prompt_catalog_loop())
+
+    async def _persist_prompt_catalog_loop(self) -> None:
+        try:
+            while self._prompt_catalog_persist_requested:
+                self._prompt_catalog_persist_requested = False
+                try:
+                    await asyncio.to_thread(self.storage.persist_prompt_catalog)
+                except OSError as exc:
+                    print(f"Prompt catalog persistence skipped: {type(exc).__name__}: {exc}", flush=True)
+        finally:
+            self._prompt_catalog_persist_task = None
+            if self._prompt_catalog_persist_requested:
+                self._schedule_prompt_catalog_persist()
 
     def _write_job_file(self, job: ScoringJobResponse) -> None:
         payload = job.model_dump()
@@ -1351,7 +1535,7 @@ def normalize_reference_pano(reference: PanoReference | None) -> dict:
         "pano_id": pano_id,
         "dataset_id": dataset_id,
     }
-    for key in ("city_id", "lon", "lat", "date"):
+    for key in ("pano_dataset_id", "city_id", "lon", "lat", "date"):
         value = data.get(key)
         if value is not None:
             normalized[key] = value

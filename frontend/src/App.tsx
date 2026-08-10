@@ -46,14 +46,15 @@ import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
 import { cityConfigsForRemoteBackend } from "./state/cities";
+import { panoDatasetIdForPoint, panoPointKey } from "./state/panoDatasets";
 import { exhibitConfig } from "./state/exhibitConfig";
 import { runtimeConfig } from "./state/runtimeConfig";
 import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./state/staticDeployment";
 import { TUTORIAL_PAGES } from "./state/tutorialContent";
 
-function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "city_id">): string {
+function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "pano_dataset_id" | "city_id">): string {
   if (pano.pano_key) return pano.pano_key;
-  const scope = pano.dataset_id || pano.city_id || "default";
+  const scope = pano.pano_dataset_id || pano.dataset_id || pano.city_id || "default";
   return `${scope}:${pano.pano_id}`;
 }
 
@@ -631,7 +632,11 @@ export function App() {
     setMarkedPanos(next);
 
     panoRequestsRef.current.add(panoKey);
-    void loadPanoImage(point.pano_id, point.dataset_id)
+    void loadPanoImage(
+      point.pano_id,
+      point.pano_dataset_id || point.dataset_id,
+      { lon: point.lon, lat: point.lat, date: point.date }
+    )
       .then((metadata) => {
         const latest = markedPanosRef.current;
         const latestPano = latest.find((pano) => keyForPano(pano) === panoKey);
@@ -655,6 +660,9 @@ export function App() {
                 status: "ready" as const,
                 image_url: metadata.image_url ?? null,
                 object_url: metadata.object_url ?? null,
+                pano_dataset_id: metadata.pano_dataset_id ?? pano.pano_dataset_id ?? null,
+                source_id: metadata.source_id ?? null,
+                entry_key: metadata.entry_key ?? null,
                 member_name: metadata.member_name ?? null,
                 tar_id: metadata.tar_id ?? null,
                 message: metadata.message || "Ready"
@@ -686,16 +694,22 @@ export function App() {
   useEffect(() => {
     if (selectedLayer?.query_type !== "pano_reference" || !selectedLayer.reference_pano) return;
     const reference = selectedLayer.reference_pano;
-    const signature = `${selectedLayer.id}:${reference.dataset_id}:${reference.pano_id}`;
+    const referenceLon = typeof reference.lon === "number" && Number.isFinite(reference.lon) ? reference.lon : 0;
+    const referenceLat = typeof reference.lat === "number" && Number.isFinite(reference.lat) ? reference.lat : 0;
+    const panoDatasetId = reference.pano_dataset_id
+      || panoDatasetIdForPoint(reference.dataset_id, referenceLon, referenceLat);
+    const referencePanoKey = panoPointKey(panoDatasetId, reference.pano_id, referenceLon, referenceLat);
+    const signature = `${selectedLayer.id}:${referencePanoKey}`;
     if (lastAutoReferenceRef.current === signature) return;
     lastAutoReferenceRef.current = signature;
     handleMarkPano({
       pano_id: reference.pano_id,
-      pano_key: `${reference.dataset_id}:${reference.pano_id}`,
+      pano_key: referencePanoKey,
       dataset_id: reference.dataset_id,
+      pano_dataset_id: panoDatasetId,
       city_id: reference.city_id ?? null,
-      lon: typeof reference.lon === "number" && Number.isFinite(reference.lon) ? reference.lon : 0,
-      lat: typeof reference.lat === "number" && Number.isFinite(reference.lat) ? reference.lat : 0,
+      lon: referenceLon,
+      lat: referenceLat,
       date: reference.date ?? null,
       source_layer_id: selectedLayer.id,
       source_layer_name: selectedLayer.name,

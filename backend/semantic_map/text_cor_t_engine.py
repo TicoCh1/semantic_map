@@ -56,7 +56,7 @@ class TextCorTScoringEngine(SemanticScoringEngine):
             sys.path.insert(0, qwen_path)
         self._layouts: dict[str, DatasetLayout] = {}
         self._records: dict[str, tuple[PanoRecord, ...]] = {}
-        self._record_indexes: dict[str, dict[str, int]] = {}
+        self._record_indexes: dict[str, dict[str, tuple[int, ...]]] = {}
         self._shards: dict[str, tuple[ShardInfo, ...]] = {}
         self._embedding_arrays: dict[Path, object] = {}
         self._embedding_tensors: dict[Path, object] = {}
@@ -288,7 +288,7 @@ class TextCorTScoringEngine(SemanticScoringEngine):
         add_timing(timings, "dataset_records_cache", time.perf_counter() - stage_start)
 
         stage_start = time.perf_counter()
-        query_embeddings = [self._reference_embedding(reference["dataset_id"], reference["pano_id"]) for reference in normalized_references]
+        query_embeddings = [self._reference_embedding(reference) for reference in normalized_references]
         query_emb = torch.stack(query_embeddings, dim=0)
         add_timing(timings, "reference_embedding_lookup", time.perf_counter() - stage_start)
 
@@ -322,6 +322,7 @@ class TextCorTScoringEngine(SemanticScoringEngine):
                     dataset_id=dataset_id,
                     reference_dataset_id=reference_metadata["dataset_id"],
                     reference_pano_id=reference_metadata["pano_id"],
+                    reference_pano_dataset_id=reference_metadata.get("pano_dataset_id"),
                     model_version=self.settings.model_version,
                     scoring_version=scoring_version,
                     tile_index_version=self.settings.tile_index_version,
@@ -469,8 +470,11 @@ class TextCorTScoringEngine(SemanticScoringEngine):
             ref = np.load(ref_path, mmap_mode="r")
             if emb.ndim != 3:
                 raise RuntimeError(f"Unexpected emb shape {emb.shape} in {emb_path.name} (expected N,K,D)")
-            if ref.shape != (emb.shape[0], 4):
-                raise RuntimeError(f"Ref shape mismatch {ref.shape} for {ref_path.name}, expected ({emb.shape[0]},4)")
+            if ref.ndim != 2 or ref.shape[0] != emb.shape[0] or ref.shape[1] < 4:
+                raise RuntimeError(
+                    f"Ref shape mismatch {ref.shape} for {ref_path.name}, "
+                    f"expected ({emb.shape[0]}, at least 4 columns)"
+                )
 
             count = int(emb.shape[0])
             shards.append(
@@ -640,11 +644,13 @@ class TextCorTScoringEngine(SemanticScoringEngine):
                 if timings is not None:
                     add_timing(timings, compute_key, time.perf_counter() - stage_start)
 
-    def _reference_embedding(self, dataset_id: str, pano_id: str):
+    def _reference_embedding(self, reference: dict):
         import numpy as np
         import torch
 
-        record = self._record_for_pano(dataset_id, pano_id)
+        dataset_id = str(reference["dataset_id"])
+        pano_id = str(reference["pano_id"])
+        record = self._record_for_reference(reference)
         row_index = record.row_index
         for shard in self._dataset_shards(dataset_id):
             if shard.start <= row_index < shard.end:
@@ -663,19 +669,74 @@ class TextCorTScoringEngine(SemanticScoringEngine):
                 return (query.float() / query.float().norm(dim=1, keepdim=True).clamp_min(1e-12)).detach()
         raise RuntimeError(f"Reference pano {pano_id} row {row_index} was not found in dataset shards for {dataset_id}.")
 
-    def _record_for_pano(self, dataset_id: str, pano_id: str) -> PanoRecord:
+    def _record_for_pano(
+        self,
+        dataset_id: str,
+        pano_id: str,
+        *,
+        lon: float | None = None,
+        lat: float | None = None,
+        capture_date: str | int | None = None,
+    ) -> PanoRecord:
         records = self.get_dataset_records(dataset_id)
         index = self._record_indexes.get(dataset_id)
         if index is None:
-            index = {record.pano_id: offset for offset, record in enumerate(records)}
+            mutable_index: dict[str, list[int]] = {}
+            for offset, record in enumerate(records):
+                mutable_index.setdefault(record.pano_id, []).append(offset)
+            index = {key: tuple(offsets) for key, offsets in mutable_index.items()}
             self._record_indexes[dataset_id] = index
-        offset = index.get(str(pano_id))
-        if offset is None:
+        offsets = index.get(str(pano_id))
+        if not offsets:
             raise ValueError(f"Reference pano {pano_id} was not found in dataset {dataset_id}.")
-        return records[offset]
+        if len(offsets) == 1:
+            return records[offsets[0]]
+
+        candidates = [records[offset] for offset in offsets]
+        if capture_date is not None:
+            date_matches = [record for record in candidates if str(record.date) == str(capture_date)]
+            if date_matches:
+                candidates = date_matches
+        if len(candidates) == 1:
+            return candidates[0]
+        if lon is None or lat is None:
+            raise ValueError(
+                f"Reference pano {pano_id} is ambiguous in dataset {dataset_id}; lon and lat are required."
+            )
+
+        ranked = sorted(
+            (
+                ((record.lon - lon) ** 2 + (record.lat - lat) ** 2, record)
+                for record in candidates
+            ),
+            key=lambda item: (item[0], item[1].row_index),
+        )
+        # Ref coordinates are stored as float32, so their round-trip error is
+        # sub-metre. A ~5 m ceiling prevents a duplicate numeric ID elsewhere
+        # in the city from being accepted as the reference image.
+        if ranked[0][0] > 2.5e-9:
+            raise ValueError(
+                f"Reference pano {pano_id} has no record near ({lon}, {lat}) in dataset {dataset_id}."
+            )
+        if len(ranked) > 1 and abs(ranked[1][0] - ranked[0][0]) <= 1e-12:
+            raise ValueError(
+                f"Reference pano {pano_id} has multiple records at ({lon}, {lat}) in dataset {dataset_id}."
+            )
+        return ranked[0][1]
+
+    def _record_for_reference(self, reference: dict) -> PanoRecord:
+        lon = reference.get("lon")
+        lat = reference.get("lat")
+        return self._record_for_pano(
+            str(reference["dataset_id"]),
+            str(reference["pano_id"]),
+            lon=float(lon) if lon is not None else None,
+            lat=float(lat) if lat is not None else None,
+            capture_date=reference.get("date"),
+        )
 
     def _reference_metadata(self, reference: dict) -> dict:
-        record = self._record_for_pano(reference["dataset_id"], reference["pano_id"])
+        record = self._record_for_reference(reference)
         metadata = dict(reference)
         metadata.setdefault("lon", record.lon)
         metadata.setdefault("lat", record.lat)

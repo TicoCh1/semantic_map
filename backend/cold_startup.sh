@@ -14,18 +14,24 @@ QWEN_SOURCE_DIR="${QWEN_SOURCE_DIR:-${WORKSPACE_ROOT}/Qwen3-VL-Embedding}"
 QWEN_RUNTIME_DIR="${QWEN_RUNTIME_DIR:-/tmp/Qwen3-VL-Embedding}"
 MODEL_DIR="${MODEL_DIR:-${WORKSPACE_ROOT}/models/Qwen3-VL-Embedding-2B}"
 DATA_ROOT="${DATA_ROOT:-${WORKSPACE_ROOT}/embedding}"
-DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID:-london_224_8_45}"
-DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS:-london_224_8_45,shanghai_224_8_45_2B}"
-DEFAULT_DATASET_GROUP_ID="${DEFAULT_DATASET_GROUP_ID:-london_shanghai}"
+BACKEND_CITIES="${BACKEND_CITIES:-london,shanghai}"
+CITY_DATASET_MAP="${CITY_DATASET_MAP:-}"
+# shellcheck source=backend/city_catalog.sh
+source "${BACKEND_DIR}/city_catalog.sh"
+backend_configure_cities
 RESULT_ROOT="${RESULT_ROOT:-${WORKSPACE_ROOT}/semantic_backend/results}"
 TILE_INDEX_ROOT="${TILE_INDEX_ROOT:-${WORKSPACE_ROOT}/semantic_backend/tile_index}"
 LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
+POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
 EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-${LOG_ROOT}/query_execution}"
 EXECUTION_LOG_ENABLED="${EXECUTION_LOG_ENABLED:-true}"
 EXECUTION_LOG_FSYNC="${EXECUTION_LOG_FSYNC:-true}"
-POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
 UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-${POD_TEMP_LOG_ROOT}/uvicorn.log}"
 UVICORN_LOG_MAX_BYTES="${UVICORN_LOG_MAX_BYTES:-104857600}"
+if [[ "${EXECUTION_LOG_ROOT}" == "${WORKSPACE_ROOT}/"* ]]; then
+  echo "Remapping execution audit log from network volume ${EXECUTION_LOG_ROOT} to ${POD_TEMP_LOG_ROOT}/query_execution."
+  EXECUTION_LOG_ROOT="${POD_TEMP_LOG_ROOT}/query_execution"
+fi
 if [[ "${UVICORN_LOG_PATH}" == "${WORKSPACE_ROOT}/"* ]]; then
   UVICORN_LOG_PATH="${POD_TEMP_LOG_ROOT}/uvicorn.log"
 fi
@@ -34,13 +40,17 @@ PANO_CACHE_ROOT="${PANO_CACHE_ROOT:-${WORKSPACE_ROOT}/semantic_backend/pano_cach
 PANO_INDEX_PATH="${PANO_INDEX_PATH:-${WORKSPACE_ROOT}/semantic_backend/pano_index/pano_index.sqlite}"
 PANO_TAR_RANGES="${PANO_TAR_RANGES:-01:10002:100005,02:100006:200001,03:200002:300001,04:300002:400001,05:400002:500001,06:500002:}"
 PANO_TAR_RANGES_SHANGHAI_224_8_45_2B="${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B:-shanghai_rootless}"
+PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45:-New_York_Manhattan_chunk_0.tar,New_York_Manhattan_chunk_1.tar,New_York_Manhattan_chunk_2.tar,New_York_Manhattan_chunk_3.tar,New_York_Manhattan_chunk_4.tar}"
+PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45:-New_York_Option_A_outside_Manhattan_chunk_0.tar,New_York_Option_A_outside_Manhattan_chunk_1.tar,New_York_Option_A_outside_Manhattan_chunk_2.tar,New_York_Option_A_outside_Manhattan_chunk_3.tar,New_York_Option_A_outside_Manhattan_chunk_4.tar}"
 PORT="${PORT:-8000}"
+BACKFILL_HISTORICAL_QUERIES="${BACKFILL_HISTORICAL_QUERIES:-true}"
 
 echo "Workspace root: ${WORKSPACE_ROOT}"
 echo "Backend dir:    ${BACKEND_DIR}"
 echo "Data root:      ${DATA_ROOT}"
 echo "Dataset id:     ${DEFAULT_DATASET_ID}"
 echo "Dataset group:  ${DEFAULT_DATASET_IDS}"
+echo "Cities:         ${BACKEND_CITIES}"
 echo "Group id:       ${DEFAULT_DATASET_GROUP_ID:-<auto>}"
 
 if command -v apt-get >/dev/null 2>&1; then
@@ -53,9 +63,25 @@ if [ ! -d "${QWEN_SOURCE_DIR}" ]; then
   exit 1
 fi
 
-rm -rf "${QWEN_RUNTIME_DIR}"
-mkdir -p "$(dirname "${QWEN_RUNTIME_DIR}")"
-cp -a "${QWEN_SOURCE_DIR}" "${QWEN_RUNTIME_DIR}"
+echo "Syncing Qwen runtime from ${QWEN_SOURCE_DIR} to ${QWEN_RUNTIME_DIR}..."
+echo "The source .venv is intentionally excluded; runtime dependencies are installed below."
+RUNTIME_READY_MARKER="${QWEN_RUNTIME_DIR}/.runtime_environment_ready"
+if [ -d "${QWEN_RUNTIME_DIR}/.venv" ] && [ ! -f "${RUNTIME_READY_MARKER}" ]; then
+  echo "Removing a legacy or partially copied runtime .venv (one-time cleanup)..."
+  rm -rf -- "${QWEN_RUNTIME_DIR}/.venv"
+  echo "Legacy runtime .venv cleanup complete."
+fi
+mkdir -p "${QWEN_RUNTIME_DIR}"
+rsync \
+  --archive \
+  --delete \
+  --human-readable \
+  --info=progress2 \
+  --exclude='.venv/' \
+  --exclude='.runtime_environment_ready' \
+  "${QWEN_SOURCE_DIR}/" \
+  "${QWEN_RUNTIME_DIR}/"
+echo "Qwen runtime source sync complete."
 
 cd "${QWEN_RUNTIME_DIR}"
 
@@ -81,6 +107,7 @@ else
 fi
 
 python -m ipykernel install --user --name qwen --display-name "Python (qwen)"
+touch "${RUNTIME_READY_MARKER}"
 
 mkdir -p "${RESULT_ROOT}" "${TILE_INDEX_ROOT}" "${LOG_ROOT}" "${EXECUTION_LOG_ROOT}" "$(dirname "${UVICORN_LOG_PATH}")" "${PANO_CACHE_ROOT}" "$(dirname "${PANO_INDEX_PATH}")"
 
@@ -121,6 +148,8 @@ export BACKEND_DIR="${BACKEND_DIR}"
 export QWEN_REPO_DIR="${QWEN_RUNTIME_DIR}"
 export MODEL_DIR="${MODEL_DIR}"
 export DATA_ROOT="${DATA_ROOT}"
+export BACKEND_CITIES="${BACKEND_CITIES}"
+export CITY_DATASET_MAP="${CITY_DATASET_MAP}"
 export DEFAULT_DATASET_ID="${DEFAULT_DATASET_ID}"
 export DEFAULT_DATASET_IDS="${DEFAULT_DATASET_IDS}"
 export DEFAULT_DATASET_GROUP_ID="${DEFAULT_DATASET_GROUP_ID}"
@@ -138,6 +167,8 @@ export PANO_CACHE_ROOT="${PANO_CACHE_ROOT}"
 export PANO_INDEX_PATH="${PANO_INDEX_PATH}"
 export PANO_TAR_RANGES="${PANO_TAR_RANGES}"
 export PANO_TAR_RANGES_SHANGHAI_224_8_45_2B="${PANO_TAR_RANGES_SHANGHAI_224_8_45_2B}"
+export PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_MANHATTAN_224_8_45}"
+export PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45="${PANO_TAR_RANGES_NEW_YORK_OUTSIDE_MANHATTAN_224_8_45}"
 export PORT="${PORT}"
 export PUBLIC_BASE_URL="${PUBLIC_BASE_URL}"
 export SCORING_VERSION="${SCORING_VERSION:-text-cor-t-qwen-cred-v1}"
@@ -150,6 +181,7 @@ export DENSITY_KEEP_POINTS="${DENSITY_KEEP_POINTS:-5000}"
 export PROMPT_BATCH_WINDOW_MS="${PROMPT_BATCH_WINDOW_MS:-250}"
 export PROMPT_BATCH_MAX_SIZE="${PROMPT_BATCH_MAX_SIZE:-32}"
 export WARMUP_ON_STARTUP="${WARMUP_ON_STARTUP:-true}"
+export BACKFILL_HISTORICAL_QUERIES="${BACKFILL_HISTORICAL_QUERIES}"
 export EMBEDDING_DEVICE="${EMBEDDING_DEVICE:-cuda}"
 export TILE_ZOOMS="${TILE_ZOOMS}"
 export TEMPORARY_SCORER_ENABLED="${TEMPORARY_SCORER_ENABLED}"

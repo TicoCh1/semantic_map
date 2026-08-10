@@ -28,6 +28,7 @@ class TileCoord(BaseModel):
 class PanoReference(BaseModel):
     pano_id: str = Field(min_length=1)
     dataset_id: str = Field(min_length=1)
+    pano_dataset_id: str | None = None
     city_id: str | None = None
     lon: float | None = None
     lat: float | None = None
@@ -78,6 +79,7 @@ class ScoringResultRef(BaseModel):
     prompt_id: str
     manifest_url: str
     tile_url_template: str
+    result_revision: str | None = None
     priority_tile: TileCoord | None = None
 
 
@@ -243,6 +245,9 @@ class PanoImageResponse(BaseModel):
     pano_id: str
     status: Literal["ready", "missing", "unavailable"]
     image_url: str | None = None
+    pano_dataset_id: str | None = None
+    source_id: str | None = None
+    entry_key: str | None = None
     member_name: str | None = None
     tar_id: str | None = None
     byte_size: int | None = None

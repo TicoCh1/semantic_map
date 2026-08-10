@@ -5,7 +5,7 @@
 #   - job.json: latest persisted status/timing for every text or pano-reference job
 #   - manifest.json: query/model/dataset metadata for every computed result
 #   - scores.jsonl, if WRITE_SCORES_JSONL had been enabled
-#   - LOG_ROOT, demo alerts, the Pod-local Uvicorn/access log, and optional external logs
+#   - LOG_ROOT, demo alerts, Pod-local execution/Uvicorn logs, and optional external logs
 #   - redacted runtime configuration, retention notes, and inventories of large caches
 #
 # score.npy, zscore.npy, GeoJSON tiles and cached panorama images are NOT copied by
@@ -42,6 +42,9 @@ LOG_ROOT="${LOG_ROOT:-${WORKSPACE_ROOT}/semantic_backend/logs}"
 EXECUTION_LOG_ROOT="${EXECUTION_LOG_ROOT:-${LOG_ROOT}/query_execution}"
 POD_TEMP_LOG_ROOT="${POD_TEMP_LOG_ROOT:-${TMPDIR:-/tmp}/semantic_backend/logs}"
 UVICORN_LOG_PATH="${UVICORN_LOG_PATH:-${POD_TEMP_LOG_ROOT}/uvicorn.log}"
+if [[ "${EXECUTION_LOG_ROOT}" == "${WORKSPACE_ROOT}/"* ]]; then
+  EXECUTION_LOG_ROOT="${POD_TEMP_LOG_ROOT}/query_execution"
+fi
 if [[ "${UVICORN_LOG_PATH}" == "${WORKSPACE_ROOT}/"* ]]; then
   UVICORN_LOG_PATH="${POD_TEMP_LOG_ROOT}/uvicorn.log"
 fi

@@ -155,7 +155,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
 
 function panoKey(pano: MarkedPano): string {
   if (pano.pano_key) return pano.pano_key;
-  const scope = pano.dataset_id || pano.city_id || "default";
+  const scope = pano.pano_dataset_id || pano.dataset_id || pano.city_id || "default";
   return `${scope}:${pano.pano_id}`;
 }
 
@@ -250,6 +250,7 @@ function panoReferenceFromMarkedPano(pano: MarkedPano): PanoReference {
   return {
     pano_id: pano.pano_id,
     dataset_id: String(pano.dataset_id || pano.city_id || "").trim(),
+    pano_dataset_id: pano.pano_dataset_id ?? null,
     city_id: pano.city_id ?? null,
     lon: typeof pano.lon === "number" && Number.isFinite(pano.lon) ? pano.lon : null,
     lat: typeof pano.lat === "number" && Number.isFinite(pano.lat) ? pano.lat : null,

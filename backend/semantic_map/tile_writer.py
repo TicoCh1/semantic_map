@@ -65,6 +65,7 @@ def write_prompt_result(
                 dataset_id=result.dataset_id,
                 reference_dataset_id=reference_dataset_id,
                 reference_pano_id=reference_pano_id,
+                reference_pano_dataset_id=str(result.reference_pano.get("pano_dataset_id") or "") or None,
                 model_version=settings.model_version,
                 scoring_version=result.scoring_version or settings.scoring_version,
                 tile_index_version=settings.tile_index_version,
@@ -112,10 +113,9 @@ def write_prompt_result(
             result_revision=result_revision,
             created_at=utc_now(),
         )
-        storage.write_json(
-            storage.manifest_path(result.dataset_id, result.prompt_id, result_revision),
-            manifest.model_dump(),
-        )
+        manifest_payload = manifest.model_dump()
+        manifest_path = storage.manifest_path(result.dataset_id, result.prompt_id, result_revision)
+        storage.write_json(manifest_path, manifest_payload)
         if result_revision:
             storage.validate_result_revision(
                 result.dataset_id,
@@ -125,6 +125,13 @@ def write_prompt_result(
                 required_tiles=write_queue,
             )
             storage.activate_result_revision(result.dataset_id, result.prompt_id, result_revision)
+        storage.upsert_prompt_result(
+            dataset_id=result.dataset_id,
+            prompt_id=result.prompt_id,
+            payload=manifest_payload,
+            manifest_path=manifest_path,
+            persist=False,
+        )
         return manifest
     except Exception:
         if result_revision:
