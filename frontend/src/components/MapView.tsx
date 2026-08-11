@@ -218,12 +218,13 @@ export const MapView = memo(function MapView({
           <span>Semantic Map</span>
           <strong>{title}</strong>
         </div>
-        <div className="mobile-city-switch" aria-label="City">
+        <div className="mobile-city-switch" aria-label="Available cities" role="group">
           {cities.map((city) => (
             <button
               key={city.id}
               type="button"
               className={city.id === mobileCityId ? "is-active" : ""}
+              aria-pressed={city.id === mobileCityId}
               onClick={() => setMobileCityId(city.id)}
             >
               {city.name}

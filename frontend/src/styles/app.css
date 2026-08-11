@@ -2823,7 +2823,10 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
   }
 
   .mobile-city-switch {
-    display: inline-flex;
+    display: flex;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
     align-items: center;
     gap: 3px;
     min-height: 34px;
@@ -2833,9 +2836,18 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     background: rgba(255, 255, 255, 0.94);
     box-shadow: 0 6px 18px rgba(17, 24, 39, 0.16);
     pointer-events: auto;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    touch-action: pan-x;
+  }
+
+  .mobile-city-switch::-webkit-scrollbar {
+    display: none;
   }
 
   .mobile-city-switch button {
+    flex: 0 0 auto;
     min-width: 72px;
     height: 28px;
     padding: 0 10px;
