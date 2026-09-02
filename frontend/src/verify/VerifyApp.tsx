@@ -1,4 +1,4 @@
-import { Download, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
+import { Download, LoaderCircle, RefreshCw, RotateCcw, Settings } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { getRemoteBackendConfig, isUsableRemoteBackendUrl, loadPanoImage, saveRemoteBackendConfig } from "../api/client";
 import type { RemoteBackendConfig } from "../api/types";
@@ -15,6 +15,7 @@ const PREFETCH_COUNT = 5;
 const FRESH_TASKS_PER_PROMPT = 20;
 const SAMPLES_PER_BUCKET_PER_DATASET = 1;
 const PROGRESS_PAGE_SIZE = 100;
+const PROMPT_EMPHASIS_MS = 1200;
 
 type CachedPano = {
   status: "loading" | "ready" | "failed";
@@ -38,6 +39,8 @@ export function VerifyApp() {
   const [error, setError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [counterPulse, setCounterPulse] = useState(0);
+  const [promptEmphasis, setPromptEmphasis] = useState<number | null>(null);
+  const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [, setCacheVersion] = useState(0);
   const raterId = useMemo(localRaterId, []);
   const autoStartedRef = useRef(false);
@@ -46,6 +49,8 @@ export function VerifyApp() {
   const panoRequestsRef = useRef<Map<string, Promise<void>>>(new Map());
   const backendConfigRef = useRef<RemoteBackendConfig | null>(null);
   const loadingNextPromptRef = useRef(false);
+  const lastPromptRef = useRef<string | null>(null);
+  const promptNoticeKeyRef = useRef(0);
 
   const requestStudy = useCallback(async (config: RemoteBackendConfig, excludePrompts: string[]) => {
     const response = await fetch(`${config.baseUrl}/api/verification/sample`, {
@@ -94,6 +99,8 @@ export function VerifyApp() {
       setRatings({});
       setCurrentIndex(0);
       setCounterPulse(0);
+      setPromptEmphasis(null);
+      lastPromptRef.current = null;
       setBackendUrl(savedConfig.baseUrl);
       syncQuery(savedConfig.baseUrl);
     } catch (loadError) {
@@ -186,6 +193,20 @@ export function VerifyApp() {
     Math.ceil(ratedCount / PROGRESS_PAGE_SIZE) * PROGRESS_PAGE_SIZE
   );
 
+  useEffect(() => {
+    const nextPrompt = currentTask?.prompt;
+    if (!nextPrompt) return;
+
+    const previousPrompt = lastPromptRef.current;
+    lastPromptRef.current = nextPrompt;
+    if (!previousPrompt || previousPrompt === nextPrompt) return;
+
+    promptNoticeKeyRef.current += 1;
+    setPromptEmphasis(promptNoticeKeyRef.current);
+    const timeout = window.setTimeout(() => setPromptEmphasis(null), PROMPT_EMPHASIS_MS);
+    return () => window.clearTimeout(timeout);
+  }, [currentTask?.prompt]);
+
   const syncRating = useCallback(async (record: HumanRatingRecord) => {
     const config = backendConfigRef.current ?? await getRemoteBackendConfig();
     const response = await fetch(`${config.baseUrl}/api/verification/ratings`, {
@@ -259,6 +280,7 @@ export function VerifyApp() {
 
   function submitSetup(event: FormEvent) {
     event.preventDefault();
+    setMobileSettingsOpen(false);
     void connectAndLoad();
   }
 
@@ -300,7 +322,14 @@ export function VerifyApp() {
           <span>UrbanFabric</span>
           <strong>Human Verify</strong>
         </div>
-        <form className="verify-backend-control" onSubmit={submitSetup}>
+        <div
+          key={promptEmphasis ?? "steady-mobile-prompt"}
+          className={`verify-mobile-prompt-block verify-prompt-block${promptEmphasis ? " verify-prompt-block-changed" : ""}`}
+        >
+          <span>Rate this statement</span>
+          <h1>{currentTask?.prompt}</h1>
+        </div>
+        <form className={`verify-backend-control${mobileSettingsOpen ? " is-open" : ""}`} onSubmit={submitSetup}>
           <label htmlFor="verify-backend-url">RunPod</label>
           <input id="verify-backend-url" value={backendUrl} onChange={(event) => setBackendUrl(event.target.value)} />
           <button type="submit" title="Start a new verification session" aria-label="Start a new verification session" disabled={loadingStudy || loadingNextPrompt}>
@@ -312,6 +341,16 @@ export function VerifyApp() {
           <strong>{ratedCount}<small> / {progressTarget}</small></strong>
           {counterPulse ? <i key={counterPulse} className="verify-progress-plus-one" aria-hidden="true">+1</i> : null}
         </div>
+        <button
+          className="verify-mobile-settings-button"
+          type="button"
+          title="Edit RunPod URL"
+          aria-label="Edit RunPod URL"
+          aria-expanded={mobileSettingsOpen}
+          onClick={() => setMobileSettingsOpen((open) => !open)}
+        >
+          <Settings size={18} />
+        </button>
         <button className="verify-export-button" type="button" onClick={() => exportRatingsCsv(sessionId, ratings)} disabled={!ratedCount}>
           <Download size={17} />
           Export results
@@ -353,7 +392,10 @@ export function VerifyApp() {
 
       {currentTask ? (
         <section className="verify-rating-panel">
-          <div className="verify-prompt-block">
+          <div
+            key={promptEmphasis ?? "steady-prompt"}
+            className={`verify-prompt-block${promptEmphasis ? " verify-prompt-block-changed" : ""}`}
+          >
             <span>Rate this statement</span>
             <h1>{currentTask.prompt}</h1>
           </div>
@@ -372,8 +414,8 @@ export function VerifyApp() {
               ))}
             </div>
             <div className="verify-scale-guide" aria-hidden="true">
-              <span>Image and description are not related</span>
-              <span>Image and description are highly related</span>
+              <span>Image and description are <strong>NOT</strong> related</span>
+              <span>Image and description are <strong>HIGHLY</strong> related</span>
             </div>
           </div>
         </section>
