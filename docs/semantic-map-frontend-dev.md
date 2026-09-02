@@ -51,6 +51,7 @@ npm.cmd run build:pages
 Deployment assumptions:
 
 - GitHub Pages can serve the project from `/docs/index.html` with `.nojekyll` and generated assets under `docs/assets/`.
+- The normal `build:pages` command remains unchanged and builds only the existing map frontend. Build the isolated human-rating interface separately with `npm.cmd exec vite -- build --config vite.verify.config.mjs --configLoader runner --outDir ../../docs/verify --emptyOutDir true`; GitHub Pages then serves it under the repository URL's `/verify/` path.
 - `runtime-config.js` is loaded as a normal static script and can provide defaults, but the URL query string can override the backend at runtime.
 - `?backend=https://POD-8000.proxy.runpod.net` selects the RunPod backend for that browser session. Bare RunPod proxy hosts are normalized to HTTPS by the frontend.
 - When no backend is configured, the default exhibit layers use real static fallback tiles hosted by the older `TicoCh1/semanticmapdemo` GitHub Pages deployment instead of copying the dataset into this repository.
@@ -288,6 +289,20 @@ Important colour rule:
 - Gradient stop positions are absolute inside the selected score range.
 - If stops are `0`, `0.1`, and `0.2`, the final stop colour applies from 20 percent of the selected score range through the right boundary.
 - Map rendering and gradient preview must match this rule.
+
+## Human Verification
+
+Human verification is isolated in the independent `/verify/` page and does not add controls or behavior to the existing map frontend. The rater never authors or selects a prompt: the backend randomly chooses one prompt that already has completed score arrays, and the page displays that statement for human judgement.
+
+Current behavior:
+
+- Reuses `loadPanoImage()` and the existing Photo Sphere Viewer configuration, so raters inspect the original interactive 360-degree panorama rather than model projections.
+- Requests `POST /api/verification/sample` without prompt text and keeps a rolling five-task panorama prefetch window. A 1-5 rating is written to local storage and advances immediately to the next unrated task; number keys 1-5 are shortcuts.
+- Samples saved `zscore` results using equal allocation across five fixed-width model-score strata. The nominal span `[-1, 3]` gives internal cut points `-0.2`, `0.6`, `1.4`, and `2.2`. The edge strata are open-ended: values below `-1` remain in stratum 1 and values above `3` remain in stratum 5.
+- Defaults to five samples per stratum per dataset and a backend-generated random seed. Sampling is random within each dataset/stratum, so this is disproportionate stratified random sampling rather than a population-representative sample.
+- Stores a local browser backup and immediately submits each rating to the backend's idempotent SQLite store. Local CSV export remains available if a network request fails.
+- Requires a reachable RunPod backend for the sample manifest and panorama bytes, but the sampling endpoint itself is CPU-only and never loads the semantic model or performs scoring.
+- A shareable GitHub Pages URL uses the existing query field: `/verify/?backend=https%3A%2F%2FPOD-8000.proxy.runpod.net`.
 
 ## Gradient And Point Style
 

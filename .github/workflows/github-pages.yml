@@ -38,6 +38,10 @@ jobs:
         working-directory: frontend
         run: npm run build:pages
 
+      - name: Build human verification frontend
+        working-directory: frontend
+        run: npm exec vite -- build --config vite.verify.config.mjs --configLoader runner --outDir ../../docs/verify --emptyOutDir true
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
 

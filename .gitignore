@@ -6,6 +6,8 @@ docs/*
 !docs/runtime-config.js
 !docs/assets/
 !docs/assets/**
+!docs/verify/
+!docs/verify/**
 
 # Python
 .venv/
