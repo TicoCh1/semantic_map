@@ -1,7 +1,9 @@
 from backend.semantic_map.human_verification import (
+    CompletedPrompt,
     HUMAN_VERIFY_BUCKET_WIDTH,
     human_verify_bucket,
     human_verify_bucket_bounds,
+    select_completed_prompt,
 )
 
 
@@ -27,3 +29,22 @@ def test_human_verify_bucket_boundaries_and_open_tails_are_stable() -> None:
     assert human_verify_bucket(3.0) == 5
     assert human_verify_bucket(3.0001) == 5
     assert human_verify_bucket(100.0) == 5
+
+
+def test_prompt_selection_excludes_the_previous_prompt() -> None:
+    prompts = (
+        CompletedPrompt(prompt="first prompt", results=()),
+        CompletedPrompt(prompt="second prompt", results=()),
+    )
+    selected = select_completed_prompt(prompts, 42, [" First   Prompt "])
+    assert selected.prompt == "second prompt"
+
+
+def test_prompt_selection_fails_when_no_alternative_is_available() -> None:
+    prompts = (CompletedPrompt(prompt="only prompt", results=()),)
+    try:
+        select_completed_prompt(prompts, 42, ["only prompt"])
+    except LookupError as exc:
+        assert "No alternative" in str(exc)
+    else:
+        raise AssertionError("Expected prompt selection to require an alternative prompt")

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import hashlib
 import io
 import json
 import sqlite3
@@ -76,7 +77,13 @@ class HumanVerificationStorage:
                 ],
             )
 
-    def record_ratings(self, batch: HumanVerificationRatingBatch) -> HumanVerificationRatingIngestResponse:
+    def record_ratings(
+        self,
+        batch: HumanVerificationRatingBatch,
+        *,
+        client_ip: str | None = None,
+        user_agent: str | None = None,
+    ) -> HumanVerificationRatingIngestResponse:
         received_at = utc_now()
         with self._lock, closing(self._connect()) as connection, connection:
             for rating in batch.ratings:
@@ -85,17 +92,47 @@ class HumanVerificationStorage:
                     (rating.study_id, rating.task_id),
                 ).fetchone()
                 if task_exists is None:
-                    raise LookupError(f"Unknown verification task {rating.study_id}/{rating.task_id}")
+                    if not rating.source_task_id:
+                        raise LookupError(f"Unknown verification task {rating.study_id}/{rating.task_id}")
+                    inserted = connection.execute(
+                        """
+                        INSERT OR IGNORE INTO verification_tasks (
+                            study_id, task_id, task_order, dataset_id, city_id, pano_id, lon, lat,
+                            capture_date, prompt_id, result_revision, score, zscore, ai_bucket,
+                            bucket_min, bucket_max, stratum_population, stratum_sample_count
+                        )
+                        SELECT
+                            study_id, ?, task_order, dataset_id, city_id, pano_id, lon, lat,
+                            capture_date, prompt_id, result_revision, score, zscore, ai_bucket,
+                            bucket_min, bucket_max, stratum_population, stratum_sample_count
+                        FROM verification_tasks
+                        WHERE study_id = ? AND task_id = ?
+                        """,
+                        (
+                            rating.task_id,
+                            rating.study_id,
+                            rating.source_task_id,
+                        ),
+                    )
+                    if inserted.rowcount != 1:
+                        raise LookupError(
+                            f"Unknown encore source task {rating.study_id}/{rating.source_task_id}"
+                        )
+                visitor_label = verification_visitor_label(rating.rater_id, user_agent)
                 connection.execute(
                     """
                     INSERT INTO verification_ratings (
-                        study_id, task_id, rater_id, human_rating, elapsed_ms, rated_at, received_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                        study_id, task_id, rater_id, human_rating, elapsed_ms, rated_at, received_at,
+                        client_ip, visitor_label, user_agent
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(study_id, task_id, rater_id) DO UPDATE SET
                         human_rating = excluded.human_rating,
                         elapsed_ms = excluded.elapsed_ms,
                         rated_at = excluded.rated_at,
-                        received_at = excluded.received_at
+                        received_at = excluded.received_at,
+                        client_ip = excluded.client_ip,
+                        visitor_label = excluded.visitor_label,
+                        user_agent = excluded.user_agent
                     """,
                     (
                         rating.study_id,
@@ -105,6 +142,9 @@ class HumanVerificationStorage:
                         rating.elapsed_ms,
                         rating.rated_at,
                         received_at,
+                        client_ip,
+                        visitor_label,
+                        user_agent,
                     ),
                 )
             stats = self._stats(connection)
@@ -118,6 +158,9 @@ class HumanVerificationStorage:
         columns = (
             "study_id",
             "rater_id",
+            "visitor_label",
+            "client_ip",
+            "user_agent",
             "task_id",
             "task_order",
             "dataset_group_id",
@@ -144,7 +187,8 @@ class HumanVerificationStorage:
         )
         query = """
             SELECT
-                ratings.study_id, ratings.rater_id, ratings.task_id, tasks.task_order,
+                ratings.study_id, ratings.rater_id, ratings.visitor_label, ratings.client_ip,
+                ratings.user_agent, ratings.task_id, tasks.task_order,
                 studies.dataset_group_id, tasks.dataset_id, tasks.city_id, tasks.pano_id,
                 tasks.lon, tasks.lat, tasks.capture_date, tasks.prompt_id, studies.prompt,
                 tasks.score, tasks.zscore, tasks.ai_bucket, tasks.bucket_min, tasks.bucket_max,
@@ -270,7 +314,27 @@ class HumanVerificationStorage:
                 ON verification_tasks(prompt_id);
             """
         )
+        rating_columns = {
+            "client_ip": "TEXT",
+            "visitor_label": "TEXT",
+            "user_agent": "TEXT",
+        }
+        existing_columns = {
+            str(row[1]) for row in connection.execute("PRAGMA table_info(verification_ratings)")
+        }
+        for name, declaration in rating_columns.items():
+            if name not in existing_columns:
+                connection.execute(f"ALTER TABLE verification_ratings ADD COLUMN {name} {declaration}")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS verification_ratings_visitor ON verification_ratings(visitor_label)"
+        )
 
 
 def utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def verification_visitor_label(rater_id: str, user_agent: str | None) -> str:
+    raw = f"{rater_id}\x1f{user_agent or ''}"
+    digest = hashlib.blake2b(raw.encode("utf-8"), digest_size=6).hexdigest()
+    return f"visitor-{digest}"

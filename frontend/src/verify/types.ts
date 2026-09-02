@@ -45,10 +45,21 @@ export type HumanVerificationStudy = {
   strata: HumanVerificationStratum[];
 };
 
-export type HumanRatingRecord = HumanVerificationTask & {
+export type HumanVerificationPresentation = HumanVerificationTask & {
+  source_task_id: string;
   study_id: string;
   prompt: string;
   dataset_group_id?: string | null;
+  sequence_number: number;
+  is_encore: boolean;
+};
+
+export type HumanRatingRecord = HumanVerificationTask & {
+  source_task_id?: string;
+  study_id: string;
+  prompt: string;
+  dataset_group_id?: string | null;
+  session_id: string;
   rater_id: string;
   task_order: number;
   human_rating: 1 | 2 | 3 | 4 | 5;

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
@@ -99,9 +99,16 @@ def create_sample(payload: HumanVerificationSampleRequest) -> HumanVerificationS
 
 
 @app.post("/api/verification/ratings", response_model=HumanVerificationRatingIngestResponse)
-def submit_ratings(payload: HumanVerificationRatingBatch) -> HumanVerificationRatingIngestResponse:
+def submit_ratings(
+    payload: HumanVerificationRatingBatch,
+    request: Request,
+) -> HumanVerificationRatingIngestResponse:
     try:
-        return rating_storage.record_ratings(payload)
+        return rating_storage.record_ratings(
+            payload,
+            client_ip=verification_client_ip(request),
+            user_agent=(request.headers.get("user-agent") or "")[:512] or None,
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
 
@@ -239,3 +246,11 @@ def pano_index_is_warming(dataset_id: str | None) -> bool:
 
 def media_type_for_image(path) -> str:
     return "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+
+
+def verification_client_ip(request: Request) -> str | None:
+    for header in ("cf-connecting-ip", "x-forwarded-for", "x-real-ip"):
+        value = (request.headers.get(header) or "").strip()
+        if value:
+            return value.split(",", 1)[0].strip()[:128] or None
+    return request.client.host[:128] if request.client and request.client.host else None

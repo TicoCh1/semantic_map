@@ -9,6 +9,7 @@ class HumanVerificationSampleRequest(BaseModel):
     dataset_ids: list[str] | None = Field(default=None, min_length=1, max_length=8)
     samples_per_bucket_per_dataset: int = Field(default=5, ge=1, le=100)
     seed: int | None = None
+    exclude_prompts: list[str] = Field(default_factory=list, max_length=100)
 
 
 class HumanVerificationTask(BaseModel):
@@ -61,6 +62,7 @@ class HumanVerificationStudy(BaseModel):
 class HumanVerificationRatingSubmission(BaseModel):
     study_id: str = Field(min_length=1, max_length=160)
     task_id: str = Field(min_length=1, max_length=160)
+    source_task_id: str | None = Field(default=None, min_length=1, max_length=160)
     rater_id: str = Field(min_length=1, max_length=160)
     human_rating: int = Field(ge=1, le=5)
     elapsed_ms: int = Field(default=0, ge=0, le=86_400_000)

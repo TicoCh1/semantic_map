@@ -67,7 +67,7 @@ class HumanVerificationSampler:
         completed_prompts = self._completed_prompts(requested_dataset_ids)
         if not completed_prompts:
             raise LookupError("No completed prompt results are available in the configured datasets")
-        selected_prompt = random.Random(f"{seed}:prompt-selection").choice(completed_prompts)
+        selected_prompt = select_completed_prompt(completed_prompts, seed, request.exclude_prompts)
         prompt = selected_prompt.prompt
         selected_dataset_ids = tuple(result.dataset_id for result in selected_prompt.results)
 
@@ -227,7 +227,7 @@ class HumanVerificationSampler:
                 results=tuple(results[dataset_id] for dataset_id in requested_dataset_ids if dataset_id in results),
             )
             for prompt, results in sorted(results_by_prompt.items())
-            if results
+            if requested.issubset(results)
         )
         self._completed_prompts_cache[requested_dataset_ids] = completed
         return completed
@@ -239,6 +239,18 @@ def human_verify_bucket(zscore: float) -> int:
         for index in range(1, HUMAN_VERIFY_BUCKET_COUNT)
     )
     return bisect_right(cutpoints, zscore) + 1
+
+
+def select_completed_prompt(
+    completed_prompts: tuple[CompletedPrompt, ...],
+    seed: int,
+    exclude_prompts: list[str],
+) -> CompletedPrompt:
+    excluded = {normalized for prompt in exclude_prompts if (normalized := normalize_prompt(prompt))}
+    selectable = tuple(prompt for prompt in completed_prompts if prompt.prompt not in excluded)
+    if not selectable:
+        raise LookupError("No alternative completed prompt is available in the configured datasets")
+    return random.Random(f"{seed}:prompt-selection").choice(selectable)
 
 
 def human_verify_bucket_bounds(bucket: int) -> tuple[float | None, float | None]:

@@ -1,7 +1,7 @@
-import type { HumanRatingRecord, HumanVerificationStudy } from "./types";
+import type { HumanRatingRecord } from "./types";
 
 const RATER_KEY = "urbanfabric-human-verify-rater-v1";
-const RESPONSE_KEY_PREFIX = "urbanfabric-human-verify-responses-v1";
+const RESPONSE_KEY_PREFIX = "urbanfabric-human-verify-responses-v2";
 
 export function localRaterId(): string {
   const existing = window.localStorage.getItem(RATER_KEY)?.trim();
@@ -13,21 +13,28 @@ export function localRaterId(): string {
   return generated;
 }
 
-export function loadRatings(studyId: string): Record<string, HumanRatingRecord> {
+export function newVerificationSessionId(): string {
+  return typeof crypto.randomUUID === "function"
+    ? `session-${crypto.randomUUID()}`
+    : `session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+export function loadRatings(sessionId: string): Record<string, HumanRatingRecord> {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(responseKey(studyId)) || "{}") as Record<string, HumanRatingRecord>;
+    const parsed = JSON.parse(window.localStorage.getItem(responseKey(sessionId)) || "{}") as Record<string, HumanRatingRecord>;
     return parsed && typeof parsed === "object" ? parsed : {};
   } catch {
     return {};
   }
 }
 
-export function saveRatings(studyId: string, ratings: Record<string, HumanRatingRecord>): void {
-  window.localStorage.setItem(responseKey(studyId), JSON.stringify(ratings));
+export function saveRatings(sessionId: string, ratings: Record<string, HumanRatingRecord>): void {
+  window.localStorage.setItem(responseKey(sessionId), JSON.stringify(ratings));
 }
 
-export function exportRatingsCsv(study: HumanVerificationStudy, ratings: Record<string, HumanRatingRecord>): void {
+export function exportRatingsCsv(sessionId: string, ratings: Record<string, HumanRatingRecord>): void {
   const columns: Array<keyof HumanRatingRecord> = [
+    "session_id",
     "study_id",
     "rater_id",
     "task_id",
@@ -53,8 +60,7 @@ export function exportRatingsCsv(study: HumanVerificationStudy, ratings: Record<
     "rated_at",
     "result_revision"
   ];
-  const order = new Map(study.tasks.map((task, index) => [task.task_id, index]));
-  const rows = Object.values(ratings).sort((a, b) => (order.get(a.task_id) ?? 0) - (order.get(b.task_id) ?? 0));
+  const rows = Object.values(ratings).sort((a, b) => a.task_order - b.task_order);
   const csv = [
     columns.join(","),
     ...rows.map((row) => columns.map((column) => csvCell(row[column])).join(","))
@@ -63,15 +69,15 @@ export function exportRatingsCsv(study: HumanVerificationStudy, ratings: Record<
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `${safeFilename(study.study_id)}-${new Date().toISOString().slice(0, 10)}.csv`;
+  anchor.download = `human-verify-${safeFilename(sessionId)}-${new Date().toISOString().slice(0, 10)}.csv`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   URL.revokeObjectURL(url);
 }
 
-function responseKey(studyId: string): string {
-  return `${RESPONSE_KEY_PREFIX}:${studyId}`;
+function responseKey(sessionId: string): string {
+  return `${RESPONSE_KEY_PREFIX}:${sessionId}`;
 }
 
 function csvCell(value: unknown): string {
