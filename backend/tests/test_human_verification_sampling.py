@@ -48,3 +48,69 @@ def test_prompt_selection_fails_when_no_alternative_is_available() -> None:
         assert "No alternative" in str(exc)
     else:
         raise AssertionError("Expected prompt selection to require an alternative prompt")
+
+
+def test_prompt_selection_prioritizes_rated_prompts_below_one_hundred() -> None:
+    prompts = (
+        CompletedPrompt(prompt="in progress", results=()),
+        CompletedPrompt(prompt="unrated", results=()),
+        CompletedPrompt(prompt="over target", results=()),
+    )
+
+    selected = select_completed_prompt(
+        prompts,
+        42,
+        [],
+        {"in progress": 99, "over target": 100},
+    )
+
+    assert selected.prompt == "in progress"
+
+
+def test_prompt_selection_uses_unrated_prompts_when_none_are_in_progress() -> None:
+    prompts = (
+        CompletedPrompt(prompt="unrated", results=()),
+        CompletedPrompt(prompt="rated", results=()),
+    )
+
+    selected = select_completed_prompt(prompts, 42, [], {"rated": 100})
+
+    assert selected.prompt == "unrated"
+
+
+def test_prompt_selection_uses_the_lowest_hundred_rating_tier_at_or_over_one_hundred() -> None:
+    prompts = (
+        CompletedPrompt(prompt="one hundred one", results=()),
+        CompletedPrompt(prompt="one hundred twenty one", results=()),
+        CompletedPrompt(prompt="two hundred one", results=()),
+    )
+
+    selected = select_completed_prompt(
+        prompts,
+        42,
+        [],
+        {
+            "one hundred one": 101,
+            "one hundred twenty one": 121,
+            "two hundred one": 201,
+        },
+    )
+
+    assert selected.prompt in {"one hundred one", "one hundred twenty one"}
+
+
+def test_prompt_selection_applies_exclusions_before_completion_priority() -> None:
+    prompts = (
+        CompletedPrompt(prompt="in progress", results=()),
+        CompletedPrompt(prompt="unrated", results=()),
+        CompletedPrompt(prompt="over target", results=()),
+    )
+
+    selected = select_completed_prompt(
+        prompts,
+        42,
+        [" IN   PROGRESS "],
+        {"in progress": 50, "over target": 100},
+    )
+
+    assert selected.prompt == "unrated"

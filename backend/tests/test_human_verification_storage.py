@@ -81,6 +81,7 @@ class HumanVerificationStorageTests(unittest.TestCase):
             self.assertTrue(rows[0]["visitor_label"].startswith("visitor-"))
             self.assertEqual(storage.stats().total_ratings, 2)
             self.assertEqual(storage.stats().total_raters, 1)
+            self.assertEqual(storage.prompt_completion_counts(), {"a test prompt": 2})
 
 
 if __name__ == "__main__":

@@ -154,6 +154,22 @@ class HumanVerificationStorage:
         with self._lock, closing(self._connect()) as connection, connection:
             return self._stats(connection)
 
+    def prompt_completion_counts(self) -> dict[str, int]:
+        """Return persisted rating rows per canonical prompt, including encores."""
+
+        with self._lock, closing(self._connect()) as connection, connection:
+            return {
+                str(prompt): int(count)
+                for prompt, count in connection.execute(
+                    """
+                    SELECT studies.prompt, COUNT(*)
+                    FROM verification_ratings AS ratings
+                    JOIN verification_studies AS studies ON studies.study_id = ratings.study_id
+                    GROUP BY studies.prompt
+                    """
+                )
+            }
+
     def export_csv(self) -> str:
         columns = (
             "study_id",

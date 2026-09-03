@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import random
 from bisect import bisect_right
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from math import isfinite
 from pathlib import Path
@@ -53,9 +54,16 @@ class CompletedPrompt:
 class HumanVerificationSampler:
     """Build deterministic, CPU-only human-verification samples from saved results."""
 
-    def __init__(self, settings: BackendSettings, storage: ResultStorage) -> None:
+    def __init__(
+        self,
+        settings: BackendSettings,
+        storage: ResultStorage,
+        *,
+        prompt_completion_counts: Callable[[], Mapping[str, int]] | None = None,
+    ) -> None:
         self.settings = settings
         self.storage = storage
+        self._prompt_completion_counts = prompt_completion_counts or (lambda: {})
         self._records_by_dataset: dict[str, tuple[PanoRecord, ...]] = {}
         self._completed_prompts_cache: dict[tuple[str, ...], tuple[CompletedPrompt, ...]] = {}
 
@@ -67,7 +75,12 @@ class HumanVerificationSampler:
         completed_prompts = self._completed_prompts(requested_dataset_ids)
         if not completed_prompts:
             raise LookupError("No completed prompt results are available in the configured datasets")
-        selected_prompt = select_completed_prompt(completed_prompts, seed, request.exclude_prompts)
+        selected_prompt = select_completed_prompt(
+            completed_prompts,
+            seed,
+            request.exclude_prompts,
+            self._prompt_completion_counts(),
+        )
         prompt = selected_prompt.prompt
         selected_dataset_ids = tuple(result.dataset_id for result in selected_prompt.results)
 
@@ -245,12 +258,38 @@ def select_completed_prompt(
     completed_prompts: tuple[CompletedPrompt, ...],
     seed: int,
     exclude_prompts: list[str],
+    prompt_completion_counts: Mapping[str, int] | None = None,
 ) -> CompletedPrompt:
     excluded = {normalized for prompt in exclude_prompts if (normalized := normalize_prompt(prompt))}
     selectable = tuple(prompt for prompt in completed_prompts if prompt.prompt not in excluded)
     if not selectable:
         raise LookupError("No alternative completed prompt is available in the configured datasets")
-    return random.Random(f"{seed}:prompt-selection").choice(selectable)
+
+    normalized_counts = {
+        normalized: max(0, int(count))
+        for prompt, count in (prompt_completion_counts or {}).items()
+        if (normalized := normalize_prompt(prompt))
+    }
+    candidates_with_counts = tuple(
+        (prompt, normalized_counts.get(prompt.prompt, 0))
+        for prompt in selectable
+    )
+
+    # Keep partially rated prompts moving toward a useful sample size before
+    # opening untouched prompts. Once every prompt has reached 100 ratings,
+    # rebalance in 100-rating tiers: 100-199, then 200-299, and so on.
+    priority_pool = tuple(
+        prompt for prompt, count in candidates_with_counts if 1 <= count < 100
+    )
+    if not priority_pool:
+        priority_pool = tuple(prompt for prompt, count in candidates_with_counts if count == 0)
+    if not priority_pool:
+        minimum_tier = min(count // 100 for _prompt, count in candidates_with_counts)
+        priority_pool = tuple(
+            prompt for prompt, count in candidates_with_counts if count // 100 == minimum_tier
+        )
+
+    return random.Random(f"{seed}:prompt-selection").choice(priority_pool)
 
 
 def human_verify_bucket_bounds(bucket: int) -> tuple[float | None, float | None]:

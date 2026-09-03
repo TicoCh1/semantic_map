@@ -24,8 +24,12 @@ from .result_storage import ResultStorage
 
 settings = get_backend_settings()
 result_storage = ResultStorage(settings)
-sampler = HumanVerificationSampler(settings, result_storage)
 rating_storage = HumanVerificationStorage(settings.result_root / "human_verification" / "ratings.sqlite3")
+sampler = HumanVerificationSampler(
+    settings,
+    result_storage,
+    prompt_completion_counts=rating_storage.prompt_completion_counts,
+)
 pano_registry = PanoServiceRegistry(settings)
 pano_warmup_task: asyncio.Task[None] | None = None
 
