@@ -1,5 +1,5 @@
 import { Download, LoaderCircle, RefreshCw, RotateCcw, Settings } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
 import { getRemoteBackendConfig, isUsableRemoteBackendUrl, loadPanoImage, saveRemoteBackendConfig } from "../api/client";
 import type { RemoteBackendConfig } from "../api/types";
 import { PanoramaViewer } from "../components/PanoramaViewer";
@@ -15,7 +15,9 @@ const PREFETCH_COUNT = 5;
 const FRESH_TASKS_PER_PROMPT = 20;
 const SAMPLES_PER_BUCKET_PER_DATASET = 1;
 const PROGRESS_PAGE_SIZE = 100;
+const MAX_ENCORES_PER_PROMPT = 5;
 const PROMPT_EMPHASIS_MS = 1200;
+const MILESTONE_ANIMATION_MS = 2200;
 
 type CachedPano = {
   status: "loading" | "ready" | "failed";
@@ -25,6 +27,11 @@ type CachedPano = {
 
 function initialParam(name: string): string {
   return new URLSearchParams(window.location.search).get(name)?.trim() || "";
+}
+
+function initialMilestonePreview(): number | null {
+  const value = Number.parseInt(initialParam("previewMilestone"), 10);
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export function VerifyApp() {
@@ -40,6 +47,7 @@ export function VerifyApp() {
   const [syncError, setSyncError] = useState<string | null>(null);
   const [counterPulse, setCounterPulse] = useState(0);
   const [promptEmphasis, setPromptEmphasis] = useState<number | null>(null);
+  const [milestoneNotice, setMilestoneNotice] = useState<number | null>(initialMilestonePreview);
   const [mobileSettingsOpen, setMobileSettingsOpen] = useState(false);
   const [, setCacheVersion] = useState(0);
   const raterId = useMemo(localRaterId, []);
@@ -51,6 +59,7 @@ export function VerifyApp() {
   const loadingNextPromptRef = useRef(false);
   const lastPromptRef = useRef<string | null>(null);
   const promptNoticeKeyRef = useRef(0);
+  const milestoneActiveRef = useRef(milestoneNotice !== null);
 
   const requestStudy = useCallback(async (config: RemoteBackendConfig, excludePrompts: string[]) => {
     const response = await fetch(`${config.baseUrl}/api/verification/sample`, {
@@ -100,6 +109,8 @@ export function VerifyApp() {
       setCurrentIndex(0);
       setCounterPulse(0);
       setPromptEmphasis(null);
+      setMilestoneNotice(null);
+      milestoneActiveRef.current = false;
       lastPromptRef.current = null;
       setBackendUrl(savedConfig.baseUrl);
       syncQuery(savedConfig.baseUrl);
@@ -207,6 +218,15 @@ export function VerifyApp() {
     return () => window.clearTimeout(timeout);
   }, [currentTask?.prompt]);
 
+  useEffect(() => {
+    if (milestoneNotice === null) return;
+    const timeout = window.setTimeout(() => {
+      milestoneActiveRef.current = false;
+      setMilestoneNotice(null);
+    }, MILESTONE_ANIMATION_MS);
+    return () => window.clearTimeout(timeout);
+  }, [milestoneNotice]);
+
   const syncRating = useCallback(async (record: HumanRatingRecord) => {
     const config = backendConfigRef.current ?? await getRemoteBackendConfig();
     const response = await fetch(`${config.baseUrl}/api/verification/ratings`, {
@@ -232,7 +252,7 @@ export function VerifyApp() {
   }, []);
 
   const rate = useCallback((rating: 1 | 2 | 3 | 4 | 5) => {
-    if (!currentTask || currentPano?.status !== "ready") return;
+    if (!currentTask || currentPano?.status !== "ready" || milestoneActiveRef.current) return;
     const {
       source_task_id: sourceTaskId,
       study_id: studyId,
@@ -256,6 +276,7 @@ export function VerifyApp() {
       rated_at: new Date().toISOString()
     };
     const nextRatings = { ...ratings, [currentTask.task_id]: record };
+    const nextRatedCount = Object.keys(nextRatings).length;
     setRatings(nextRatings);
     saveRatings(sessionId, nextRatings);
     void syncRating(record)
@@ -265,6 +286,10 @@ export function VerifyApp() {
         setSyncError(`Saved locally, but not yet stored by RunPod: ${message}`);
       });
     setCounterPulse((pulse) => pulse + 1);
+    if (nextRatedCount > 0 && nextRatedCount % PROGRESS_PAGE_SIZE === 0) {
+      milestoneActiveRef.current = true;
+      setMilestoneNotice(nextRatedCount);
+    }
     setCurrentIndex((index) => index + 1);
   }, [currentPano?.status, currentTask, raterId, ratings, sessionId, syncRating]);
 
@@ -293,6 +318,16 @@ export function VerifyApp() {
     ensurePano(currentTask);
   }
 
+  const milestoneOverlay = milestoneNotice !== null ? (
+    <section className="verify-milestone" role="status" aria-live="assertive">
+      <div className="verify-milestone-content">
+        <strong>{milestoneNotice}</strong>
+        <h2>ratings complete</h2>
+      </div>
+      <div className="verify-milestone-progress" aria-hidden="true" />
+    </section>
+  ) : null;
+
   if (!presentations.length) {
     return (
       <main className="verify-setup-shell">
@@ -311,6 +346,7 @@ export function VerifyApp() {
           </button>
           <small>Five score buckets · twenty new scenes per prompt · continuous verification</small>
         </form>
+        {milestoneOverlay}
       </main>
     );
   }
@@ -318,13 +354,10 @@ export function VerifyApp() {
   return (
     <main className="verify-app-shell">
       <header className="verify-toolbar">
-        <div className="verify-brand-block">
-          <span>UrbanFabric</span>
-          <strong>Human Verify</strong>
-        </div>
         <div
-          key={promptEmphasis ?? "steady-mobile-prompt"}
-          className={`verify-mobile-prompt-block verify-prompt-block${promptEmphasis ? " verify-prompt-block-changed" : ""}`}
+          key={promptEmphasis ?? "steady-toolbar-prompt"}
+          className={`verify-toolbar-prompt-block verify-prompt-block${promptEmphasis ? " verify-prompt-block-changed" : ""}`}
+          style={{ "--verify-mobile-prompt-size": mobilePromptFontSize(currentTask?.prompt ?? "") } as CSSProperties}
         >
           <span>Rate this statement</span>
           <h1>{currentTask?.prompt}</h1>
@@ -336,13 +369,17 @@ export function VerifyApp() {
             <RefreshCw className={loadingStudy || loadingNextPrompt ? "verify-spin" : ""} size={17} />
           </button>
         </form>
-        <div className="verify-progress-block" aria-label={`${ratedCount} of ${progressTarget} rated`}>
+        <div
+          key={`progress-${counterPulse}`}
+          className="verify-progress-block"
+          aria-label={`${ratedCount} of ${progressTarget} rated`}
+        >
           <span>Rated</span>
           <strong>{ratedCount}<small> / {progressTarget}</small></strong>
           {counterPulse ? <i key={counterPulse} className="verify-progress-plus-one" aria-hidden="true">+1</i> : null}
         </div>
         <button
-          className="verify-mobile-settings-button"
+          className="verify-settings-button"
           type="button"
           title="Edit RunPod URL"
           aria-label="Edit RunPod URL"
@@ -351,9 +388,15 @@ export function VerifyApp() {
         >
           <Settings size={18} />
         </button>
-        <button className="verify-export-button" type="button" onClick={() => exportRatingsCsv(sessionId, ratings)} disabled={!ratedCount}>
+        <button
+          className="verify-export-button"
+          type="button"
+          title="Export results"
+          aria-label="Export results"
+          onClick={() => exportRatingsCsv(sessionId, ratings)}
+          disabled={!ratedCount}
+        >
           <Download size={17} />
-          Export results
         </button>
       </header>
 
@@ -392,13 +435,6 @@ export function VerifyApp() {
 
       {currentTask ? (
         <section className="verify-rating-panel">
-          <div
-            key={promptEmphasis ?? "steady-prompt"}
-            className={`verify-prompt-block${promptEmphasis ? " verify-prompt-block-changed" : ""}`}
-          >
-            <span>Rate this statement</span>
-            <h1>{currentTask.prompt}</h1>
-          </div>
           <div className="verify-scale-block">
             <div className="verify-scale" role="group" aria-label="Human rating from 1 to 5">
               {RATING_VALUES.map((value) => (
@@ -406,7 +442,7 @@ export function VerifyApp() {
                   key={value}
                   type="button"
                   onClick={() => rate(value)}
-                  disabled={currentPano?.status !== "ready"}
+                  disabled={currentPano?.status !== "ready" || milestoneNotice !== null}
                   aria-label={`Rate ${value} out of 5`}
                 >
                   <strong>{value}</strong>
@@ -420,6 +456,7 @@ export function VerifyApp() {
           </div>
         </section>
       ) : null}
+      {milestoneOverlay}
       {(error || syncError) ? <div className="verify-floating-error">{error || syncError}</div> : null}
     </main>
   );
@@ -443,11 +480,18 @@ function composePromptBlock(
 ): HumanVerificationPresentation[] {
   const output = [...previous];
   const freshTasks = study.tasks.slice(0, FRESH_TASKS_PER_PROMPT);
+  const encoreCountsByPrompt = new Map<string, number>();
+  for (const item of output) {
+    if (!item.is_encore) continue;
+    encoreCountsByPrompt.set(item.prompt, (encoreCountsByPrompt.get(item.prompt) ?? 0) + 1);
+  }
   let freshIndex = 0;
   while (freshIndex < freshTasks.length) {
     const sequenceNumber = output.length + 1;
     const eligibleEncoreSources = output.filter(
-      (item) => !item.is_encore && item.sequence_number <= sequenceNumber - 10
+      (item) => !item.is_encore
+        && item.sequence_number <= sequenceNumber - 10
+        && (encoreCountsByPrompt.get(item.prompt) ?? 0) < MAX_ENCORES_PER_PROMPT
     );
     if (eligibleEncoreSources.length && Math.random() < encoreProbability(sequenceNumber)) {
       const source = eligibleEncoreSources[Math.floor(Math.random() * eligibleEncoreSources.length)];
@@ -458,6 +502,7 @@ function composePromptBlock(
         sequence_number: sequenceNumber,
         is_encore: true
       });
+      encoreCountsByPrompt.set(source.prompt, (encoreCountsByPrompt.get(source.prompt) ?? 0) + 1);
       continue;
     }
 
@@ -480,7 +525,15 @@ function encoreProbability(sequenceNumber: number): number {
   const previouslySeen = sequenceNumber - 1;
   if (previouslySeen < 10) return 0;
   const progress = Math.min(1, (previouslySeen - 10) / 40);
-  return 0.05 + 0.05 * progress;
+  return 0.01 + 0.04 * progress;
+}
+
+function mobilePromptFontSize(prompt: string): string {
+  const length = Array.from(prompt.trim()).length;
+  if (length <= 28) return "clamp(1.2rem, 5.2vw, 1.55rem)";
+  if (length <= 48) return "clamp(1.05rem, 4.7vw, 1.35rem)";
+  if (length <= 78) return "clamp(0.9rem, 4vw, 1.15rem)";
+  return "clamp(0.74rem, 3.35vw, 0.95rem)";
 }
 
 function uniqueId(prefix: string): string {
