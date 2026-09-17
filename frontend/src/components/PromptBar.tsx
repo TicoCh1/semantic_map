@@ -1,5 +1,6 @@
 import { Check, Copy, SendHorizontal } from "lucide-react";
 import { useState, type DragEvent } from "react";
+import { SavedPromptSearch } from "./SavedPromptSearch";
 import { saveRemoteBackendConfig } from "../api/client";
 import { PANO_REFERENCE_DRAG_TYPE, type PanoReference, type RemoteBackendConfig } from "../api/types";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
@@ -45,7 +46,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
   }
 
   function canAcceptReferenceDrag(event: DragEvent): boolean {
-    return Boolean(onCreateReference && Array.from(event.dataTransfer.types).includes(PANO_REFERENCE_DRAG_TYPE));
+    return Boolean(backendConfig?.mode !== "cpu" && onCreateReference && Array.from(event.dataTransfer.types).includes(PANO_REFERENCE_DRAG_TYPE));
   }
 
   function handleReferenceDragOver(event: DragEvent) {
@@ -62,7 +63,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
   }
 
   async function handleReferenceDrop(event: DragEvent) {
-    if (!onCreateReference || disabled || !liveSearchAvailable || submitting) return;
+    if (backendConfig?.mode === "cpu" || !onCreateReference || disabled || !liveSearchAvailable || submitting) return;
     event.preventDefault();
     setReferenceDragOver(false);
     const reference = parsePanoReferenceDrop(event.dataTransfer);
@@ -98,7 +99,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
           />
         </div>
       ) : null}
-      <div className="prompt-input-row">
+      {backendConfig?.enabled && backendConfig.mode === "cpu" ? <SavedPromptSearch config={backendConfig} disabled={disabled || !liveSearchAvailable} onCreate={onCreate} /> : <div className="prompt-input-row">
         <textarea
           id="prompt-input"
           value={prompt}
@@ -119,7 +120,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
         >
           {liveSearchAvailable ? <SendHorizontal size={18} /> : contactCopied ? <Check size={18} /> : <Copy size={18} />}
         </button>
-      </div>
+      </div>}
     </section>
   );
 }

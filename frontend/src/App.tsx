@@ -202,6 +202,7 @@ export function App() {
         // Keep the configured fallback while the remote backend starts.
       }
       setBackendConfig(config);
+      if (config.mode === "cpu") setShowExhibitIntro(false);
       return resumeRemoteScoringJobs();
     });
   }, []);
@@ -233,7 +234,7 @@ export function App() {
           }
           const result = await refreshAllScoringLayers(priorityTilesRef.current);
           if (cancelled) return;
-          setBackendConnectionFailed(result.failed > 0 && result.submitted === 0 && result.skipped === 0);
+          setBackendConnectionFailed(backendConfig.mode !== "cpu" && result.failed > 0 && result.submitted === 0 && result.skipped === 0);
           void refresh();
         })
         .catch(() => {
@@ -516,6 +517,10 @@ export function App() {
 
   async function handleCreateReference(reference: PanoReference) {
     setError(null);
+    if (backendConfig?.mode === "cpu") {
+      setError("CPU mode only opens saved prompts. Reference-image scoring requires a GPU backend.");
+      return;
+    }
     if (!liveSearchAvailable) {
       setError("Reference pano scoring requires a RunPod backend.");
       return;
@@ -568,6 +573,8 @@ export function App() {
 
   const handlePriorityTileChange = useCallback((cityId: CityId, tile: TileCoord | null) => {
     setPriorityTiles((current) => {
+      const previous = current[cityId];
+      if ((!previous && !tile) || (previous && tile && previous.z === tile.z && previous.x === tile.x && previous.y === tile.y && previous.dataset_id === tile.dataset_id)) return current;
       const next = { ...current };
       if (tile) next[cityId] = tile;
       else delete next[cityId];
@@ -940,6 +947,7 @@ export function App() {
             progressEntries={mapProgressEntries}
             refreshingLayers={refreshingLayers}
             onCreatePrompt={handleCreate}
+            backendConfig={backendConfig}
             promptDisabled={loading}
             liveSearchAvailable={liveSearchAvailable}
           />

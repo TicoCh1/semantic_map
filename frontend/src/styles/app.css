@@ -3067,3 +3067,12 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     transform: scale(1.22);
   }
 }
+.saved-prompt-search { display: grid; gap: 8px; width: 100%; min-width: 0; }
+.saved-prompt-search input { width: 100%; box-sizing: border-box; }
+.saved-prompt-results { display: grid; gap: 4px; max-height: 220px; overflow-y: auto; }
+.saved-prompt-results button { text-align: left; white-space: normal; padding: 8px; font: inherit; }
+.saved-prompt-search small { opacity: .75; }
+.mobile-map-search.cpu-map-search { grid-template-columns: minmax(0, 1fr); top: 104px; border-radius: 12px; padding: 10px; max-height: 36vh; overflow-y: auto; }
+.cpu-map-search .saved-prompt-results { max-height: 130px; }
+.cpu-map-search .saved-prompt-results button { width: 100%; height: auto; min-height: 34px; border-radius: 6px; padding: 7px; place-items: start; }
+.cpu-map-search .saved-prompt-search > small:first-of-type { display: none; }

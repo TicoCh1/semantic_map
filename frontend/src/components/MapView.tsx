@@ -12,6 +12,8 @@ import {
   mergeFeatureCollections
 } from "../api/client";
 import { StreetViewPanel } from "./StreetViewPanel";
+import { SavedPromptSearch } from "./SavedPromptSearch";
+import type { RemoteBackendConfig } from "../api/types";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { DEFAULT_CITY_CONFIGS } from "../state/cities";
@@ -21,6 +23,7 @@ import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type MapViewProps = {
+  backendConfig?: RemoteBackendConfig | null;
   cities: CityConfig[];
   layers: SemanticLayer[];
   gradients: GradientPreset[];
@@ -86,6 +89,7 @@ export const MapView = memo(function MapView({
   scoreField,
   progressEntries,
   onCreatePrompt,
+  backendConfig,
   promptDisabled = false,
   liveSearchAvailable = true
 }: MapViewProps) {
@@ -212,7 +216,9 @@ export const MapView = memo(function MapView({
       }`}
       data-tour-target="map"
     >
-      <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />
+      {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
+        <div className="mobile-map-search cpu-map-search"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></div> :
+        <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
       <div className="map-toolbar">
         <div>
           <span>Semantic Map</span>

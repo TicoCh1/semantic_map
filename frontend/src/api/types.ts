@@ -228,6 +228,7 @@ export type RemoteLogEntry = {
 };
 
 export type RemoteBackendConfig = {
+  mode?: "cpu" | "gpu";
   baseUrl: string;
   token?: string;
   datasetId: string;

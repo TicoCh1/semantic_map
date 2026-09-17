@@ -373,6 +373,7 @@ function remoteDatasetIds(config: RemoteBackendConfig): string[] {
 }
 
 type CachedBackendCapabilities = {
+  mode?: "cpu" | "gpu";
   datasetId: string;
   datasetIds: string[];
   datasetGroupId?: string;
@@ -392,7 +393,8 @@ function withCachedBackendCapabilities(config: RemoteBackendConfig): RemoteBacke
     datasetId: cached.datasetId || cached.datasetIds[0] || config.datasetId,
     datasetIds: cached.datasetIds,
     datasetGroupId: cached.datasetGroupId || config.datasetGroupId,
-    cities: cached.cities
+    cities: cached.cities,
+    mode: cached.mode
   };
 }
 
@@ -464,6 +466,7 @@ export async function refreshRemoteBackendCapabilities(config: RemoteBackendConf
   if (!datasetIds.length || !cities.length) throw new Error("RunPod returned an empty city capability list.");
 
   const cached: CachedBackendCapabilities = {
+    mode: payload.mode === "cpu" ? "cpu" : "gpu",
     datasetId: String(payload.dataset_id || datasetIds[0]).trim() || datasetIds[0],
     datasetIds,
     datasetGroupId: typeof payload.dataset_group_id === "string" ? payload.dataset_group_id : undefined,
@@ -1275,7 +1278,11 @@ export async function createScoringJob(prompt: string, priorityTiles?: CityPrior
   const layer = await createLayer({ prompt });
   try {
     return await submitRemoteScoringForLayer(config, layer, priorityTiles);
-  } catch {
+  } catch (error) {
+    if (config.mode === "cpu") {
+      await deleteLayer(layer.id);
+      throw error;
+    }
     const fallbackLayer = restoreLayerLocalFallbackSync(layer) ?? layer;
     emitRemoteInfoLog(layer.id, prompt, "RunPod submission failed. Using local fallback layer.", "info");
     return localFallbackJob(fallbackLayer, "Local fallback scoring completed after RunPod submission failed.");
@@ -1285,6 +1292,7 @@ export async function createScoringJob(prompt: string, priorityTiles?: CityPrior
 export async function createPanoReferenceScoringJob(reference: PanoReference, priorityTiles?: CityPriorityTiles | null): Promise<ScoringJob> {
   const normalizedReference = normalizePanoReference(reference);
   const config = loadRemoteBackendConfigSync();
+  if (config.mode === "cpu") throw new Error("CPU mode does not support reference-image scoring.");
   if (!config.enabled || !config.baseUrl) {
     return createLocalMockReferenceScoringJob(normalizedReference);
   }

@@ -6,7 +6,7 @@ export const DEFAULT_CITY_CONFIGS: CityConfig[] = [
     name: "London",
     datasetId: "london_224_8_45",
     center: [-0.1276, 51.5072],
-    initialZoom: 10.45,
+    initialZoom: 13.3758,
     bounds: { west: -1.05, east: 0.7, south: 50.85, north: 52.05 },
     liveDemo: true
   },
@@ -15,7 +15,7 @@ export const DEFAULT_CITY_CONFIGS: CityConfig[] = [
     name: "Shanghai",
     datasetId: "shanghai_224_8_45_2B",
     center: [121.4737, 31.2304],
-    initialZoom: 10.45,
+    initialZoom: 13.8339,
     bounds: { west: 120.85, east: 122.25, south: 30.65, north: 31.85 },
     liveDemo: true
   },
@@ -24,7 +24,7 @@ export const DEFAULT_CITY_CONFIGS: CityConfig[] = [
     name: "New York",
     datasetId: "new_york_224_8_45",
     center: [-74.006, 40.7128],
-    initialZoom: 10.45,
+    initialZoom: 13.6601,
     bounds: { west: -74.45, east: -73.45, south: 40.45, north: 41.05 },
     liveDemo: true
   },
@@ -33,7 +33,7 @@ export const DEFAULT_CITY_CONFIGS: CityConfig[] = [
     name: "Rome",
     datasetId: "rome_224_8_45",
     center: [12.4964, 41.9028],
-    initialZoom: 10.45,
+    initialZoom: 13.6337,
     bounds: { west: 12.2, east: 12.8, south: 41.7, north: 42.1 },
     liveDemo: false
   }

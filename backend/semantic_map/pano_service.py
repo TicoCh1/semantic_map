@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import math
 import os
 import re
@@ -66,9 +67,18 @@ class PanoCoordinateMismatchError(LookupError):
 
 class PanoService:
     def __init__(self, settings: BackendSettings, dataset_id: str | None = None) -> None:
+        self._prepared = None
+        manifest_path = os.getenv("PANO_PREPARED_MANIFEST")
+        if manifest_path:
+            manifest = json.loads(Path(manifest_path).read_text())
+            self._prepared = manifest["datasets"].get(dataset_id or settings.default_dataset_id)
+            if self._prepared:
+                settings = replace(settings, pano_index_path=Path(self._prepared["index_path"]),
+                                   pano_tar_ranges=",".join(a["path"] for a in self._prepared["archives"]),
+                                   pano_cache_root=Path(manifest["cache_root"]) / (dataset_id or settings.default_dataset_id))
         self.settings = settings
         self.dataset_id = dataset_id
-        self._ranges = parse_pano_tar_ranges(settings.pano_tar_ranges)
+        self._ranges = tuple(PanoTarRange(a["path"], None, None) for a in self._prepared["archives"]) if self._prepared else parse_pano_tar_ranges(settings.pano_tar_ranges)
         self._index_ready = False
         self._lock = threading.RLock()
         self._index_connection: sqlite3.Connection | None = None
@@ -83,6 +93,17 @@ class PanoService:
 
         with self._lock:
             started = time.perf_counter()
+            if self._prepared:
+                for archive in self._prepared["archives"]:
+                    st = Path(archive["path"]).stat()
+                    if (st.st_size, st.st_mtime_ns) != (archive["size"], archive["mtime_ns"]):
+                        raise RuntimeError("Prepared panorama archive changed; rerun CPU preparation")
+                with closing(sqlite3.connect(self.settings.pano_index_path.resolve().as_uri()+"?mode=ro", uri=True)) as conn:
+                    namespace = conn.execute("SELECT value FROM meta WHERE key='namespace'").fetchone()
+                    if namespace != (self._prepared["namespace"],):
+                        raise RuntimeError("Prepared panorama namespace mismatch")
+                self._index_ready = True
+                return {"pano_index_status": "prepared", "pano_index_warmup": round(time.perf_counter()-started,3)}
             if not self.settings.pano_tar_dir.exists():
                 return {"pano_index_status": "tar_dir_missing"}
 
@@ -173,6 +194,12 @@ class PanoService:
         if not rows:
             return None
         candidates = [pano_index_entry_from_row(row) for row in rows]
+        if self._prepared:
+            with self._index_connection_lock:
+                conn = self._read_index_connection()
+                candidates = [replace(entry, source_id=pano_source_id_from_tar_id(
+                    conn.execute("SELECT source_tar FROM provenance WHERE entry_key=?", (entry.entry_key,)).fetchone()[0]
+                )) for entry in candidates]
 
         if entry_key is not None:
             if len(candidates) != 1:
@@ -408,14 +435,18 @@ class PanoServiceRegistry:
             service = self._services.get(key)
             if service is not None:
                 return service
-            service = PanoService(pano_settings_for_dataset(self.settings, dataset_id), dataset_id=dataset_id)
+            prepared_path = os.getenv("PANO_PREPARED_MANIFEST")
+            prepared = prepared_path and (dataset_id or self.settings.default_dataset_id) in json.loads(Path(prepared_path).read_text())["datasets"]
+            service = PanoService(self.settings if prepared else pano_settings_for_dataset(self.settings, dataset_id), dataset_id=dataset_id)
             self._services[key] = service
             return service
 
     def warmup(self) -> dict[str, float | int | str]:
         timings: dict[str, float | int | str] = {}
         for dataset_id in sorted(self.allowed_dataset_ids()):
-            if not pano_tar_ranges_for_dataset(self.settings, dataset_id):
+            prepared_path = os.getenv("PANO_PREPARED_MANIFEST")
+            prepared = prepared_path and dataset_id in json.loads(Path(prepared_path).read_text())["datasets"]
+            if not prepared and not pano_tar_ranges_for_dataset(self.settings, dataset_id):
                 timings[f"{dataset_id}:pano_index_status"] = "not_configured"
                 continue
             result = self.service_for(dataset_id).warmup()

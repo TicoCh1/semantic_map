@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [ "${SEMANTICMAP_MODE:-gpu}" = cpu ]; then
+  exec bash "$(dirname "$0")/start_cpu_semanticmap.sh"
+fi
+
 if [ -z "${WORKSPACE_ROOT:-}" ]; then
   if [ -d /workspace/embedding/london_224_8_45 ] || [ -d /workspace/Qwen3-VL-Embedding ]; then
     WORKSPACE_ROOT=/workspace
