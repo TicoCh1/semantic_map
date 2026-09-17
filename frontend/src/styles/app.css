@@ -3067,12 +3067,33 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     transform: scale(1.22);
   }
 }
-.saved-prompt-search { display: grid; gap: 8px; width: 100%; min-width: 0; }
-.saved-prompt-search input { width: 100%; box-sizing: border-box; }
-.saved-prompt-results { display: grid; gap: 4px; max-height: 220px; overflow-y: auto; }
-.saved-prompt-results button { text-align: left; white-space: normal; padding: 8px; font: inherit; }
-.saved-prompt-search small { opacity: .75; }
-.mobile-map-search.cpu-map-search { grid-template-columns: minmax(0, 1fr); top: 104px; border-radius: 12px; padding: 10px; max-height: 36vh; overflow-y: auto; }
-.cpu-map-search .saved-prompt-results { max-height: 130px; }
-.cpu-map-search .saved-prompt-results button { width: 100%; height: auto; min-height: 34px; border-radius: 6px; padding: 7px; place-items: start; }
-.cpu-map-search .saved-prompt-search > small:first-of-type { display: none; }
+
+/* Saved-query search follows the original prompt bar and mobile bubble. */
+.saved-prompt-search { position: relative; width: 100%; min-width: 0; }
+.saved-search-field { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 12px; border: 1px solid #cfd6df; border-radius: 8px; background: #fff; color: #667085; transition: border-color 140ms, box-shadow 140ms; }
+.saved-search-field:focus-within { border-color: #4289be; box-shadow: 0 0 0 3px rgba(66,137,190,.12); }
+.saved-search-field > svg { flex-shrink: 0; }
+.saved-search-field input { appearance: none; -webkit-appearance: none; flex: 1; min-width: 0; width: 100%; height: 44px; padding: 0; border: 0; border-radius: 0; outline: none; box-shadow: none; background: transparent; color: #253243; font: inherit; font-size: 14px; }
+.saved-search-field input::placeholder { color: #8794a3; opacity: 1; }
+.saved-search-badge { flex-shrink: 0; padding: 3px 7px; border-radius: 5px; background: #edf2f6; color: #69798b; font-size: 10px; font-weight: 600; letter-spacing: .025em; }
+.saved-search-dropdown { position: absolute; top: calc(100% + 6px); left: 0; right: 0; z-index: 30; padding: 5px; border: 1px solid #dce2e9; border-radius: 10px; background: #fff; box-shadow: 0 12px 28px rgba(16,24,40,.14); }
+.saved-search-caption { padding: 7px 9px; font-size: 11px; color: #7b8796; }
+.saved-prompt-results { max-height: 260px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #a7b2be transparent; }
+.saved-prompt-search button.saved-search-option { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; height: auto; min-height: 40px; padding: 10px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: #344054; font: inherit; font-size: 13px; line-height: 1.45; text-align: left; white-space: normal; cursor: pointer; }
+.saved-search-option span { overflow-wrap: anywhere; }
+.saved-search-option svg { flex-shrink: 0; opacity: .35; }
+.saved-prompt-search button.saved-search-option[aria-selected="true"], .saved-prompt-search button.saved-search-option:hover { background: #edf4fa; color: #245c88; }
+.saved-search-empty, .saved-search-error { padding: 10px; font-size: 12px; color: #7b8796; }
+.saved-search-error { color: #c55b5b; }
+.saved-search-spinner { animation: map-refresh-spin 1s linear infinite; }
+.theme-dark .saved-search-field { border-color: #3a4653; background: #252d36; color: #94a3b5; }
+.theme-dark .saved-search-field input { border: 0; background: transparent; color: #e4ebf3; box-shadow: none; }
+.theme-dark .saved-search-field:focus-within { border-color: #619ac7; box-shadow: 0 0 0 3px rgba(97,154,199,.12); }
+.theme-dark .saved-search-badge { background: #333f4c; color: #afc0d1; }
+.theme-dark .saved-search-dropdown { background: #252d36; border-color: #3a4653; box-shadow: 0 12px 28px rgba(0,0,0,.3); }
+.theme-dark .saved-prompt-search button.saved-search-option { color: #d2dce7; background: transparent; border: 0; }
+.theme-dark .saved-prompt-search button.saved-search-option[aria-selected="true"], .theme-dark .saved-prompt-search button.saved-search-option:hover { background: #334456; color: #eef5fc; }
+.mobile-map-search.cpu-map-search { grid-template-columns: minmax(0,1fr); padding: 0; border: 0; border-radius: 24px; background: transparent; overflow: visible; }
+.cpu-map-search .saved-search-field { border-radius: 24px; min-height: 44px; padding: 0 14px; }
+.cpu-map-search .saved-search-dropdown { top: calc(100% + 48px); }
+.cpu-map-search .saved-prompt-results { max-height: min(240px, 32vh); }

@@ -1,10 +1,18 @@
 # SemanticMap CPU mode
 
+Updated: 2026-09-17. Released as `f107d46f`; the user authorized pushing to `main`,
+both GitHub Pages workflows succeeded, and the online browser was tested after deployment.
+
+[Open the deployed CPU frontend](https://ticoch1.github.io/semantic_map/?backend=https%3A%2F%2F3wzy1s5xoo6s4c-8000.proxy.runpod.net&release=f107d46f).
+
 CPU mode serves previously computed prompt scores without importing Torch, Qwen,
 or a scoring engine. The frontend discovers `mode: cpu` through `/api/capabilities`
 and replaces free-form submission with a searchable list of saved prompts on desktop
 and mobile. Unknown prompts, reference-image queries and force overrides are rejected
 by the backend, including batch requests. Failed CPU requests do not create mock layers.
+
+
+CPU search visual refinement (2026-09-17): the input uses the original app typography, rounded borders and light/dark palette. The catalog is a focus-triggered dropdown, filtered while typing, with arrow-key/Enter selection and Escape/blur dismissal. Selecting a saved prompt closes the dropdown. Technical banners and the permanent result list were removed; mobile reuses the original top search bubble. Desktop dark mode, mobile layout and keyboard selection were checked in the browser.
 
 ## Current data contract
 
@@ -33,6 +41,18 @@ bash /workspace/backend/start_cpu_semanticmap.sh
 ```
 
 The existing launcher also accepts `SEMANTICMAP_MODE=cpu`. The default remains GPU.
+For the existing installed runtime, subsequent starts only need:
+
+```bash
+SEMANTICMAP_MODE=cpu bash /workspace/backend/start_runpod_backend.sh
+```
+
+Check for an existing listener before starting a second instance. The last observed
+service was PID 1983 with log `/tmp/semanticmap-cpu-v2.log`; recheck after any restart.
+The virtual environment lives on the volume but depends on Python 3.12 in the Pod image;
+verify or recreate it after changing images. The CPU launcher does not source the GPU
+`.runpod_backend.env`: supply any required `BACKEND_TOKEN` explicitly in its environment.
+
 Use `CPU_PYTHON_BIN`, `CPU_EXPERIMENT_ROOT`, `CPU_CACHE_ROOT` or `PORT` to override paths
 and the listening port. `BACKEND_TOKEN` is honored when supplied in the environment.
 Native Q90 panorama images reuse the prepared SQLite indexes through
@@ -52,7 +72,9 @@ GitHub Pages connects via `?backend=https://3wzy1s5xoo6s4c-8000.proxy.runpod.net
   corresponding panorama JPEGs can be read.
 - Public API: CORS allows the GitHub Pages origin; all four manifests respond successfully.
 - Frontend: TypeScript and Vite production build; desktop saved-prompt selection displays
-  London/Shanghai score maps; mobile search layout checked separately.
+  London/Shanghai score maps; mobile search layout checked at 390×844. The deployed
+  GitHub page also successfully searched and opened `brick house`, rendered both cities,
+  and had no browser console errors in the final check.
 - The pre-existing repeated priority-tile state update was fixed to avoid React render loops.
 
 The CPU service uses about 1.2–1.4 GiB RSS with four cities loaded. Drive upload remains

@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { Search, ArrowUpRight, LoaderCircle } from "lucide-react";
+import { useEffect, useId, useState } from "react";
 import type { RemoteBackendConfig } from "../api/types";
 
 export function SavedPromptSearch({ config, disabled, onCreate }: {
@@ -6,6 +7,9 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
   disabled?: boolean;
   onCreate: (prompt: string) => Promise<void>;
 }) {
+  const listId = useId();
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(0);
   const [query, setQuery] = useState("");
   const [prompts, setPrompts] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,24 +32,50 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
     return () => controller.abort();
   }, [config.baseUrl, config.token, config.datasetIds.join(",")]);
   const matches = prompts.filter(p => p.toLowerCase().includes(query.trim().toLowerCase()));
+  const visible = matches.slice(0, 40);
+  useEffect(() => {
+    if (open) document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
+  }, [active, open, listId]);
   async function choose(prompt: string) {
     if (disabled || busy) return;
     setBusy(true);
+    setOpen(false);
+    setQuery(prompt);
     setError("");
     try { await onCreate(prompt); } catch (e) { setError(String(e)); } finally { setBusy(false); }
   }
-  return <div className="saved-prompt-search">
-    <strong>CPU mode · Saved prompts</strong>
-    <small>8B · 4096 dimensions · Existing scores, standardized within each city</small>
-    <input aria-label="Search saved prompts" placeholder="Search existing prompts…" value={query}
-      disabled={disabled || busy || loading} onChange={e => setQuery(e.target.value)} />
-    <small>{loading ? "Loading saved prompts…" : `${matches.length} saved prompts · Select one to open its map`}</small>
-    {error && <div role="alert">{error}</div>}
-    <div className="saved-prompt-results">
-      {matches.slice(0, 40).map(prompt => <button key={prompt} type="button" disabled={disabled || busy}
-        onClick={() => void choose(prompt)}>{prompt}</button>)}
-      {!loading && !error && !matches.length && <span>No saved prompts match your search.</span>}
+  return <div className="saved-prompt-search" onBlur={e => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
+  }}>
+    <div className="saved-search-field">
+      {busy ? <LoaderCircle size={17} className="saved-search-spinner" /> : <Search size={17} />}
+      <input role="combobox" aria-label="Search saved prompts" aria-autocomplete="list"
+        aria-expanded={open && !loading && !busy} aria-controls={listId}
+        aria-activedescendant={open && visible[active] ? `${listId}-${active}` : undefined}
+        placeholder={loading ? "Loading prompts…" : "Search saved prompts…"} value={query}
+        disabled={disabled || busy || loading} onFocus={() => setOpen(true)}
+        onChange={e => { setQuery(e.target.value); setActive(0); setOpen(true); }}
+        onKeyDown={e => {
+          if (e.key === "Escape") { setOpen(false); return; }
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault(); setOpen(true);
+            setActive(i => Math.max(0, Math.min(visible.length - 1, i + (e.key === "ArrowDown" ? 1 : -1))));
+          }
+          if (e.key === "Enter" && open && visible[active]) { e.preventDefault(); void choose(visible[active]); }
+        }} />
+      <span className="saved-search-badge" title="Browse previously computed prompts">Saved</span>
     </div>
-    {matches.length > 40 && <small>Showing 40 results. Type more to narrow your search.</small>}
+    {error && <div className="saved-search-error" role="alert">{error}</div>}
+    {open && !loading && !busy && <div className="saved-search-dropdown">
+      <div className="saved-search-caption">{matches.length ? `${matches.length} saved prompts` : "No matching prompts"}</div>
+      <div id={listId} className="saved-prompt-results" role="listbox" aria-label="Saved prompts">
+        {visible.map((prompt, i) => <button key={prompt} id={`${listId}-${i}`} role="option"
+          aria-selected={i === active} className="saved-search-option" type="button" disabled={disabled}
+          onMouseEnter={() => setActive(i)} onClick={() => void choose(prompt)}>
+          <span>{prompt}</span><ArrowUpRight size={15} aria-hidden="true" />
+        </button>)}
+      </div>
+      {!matches.length && <div className="saved-search-empty">Try another word. Only saved prompts are available.</div>}
+    </div>}
   </div>;
 }
