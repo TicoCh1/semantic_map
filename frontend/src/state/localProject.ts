@@ -1733,7 +1733,6 @@ export async function loadPanoImage(
   const hasPointCoordinates = typeof point?.lon === "number" && Number.isFinite(point.lon)
     && typeof point?.lat === "number" && Number.isFinite(point.lat);
   const alternateDatasetId = hasPointCoordinates ? alternatePanoDatasetId(datasetId) : null;
-  const validatePointCoordinates = alternateDatasetId !== null;
   const candidateDatasetIds = [datasetId ?? null, ...(alternateDatasetId ? [alternateDatasetId] : [])];
   let metadata: PanoImageResponse | null = null;
   let resolvedDatasetId = datasetId ?? null;
@@ -1742,7 +1741,9 @@ export async function loadPanoImage(
   for (let candidateIndex = 0; candidateIndex < candidateDatasetIds.length; candidateIndex += 1) {
     const candidateDatasetId = candidateDatasetIds[candidateIndex];
     const query = new URLSearchParams();
-    if (validatePointCoordinates && point) {
+    // Merged datasets also contain duplicate pano IDs across source regions.
+    // Always send the selected point's identity, independently of legacy routing.
+    if (hasPointCoordinates && point) {
       query.set("lon", String(point.lon));
       query.set("lat", String(point.lat));
       if (point.date !== null && point.date !== undefined && String(point.date).trim() !== "") {

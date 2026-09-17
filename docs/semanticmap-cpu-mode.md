@@ -66,6 +66,20 @@ GitHub Pages connects via `?backend=https://3wzy1s5xoo6s4c-8000.proxy.runpod.net
 
 ## Validation
 
+### New York panorama identity (2026-09-17)
+
+The combined `new_york_512_8_45_8B` dataset contains panorama IDs shared by
+Manhattan and outside-Manhattan sources (including ID `16758`). Panorama metadata
+requests must carry the selected point's longitude, latitude and available capture
+date for every dataset, not only the legacy split New York dataset IDs. The returned
+image URL pins the resolved `entry_key`. A request with an ambiguous ID alone must
+continue returning 409 rather than silently displaying another location's image.
+
+Live regression check: ID `16758` at `(-74.0090948198, 40.721857038, 202604)`
+resolved to Manhattan; `(-73.8934452765, 40.6609014193, 202212)` resolved to the
+outside-Manhattan archive. Both image responses matched their indexed member and
+entry key and decoded as 4096x2048 JPEGs. The ID-only request still returned 409.
+
 - CPU API unit tests: saved prompt search, batch rejection, unknown query/reference/override
   rejection, invalid revisions/tiles, identity and score preservation, cached tile reuse.
 - Live four-city checks: generated tile scores equal their saved NPY values and all four
