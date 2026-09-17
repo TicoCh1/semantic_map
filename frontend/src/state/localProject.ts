@@ -373,6 +373,7 @@ function remoteDatasetIds(config: RemoteBackendConfig): string[] {
 }
 
 type CachedBackendCapabilities = {
+  embeddingComparisonDatasetIds?: string[];
   mode?: "cpu" | "gpu";
   datasetId: string;
   datasetIds: string[];
@@ -394,7 +395,8 @@ function withCachedBackendCapabilities(config: RemoteBackendConfig): RemoteBacke
     datasetIds: cached.datasetIds,
     datasetGroupId: cached.datasetGroupId || config.datasetGroupId,
     cities: cached.cities,
-    mode: cached.mode
+    mode: cached.mode,
+    embeddingComparisonDatasetIds: cached.embeddingComparisonDatasetIds
   };
 }
 
@@ -466,6 +468,7 @@ export async function refreshRemoteBackendCapabilities(config: RemoteBackendConf
   if (!datasetIds.length || !cities.length) throw new Error("RunPod returned an empty city capability list.");
 
   const cached: CachedBackendCapabilities = {
+    embeddingComparisonDatasetIds: normalizeDatasetIds(payload.embedding_comparison_dataset_ids as string[] | undefined),
     mode: payload.mode === "cpu" ? "cpu" : "gpu",
     datasetId: String(payload.dataset_id || datasetIds[0]).trim() || datasetIds[0],
     datasetIds,

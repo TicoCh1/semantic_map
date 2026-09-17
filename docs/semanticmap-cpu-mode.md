@@ -66,6 +66,40 @@ GitHub Pages connects via `?backend=https://3wzy1s5xoo6s4c-8000.proxy.runpod.net
 
 ## Validation
 
+### Same-city embedding comparison (2026-09-17)
+
+Choose **View > Old vs new embedding**, select a city, and open a saved prompt.
+The left pane shows historical 2B scores and the right pane shows new 8B/4096
+scores for that same prompt and city. Only the selected prompt is displayed in
+comparison mode. Both panes share the selected layer's color ramp and score range;
+pan, zoom, bearing and pitch are synchronized. Narrow phone layouts stack the panes.
+Switch back to **Compare cities** to restore the normal multilayer city view.
+
+`POST /api/scoring/comparison` accepts `prompt` and a single `dataset_id` and returns
+old/new result references. Capability `embedding_comparison_dataset_ids` advertises
+supported cities. Historical values come from `historical_score.npy`; new values
+come from `score_new4096.npy`. Both already use the same `alignment.npz` identities
+(ID, longitude, latitude, date); London includes only the retained 156,880 records.
+Other matched counts: Shanghai 173,622, New York 138,882, Rome 131,644.
+
+Old result URLs carry `embedding=old` and a separate revision/cache namespace.
+Ordinary jobs continue using new scores by default. Z-scores are computed separately
+for each embedding over the identical aligned city sample. Original scores remain
+available through the existing score field selector. Comparison does not run inference.
+The existing sidebar histogram continues to describe its normal selected layer;
+it is not a two-version comparison histogram.
+
+Validation: six CPU API tests, including identity/score preservation, opposite
+ranking, cache separation and invalid variant/revision checks; live old/new tile
+scores verified against saved matrices in all four cities. Browser tests cover
+prompt/city switching and synchronized Rome navigation. Rome's latitude-corrected
+ground scale is consistent: both 500 m bars measured 109.2 CSS pixels initially,
+and both 200 m bars measured 87.4 pixels after zooming and panning.
+
+CPU service after this deployment: PID 3231, log `/tmp/semanticmap-cpu-comparison.log`.
+Recheck the process after future restarts. Previous module backup:
+`/workspace/backend/semantic_map/cpu_api.pre_comparison_20260917.py`.
+
 ### New York panorama identity (2026-09-17)
 
 The combined `new_york_512_8_45_8B` dataset contains panorama IDs shared by

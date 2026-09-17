@@ -9,6 +9,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from pathlib import Path
 from uuid import uuid4
+from typing import Literal
 
 import numpy as np
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -65,11 +66,18 @@ class SavedScoreCatalog:
                 lookup[canonical] = column
                 self.prompts.setdefault(canonical, []).append(dataset)
             self.datasets[dataset] = dict(records=records, scores=scores, lookup=lookup,
-                                          index=index, revision=revision)
+                                          index=index, revision=revision, variants={})
+            old_path = directory / 'historical_score.npy'
+            if old_path.is_file():
+                old_scores = np.load(old_path, mmap_mode='r', allow_pickle=False)
+                if old_scores.shape != scores.shape or not np.isfinite(old_scores).all():
+                    raise ValueError(f'Invalid historical score matrix: {dataset}')
+                self.datasets[dataset]['variants']['old'] = dict(
+                    scores=old_scores, revision=f'cpu-old-v1-{old_path.stat().st_mtime_ns}-{revision}')
         if not self.datasets:
             raise ValueError('CPU mode has no configured saved-score datasets')
 
-    def resolve(self, dataset, prompt_id):
+    def resolve(self, dataset, prompt_id, embedding='new'):
         data = self.datasets.get(dataset)
         if data is None:
             raise HTTPException(404, 'Dataset is not available')
@@ -78,13 +86,18 @@ class SavedScoreCatalog:
         column = int(prompt_id[6:])
         if column >= data['scores'].shape[1]:
             raise HTTPException(404, 'Saved prompt not found')
+        if embedding != 'new':
+            variant = data['variants'].get(embedding)
+            if variant is None:
+                raise HTTPException(404, 'Embedding comparison is not available for this city')
+            data = {**data, **variant}
         return data, column
 
-    def arrays(self, dataset, prompt_id):
+    def arrays(self, dataset, prompt_id, embedding='new'):
         with self.lock:
-            key = (dataset, prompt_id)
+            key = (dataset, prompt_id, embedding)
             if key not in self.cache:
-                data, column = self.resolve(dataset, prompt_id)
+                data, column = self.resolve(dataset, prompt_id, embedding)
                 scores = np.array(data['scores'][:, column], dtype=np.float32)
                 mean = np.float32(scores.mean(dtype=np.float64))
                 std = np.float32(scores.std(dtype=np.float64)) + np.float32(1e-12)
@@ -95,12 +108,14 @@ class SavedScoreCatalog:
             self.cache.move_to_end(key)
             return self.cache[key]
 
-    def result_ref(self, dataset, column):
-        data = self.datasets[dataset]
+    def result_ref(self, dataset, column, embedding='new'):
         prompt_id = f'saved-{column}'
+        data, _ = self.resolve(dataset, prompt_id, embedding)
         base = f'/api/scoring/results/{dataset}/{prompt_id}/revisions/{data["revision"]}'
+        suffix = '?embedding=old' if embedding == 'old' else ''
         return dict(dataset_id=dataset, prompt_id=prompt_id, result_revision=data['revision'],
-                    manifest_url=base+'/manifest', tile_url_template=base+'/tiles/{z}/{x}/{y}.geojson')
+                    embedding=embedding, manifest_url=base+'/manifest'+suffix,
+                    tile_url_template=base+'/tiles/{z}/{x}/{y}.geojson'+suffix)
 
     def job(self, query):
         canonical = normalize_prompt(query.prompt)
@@ -145,6 +160,7 @@ def create_app(settings=None, experiment_root=None):
     @app.get('/api/capabilities')
     def capabilities():
         return dict(mode='cpu', new_queries_enabled=False, saved_prompts_enabled=True,
+                    embedding_comparison_dataset_ids=[d for d, v in app.state.catalog.datasets.items() if 'old' in v['variants']],
                     dataset_id=settings.default_dataset_id, dataset_ids=list(app.state.catalog.datasets),
                     dataset_group_id=settings.default_dataset_group_id, cities=active_city_configs(settings))
 
@@ -157,6 +173,20 @@ def create_app(settings=None, experiment_root=None):
     def open_prompt(payload: ScoringJobCreate):
         return app.state.catalog.job(payload)
 
+    @app.post('/api/scoring/comparison', dependencies=protected)
+    def comparison(payload: ScoringJobCreate):
+        datasets = payload.dataset_ids or ([payload.dataset_id] if payload.dataset_id else [])
+        if len(datasets) != 1:
+            raise HTTPException(400, 'Choose exactly one city for embedding comparison')
+        catalog = app.state.catalog
+        job = catalog.job(payload)
+        dataset = datasets[0]
+        column = catalog.datasets[dataset]['lookup'][normalize_prompt(payload.prompt)]
+        return dict(prompt=job['prompt'], dataset_id=dataset,
+                    matched_count=len(catalog.datasets[dataset]['records']),
+                    normalization='Per-embedding z-score over the same aligned city points',
+                    results=[catalog.result_ref(dataset, column, v) for v in ('old', 'new')])
+
     @app.post('/api/scoring/jobs/batch', dependencies=protected)
     def open_prompts(payload: ScoringJobBatchCreate):
         results = []
@@ -167,34 +197,35 @@ def create_app(settings=None, experiment_root=None):
                 results.append(dict(index=i, status='rejected', error=str(e.detail)))
         return dict(request_id='cpu-saved', received_at=utc_now(), queries=results)
 
-    def checked(dataset, prompt_id, revision):
-        data, column = app.state.catalog.resolve(dataset, prompt_id)
+    def checked(dataset, prompt_id, revision, embedding='new'):
+        data, column = app.state.catalog.resolve(dataset, prompt_id, embedding)
         if revision != data['revision']:
             raise HTTPException(404, 'Saved score revision has changed; reopen this prompt')
         return data, column
 
     @app.get('/api/scoring/results/{dataset}/{prompt_id}/revisions/{revision}/manifest', dependencies=protected)
-    def manifest(dataset: str, prompt_id: str, revision: str):
-        data, column = checked(dataset, prompt_id, revision)
-        scores, zscores = app.state.catalog.arrays(dataset, prompt_id)
-        return dict(**app.state.catalog.result_ref(dataset, column),
+    def manifest(dataset: str, prompt_id: str, revision: str, embedding: Literal['old', 'new'] = 'new'):
+        data, column = checked(dataset, prompt_id, revision, embedding)
+        scores, zscores = app.state.catalog.arrays(dataset, prompt_id, embedding)
+        return dict(**app.state.catalog.result_ref(dataset, column, embedding),
                     prompt=next(p for p, i in data['lookup'].items() if i == column),
                     source_type='zxy_geojson', score_property='score', zscore_property='zscore',
-                    zooms=list(settings.tile_zooms), model_version='8B', scoring_version='saved-city-only-4096',
+                    zooms=list(settings.tile_zooms), model_version='2B' if embedding == 'old' else '8B',
+                    scoring_version='historical-aligned' if embedding == 'old' else 'saved-city-only-4096',
                     density_rule=data['index'].density_rule, density_base_zoom=data['index'].density_base_zoom,
                     stats=dict(count=len(scores), score_min=float(scores.min()), score_max=float(scores.max()),
                                zscore_min=float(zscores.min()), zscore_max=float(zscores.max())))
 
     @app.get('/api/scoring/results/{dataset}/{prompt_id}/revisions/{revision}/tiles/{z}/{x}/{y}.geojson', dependencies=protected)
-    def tile(dataset: str, prompt_id: str, revision: str, z: int, x: int, y: int):
-        data, _ = checked(dataset, prompt_id, revision)
+    def tile(dataset: str, prompt_id: str, revision: str, z: int, x: int, y: int, embedding: Literal['old', 'new'] = 'new'):
+        data, _ = checked(dataset, prompt_id, revision, embedding)
         if z not in settings.tile_zooms or not (0 <= x < 2**z and 0 <= y < 2**z):
             raise HTTPException(400, 'Invalid tile coordinates or unsupported zoom')
         catalog = app.state.catalog
         path = catalog.storage.tile_path(dataset, prompt_id, z, x, y, revision)
         with catalog.lock:
             if not path.is_file():
-                scores, zscores = catalog.arrays(dataset, prompt_id)
+                scores, zscores = catalog.arrays(dataset, prompt_id, embedding)
                 write_geojson_tile_from_arrays(prompt_id=prompt_id, dataset_id=dataset, tile=TileKey(z,x,y),
                     tile_index=data['index'], records=data['records'], scores=scores, zscores=zscores,
                     storage=catalog.storage, result_revision=revision)

@@ -19,6 +19,7 @@ import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { DEFAULT_CITY_CONFIGS } from "../state/cities";
 import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
 import { panoDatasetIdForPoint, panoPointKey } from "../state/panoDatasets";
+import { useEmbeddingComparison } from "../state/useEmbeddingComparison";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
@@ -94,6 +95,31 @@ export const MapView = memo(function MapView({
   liveSearchAvailable = true
 }: MapViewProps) {
   const [citySelection, setCitySelection] = useState<CityId[]>(loadCitySelection);
+  const [compareEmbeddings, setCompareEmbeddings] = useState(false);
+  const [comparisonCityId, setComparisonCityId] = useState<CityId>(citySelection[0]);
+  const comparisonCities = cities.filter(city => backendConfig?.embeddingComparisonDatasetIds?.includes(city.datasetId));
+  const comparisonEnabled = compareEmbeddings && !!backendConfig?.enabled && comparisonCities.length > 0;
+  const comparisonCity = comparisonCities.find(city => city.id === comparisonCityId) ?? comparisonCities[0];
+  const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
+  const comparison = useEmbeddingComparison(comparisonEnabled, backendConfig, comparisonCity, selectedLayer);
+  const comparisonMaps = useRef(new Map<number, MapLibreMap>());
+  const syncingCamera = useRef(false);
+  const registerComparisonMap = useCallback((slot: number, map: MapLibreMap) => {
+    const peer = [...comparisonMaps.current.values()][0];
+    if (peer) map.jumpTo({ center: peer.getCenter(), zoom: peer.getZoom(), bearing: peer.getBearing(), pitch: peer.getPitch() });
+    comparisonMaps.current.set(slot, map);
+    const sync = () => {
+      if (syncingCamera.current) return;
+      syncingCamera.current = true;
+      try {
+        for (const other of comparisonMaps.current.values()) {
+          if (other !== map) other.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() });
+        }
+      } finally { syncingCamera.current = false; }
+    };
+    map.on("move", sync);
+    return () => { map.off("move", sync); comparisonMaps.current.delete(slot); };
+  }, []);
   const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
   const [citySplit, setCitySplit] = useState(loadCitySplit);
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
@@ -109,13 +135,14 @@ export const MapView = memo(function MapView({
     () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
     [cities, citySelection]
   );
-  const activeCities = compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities;
+  const activeCities = comparisonEnabled && comparisonCity ? [comparisonCity, comparisonCity]
+    : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
-  const allLayersHidden = layers.length > 0 && visibleLayerCount === 0;
-  const semanticLayerOverlayActive = !allLayersHidden && activeCities.length > 0 && activeCities.every((city) => semanticLayerLoadingByCity[city.id] === true);
+  const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
+  const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
-  const statusLabel = activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
+  const statusLabel = comparisonEnabled ? "Views synced" : activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
@@ -211,7 +238,7 @@ export const MapView = memo(function MapView({
 
   return (
     <div
-      className={`map-shell${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
+      className={`map-shell${comparisonEnabled ? " is-embedding-comparison" : ""}${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
         allLayersHidden ? " is-all-layers-hidden" : ""
       }`}
       data-tour-target="map"
@@ -224,7 +251,7 @@ export const MapView = memo(function MapView({
           <span>Semantic Map</span>
           <strong>{title}</strong>
         </div>
-        <div className="mobile-city-switch" aria-label="Available cities" role="group">
+        <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
             <button
               key={city.id}
@@ -237,7 +264,18 @@ export const MapView = memo(function MapView({
             </button>
           ))}
         </div>
-        <div className="city-toggle-group city-source-selectors">
+        {comparisonCities.length > 0 && <label className="basemap-select comparison-mode-select">
+          <span>View</span>
+          <select aria-label="Map comparison mode" value={comparisonEnabled ? "embeddings" : "cities"} onChange={e => setCompareEmbeddings(e.target.value === "embeddings")}>
+            <option value="cities">Compare cities</option><option value="embeddings">Old vs new embedding</option>
+          </select>
+        </label>}
+        {comparisonEnabled ? <label className="basemap-select comparison-city-select">
+          <span>City</span>
+          <select aria-label="Embedding comparison city" value={comparisonCity?.id} onChange={e => setComparisonCityId(e.target.value)}>
+            {comparisonCities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
+          </select>
+        </label> : <div className="city-toggle-group city-source-selectors">
           <span>Map sources</span>
           <div>
             {desktopCities.map((city, slot) => (
@@ -253,7 +291,7 @@ export const MapView = memo(function MapView({
               </label>
             ))}
           </div>
-        </div>
+        </div>}
         <label className="basemap-select">
           <span>Basemap</span>
           <select value={basemapId} onChange={(event) => onBasemapChange(event.target.value as BasemapId)}>
@@ -280,14 +318,17 @@ export const MapView = memo(function MapView({
       >
         {activeCities.map((city, index) => (
           <CityMapPane
-            key={city.id}
+            key={`${comparisonEnabled ? "comparison" : "cities"}-${city.id}-${index}`}
             city={city}
-            layers={layers}
+            layers={comparisonEnabled ? comparison.paneLayers[index] : layers}
             gradients={gradients}
             basemapId={basemapId}
-            selectedLayerId={selectedLayerId}
-            onSelectLayer={onSelectLayer}
-            onPriorityTileChange={onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
+            selectedLayerId={comparisonEnabled ? comparison.paneLayers[index][0]?.id ?? null : selectedLayerId}
+            onSelectLayer={comparisonEnabled ? () => { if (selectedLayerId) onSelectLayer(selectedLayerId); } : onSelectLayer}
+            registerComparisonMap={comparisonEnabled ? registerComparisonMap : undefined}
+            embeddingLabel={comparisonEnabled ? (index === 0 ? "Old embedding · 2B" : "New embedding · 8B / 4096") : undefined}
+            loadingKey={comparisonEnabled ? `${city.id}:${index}` : city.id}
+            onPriorityTileChange={!comparisonEnabled && onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
             markedPanos={markedPanos}
             selectedPanoKey={selectedPanoKey}
             onMarkPano={onMarkPano}
@@ -309,6 +350,10 @@ export const MapView = memo(function MapView({
       </div>
 
       <MapProgressOverlay entries={progressEntries} />
+      {comparisonEnabled && <div className="embedding-comparison-note" role="status">
+        {comparison.error || (!selectedLayer ? "Select a saved prompt to compare embeddings." :
+          comparison.count ? `${comparison.count.toLocaleString()} matched panoramas · Same prompt · ${scoreField === "zscore" ? "Z-score within each embedding" : "Original scores"}` : "Loading comparison…")}
+      </div>}
       <MapRefreshOverlay active={semanticLayerOverlayActive} />
       <AllLayersHiddenOverlay active={allLayersHidden} />
       <StreetViewPanel
@@ -323,6 +368,9 @@ export const MapView = memo(function MapView({
 });
 
 type CityMapPaneProps = {
+  registerComparisonMap?: (slot: number, map: MapLibreMap) => () => void;
+  embeddingLabel?: string;
+  loadingKey: string;
   city: CityConfig;
   layers: SemanticLayer[];
   gradients: GradientPreset[];
@@ -425,6 +473,9 @@ function MobileMapSearch({
 }
 
 function CityMapPane({
+  registerComparisonMap,
+  embeddingLabel,
+  loadingKey,
   city,
   layers,
   gradients,
@@ -544,6 +595,7 @@ function CityMapPane({
     });
     map.on("error", (event) => setStatus(event.error?.message ?? "Map error"));
     mapRef.current = map;
+    const unregisterComparisonMap = registerComparisonMap?.(splitIndex, map);
     requestSemanticRedraw(generation, `Loading ${city.name}`);
     reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
@@ -554,6 +606,7 @@ function CityMapPane({
         semanticRedrawTimerRef.current = undefined;
       }
       detachDiagnostics();
+      unregisterComparisonMap?.();
       map.remove();
       mapRef.current = null;
     };
@@ -621,7 +674,7 @@ function CityMapPane({
     selectPanoRef.current = onSelectPano;
   }, [onSelectPano]);
 
-  useEffect(() => () => onSemanticLayerLoadingChange(city.id, false), [city.id, onSemanticLayerLoadingChange]);
+  useEffect(() => () => onSemanticLayerLoadingChange(loadingKey, false), [loadingKey, onSemanticLayerLoadingChange]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -755,7 +808,7 @@ function CityMapPane({
     const reportSemanticLoading = (loading: boolean) => {
       if (loadingReported === loading) return;
       loadingReported = loading;
-      onSemanticLayerLoadingChange(city.id, loading);
+      onSemanticLayerLoadingChange(loadingKey, loading);
     };
 
     async function draw(attempt = 0) {
@@ -932,6 +985,7 @@ function CityMapPane({
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex}>
+      {embeddingLabel && <div className="embedding-pane-label">{embeddingLabel}</div>}
       <div ref={containerRef} className="map-container" />
       <div className="city-map-label">
         <span>{city.name}</span>

@@ -29,6 +29,7 @@ class CpuMapTests(unittest.TestCase):
         (exp/'prompts.json').write_text(json.dumps([{'index':0,'prompt':'a brick facade'}]))
         np.savez(exp/'alignment.npz', refs=np.array([[10,-.12,51.5,202001],[11,-.121,51.501,202002]]))
         np.save(exp/'score_new4096.npy', np.array([[.2],[.8]], dtype=np.float32))
+        np.save(exp/'historical_score.npy', np.array([[.9],[.1]], dtype=np.float32))
         self.client = TestClient(create_app(self.settings, root/'experiments'))
         self.client.__enter__()
 
@@ -70,6 +71,39 @@ class CpuMapTests(unittest.TestCase):
         ref = self.client.post('/api/scoring/jobs',json={'prompt':'a brick facade'}).json()['results'][0]
         self.assertEqual(self.client.get(ref['manifest_url'].replace(ref['result_revision'],'stale')).status_code,404)
         self.assertEqual(self.client.get(ref['tile_url_template'].format(z=30,x=0,y=0)).status_code,400)
+
+    def test_comparison_uses_same_points_with_distinct_scores_and_caches(self):
+        response = self.client.post('/api/scoring/comparison', json={
+            'prompt': 'a brick facade', 'dataset_id': 'london_224_8_45'})
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        self.assertEqual(result['matched_count'], 2)
+        old, new = result['results']
+        self.assertNotEqual(old['result_revision'], new['result_revision'])
+        tile = latlon_to_tile(lat_deg=51.5, lon_deg=-.12, z=13)
+        outputs = []
+        for ref in (old, new):
+            url = ref['tile_url_template'].format(z=13,x=tile.x,y=tile.y)
+            response = self.client.get(url)
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(response.content, self.client.get(url).content)
+            outputs.append({p['properties']['pano_id']: p for p in response.json()['features']})
+        self.assertEqual(set(outputs[0]), set(outputs[1]))
+        for pano_id in outputs[0]:
+            self.assertEqual(outputs[0][pano_id]['geometry'], outputs[1][pano_id]['geometry'])
+            self.assertEqual(outputs[0][pano_id]['properties']['date'], outputs[1][pano_id]['properties']['date'])
+        self.assertAlmostEqual(outputs[0]['10']['properties']['score'], .9)
+        self.assertAlmostEqual(outputs[1]['10']['properties']['score'], .2)
+        self.assertGreater(outputs[0]['10']['properties']['zscore'], 0)
+        self.assertLess(outputs[1]['10']['properties']['zscore'], 0)
+        self.assertEqual(self.client.get(old['manifest_url'].replace('?embedding=old','')).status_code,404)
+        self.assertEqual(self.client.get(old['manifest_url'].replace('embedding=old','embedding=bogus')).status_code,422)
+
+    def test_comparison_rejects_missing_city_and_unknown_prompt(self):
+        for payload, status in (({'prompt':'a brick facade'},400),
+                                ({'prompt':'unknown','dataset_id':'london_224_8_45'},403),
+                                ({'prompt':'a brick facade','dataset_ids':['london_224_8_45','unknown']},400)):
+            self.assertEqual(self.client.post('/api/scoring/comparison',json=payload).status_code,status)
 
 
 if __name__ == '__main__':
