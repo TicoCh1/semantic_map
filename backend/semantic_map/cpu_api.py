@@ -87,10 +87,12 @@ class SavedScoreCatalog:
         if column >= data['scores'].shape[1]:
             raise HTTPException(404, 'Saved prompt not found')
         if embedding != 'new':
-            variant = data['variants'].get(embedding)
+            variant = data['variants'].get('old' if embedding == 'difference' else embedding)
             if variant is None:
                 raise HTTPException(404, 'Embedding comparison is not available for this city')
             data = {**data, **variant}
+            if embedding == 'difference':
+                data['revision'] = 'cpu-difference-v1-' + data['revision']
         return data, column
 
     def arrays(self, dataset, prompt_id, embedding='new'):
@@ -98,10 +100,17 @@ class SavedScoreCatalog:
             key = (dataset, prompt_id, embedding)
             if key not in self.cache:
                 data, column = self.resolve(dataset, prompt_id, embedding)
-                scores = np.array(data['scores'][:, column], dtype=np.float32)
-                mean = np.float32(scores.mean(dtype=np.float64))
-                std = np.float32(scores.std(dtype=np.float64)) + np.float32(1e-12)
-                zscores = (scores - mean) / std
+                if embedding == 'difference':
+                    new_scores, new_zscores = self.arrays(dataset, prompt_id, 'new')
+                    old_scores, old_zscores = self.arrays(dataset, prompt_id, 'old')
+                    scores = new_scores - old_scores
+                    # Difference of standardized values, not standardization of differences.
+                    zscores = new_zscores - old_zscores
+                else:
+                    scores = np.array(data['scores'][:, column], dtype=np.float32)
+                    mean = np.float32(scores.mean(dtype=np.float64))
+                    std = np.float32(scores.std(dtype=np.float64)) + np.float32(1e-12)
+                    zscores = (scores - mean) / std
                 self.cache[key] = (scores, zscores)
                 if len(self.cache) > 16:
                     self.cache.popitem(last=False)
@@ -112,7 +121,7 @@ class SavedScoreCatalog:
         prompt_id = f'saved-{column}'
         data, _ = self.resolve(dataset, prompt_id, embedding)
         base = f'/api/scoring/results/{dataset}/{prompt_id}/revisions/{data["revision"]}'
-        suffix = '?embedding=old' if embedding == 'old' else ''
+        suffix = f'?embedding={embedding}' if embedding != 'new' else ''
         return dict(dataset_id=dataset, prompt_id=prompt_id, result_revision=data['revision'],
                     embedding=embedding, manifest_url=base+'/manifest'+suffix,
                     tile_url_template=base+'/tiles/{z}/{x}/{y}.geojson'+suffix)
@@ -185,7 +194,7 @@ def create_app(settings=None, experiment_root=None):
         return dict(prompt=job['prompt'], dataset_id=dataset,
                     matched_count=len(catalog.datasets[dataset]['records']),
                     normalization='Per-embedding z-score over the same aligned city points',
-                    results=[catalog.result_ref(dataset, column, v) for v in ('old', 'new')])
+                    results=[catalog.result_ref(dataset, column, v) for v in ('old', 'new', 'difference')])
 
     @app.post('/api/scoring/jobs/batch', dependencies=protected)
     def open_prompts(payload: ScoringJobBatchCreate):
@@ -204,20 +213,20 @@ def create_app(settings=None, experiment_root=None):
         return data, column
 
     @app.get('/api/scoring/results/{dataset}/{prompt_id}/revisions/{revision}/manifest', dependencies=protected)
-    def manifest(dataset: str, prompt_id: str, revision: str, embedding: Literal['old', 'new'] = 'new'):
+    def manifest(dataset: str, prompt_id: str, revision: str, embedding: Literal['old', 'new', 'difference'] = 'new'):
         data, column = checked(dataset, prompt_id, revision, embedding)
         scores, zscores = app.state.catalog.arrays(dataset, prompt_id, embedding)
         return dict(**app.state.catalog.result_ref(dataset, column, embedding),
                     prompt=next(p for p, i in data['lookup'].items() if i == column),
                     source_type='zxy_geojson', score_property='score', zscore_property='zscore',
-                    zooms=list(settings.tile_zooms), model_version='2B' if embedding == 'old' else '8B',
-                    scoring_version='historical-aligned' if embedding == 'old' else 'saved-city-only-4096',
+                    zooms=list(settings.tile_zooms), model_version={'old': '2B', 'new': '8B', 'difference': '8B-minus-2B'}[embedding],
+                    scoring_version={'old': 'historical-aligned', 'new': 'saved-city-only-4096', 'difference': 'new-minus-old-aligned-v1'}[embedding],
                     density_rule=data['index'].density_rule, density_base_zoom=data['index'].density_base_zoom,
                     stats=dict(count=len(scores), score_min=float(scores.min()), score_max=float(scores.max()),
                                zscore_min=float(zscores.min()), zscore_max=float(zscores.max())))
 
     @app.get('/api/scoring/results/{dataset}/{prompt_id}/revisions/{revision}/tiles/{z}/{x}/{y}.geojson', dependencies=protected)
-    def tile(dataset: str, prompt_id: str, revision: str, z: int, x: int, y: int, embedding: Literal['old', 'new'] = 'new'):
+    def tile(dataset: str, prompt_id: str, revision: str, z: int, x: int, y: int, embedding: Literal['old', 'new', 'difference'] = 'new'):
         data, _ = checked(dataset, prompt_id, revision, embedding)
         if z not in settings.tile_zooms or not (0 <= x < 2**z and 0 <= y < 2**z):
             raise HTTPException(400, 'Invalid tile coordinates or unsupported zoom')

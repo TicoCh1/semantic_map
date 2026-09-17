@@ -78,7 +78,7 @@ class CpuMapTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         result = response.json()
         self.assertEqual(result['matched_count'], 2)
-        old, new = result['results']
+        old, new, difference = result['results']
         self.assertNotEqual(old['result_revision'], new['result_revision'])
         tile = latlon_to_tile(lat_deg=51.5, lon_deg=-.12, z=13)
         outputs = []
@@ -96,6 +96,22 @@ class CpuMapTests(unittest.TestCase):
         self.assertAlmostEqual(outputs[1]['10']['properties']['score'], .2)
         self.assertGreater(outputs[0]['10']['properties']['zscore'], 0)
         self.assertLess(outputs[1]['10']['properties']['zscore'], 0)
+        url = difference['tile_url_template'].format(z=13,x=tile.x,y=tile.y)
+        delta_response = self.client.get(url)
+        self.assertEqual(delta_response.status_code, 200)
+        self.assertEqual(delta_response.content, self.client.get(url).content)
+        delta = {p['properties']['pano_id']: p for p in delta_response.json()['features']}
+        self.assertEqual(set(delta), set(outputs[0]))
+        for pano_id, point in delta.items():
+            self.assertEqual(point['geometry'], outputs[0][pano_id]['geometry'])
+            for field in ('score', 'zscore'):
+                self.assertAlmostEqual(point['properties'][field],
+                    outputs[1][pano_id]['properties'][field] - outputs[0][pano_id]['properties'][field], places=6)
+        self.assertAlmostEqual(delta['10']['properties']['score'], -.7)
+        self.assertAlmostEqual(delta['10']['properties']['zscore'], -2.)
+        self.assertAlmostEqual(delta['11']['properties']['zscore'], 2.)
+        self.assertNotEqual(difference['result_revision'], old['result_revision'])
+        self.assertNotEqual(difference['result_revision'], new['result_revision'])
         self.assertEqual(self.client.get(old['manifest_url'].replace('?embedding=old','')).status_code,404)
         self.assertEqual(self.client.get(old['manifest_url'].replace('embedding=old','embedding=bogus')).status_code,422)
 

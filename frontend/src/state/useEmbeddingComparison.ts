@@ -3,7 +3,7 @@ import type { CityConfig, RemoteBackendConfig, SemanticLayer } from "../api/type
 
 type ComparisonResult = {
   matched_count: number;
-  results: { embedding: "old" | "new"; tile_url_template: string }[];
+  results: { embedding: "old" | "new" | "difference"; tile_url_template: string }[];
 };
 
 export function useEmbeddingComparison(
@@ -35,13 +35,18 @@ export function useEmbeddingComparison(
     return () => controller.abort();
   }, [enabled, key, config?.token]);
   const result = enabled && state.key === key ? state.result : undefined;
-  const paneLayers = useMemo(() => (["old", "new"] as const).map(embedding => {
+  const paneLayers = useMemo(() => (["old", "new", "difference"] as const).map(embedding => {
     const ref = result?.results.find(r => r.embedding === embedding);
     if (!ref || !layer || !city || !config) return [];
     const url = new URL(ref.tile_url_template, config.baseUrl).href
       .replace(/%7B/gi, "{").replace(/%7D/gi, "}");
     return [{ ...layer, id: `${layer.id}:embedding-${embedding}`, visible: true,
-      name: `${layer.name} · ${embedding === "old" ? "Old 2B" : "New 8B"}`,
+      name: `${layer.name} · ${{old: "Old 2B", new: "New 8B", difference: "New − old"}[embedding]}`,
+      style: embedding === "difference" ? { ...layer.style,
+        gradient_name: "New − old", score_min: layer.score_property === "zscore" ? -3 : -0.2,
+        score_max: layer.score_property === "zscore" ? 3 : 0.2,
+        stops: [{value: 0, color: "#2166ac"}, {value: .5, color: "#f7f7f7"}, {value: 1, color: "#b2182b"}]
+      } : layer.style,
       source_path: url, source_paths: { [city.id]: url }, status: "ready" as const }];
   }), [result, layer, city, config]);
   return { paneLayers, count: result?.matched_count,

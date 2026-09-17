@@ -95,10 +95,11 @@ export const MapView = memo(function MapView({
   liveSearchAvailable = true
 }: MapViewProps) {
   const [citySelection, setCitySelection] = useState<CityId[]>(loadCitySelection);
-  const [compareEmbeddings, setCompareEmbeddings] = useState(false);
+  const [comparisonMode, setComparisonMode] = useState<"cities" | "embeddings" | "difference">("cities");
   const [comparisonCityId, setComparisonCityId] = useState<CityId>(citySelection[0]);
   const comparisonCities = cities.filter(city => backendConfig?.embeddingComparisonDatasetIds?.includes(city.datasetId));
-  const comparisonEnabled = compareEmbeddings && !!backendConfig?.enabled && comparisonCities.length > 0;
+  const comparisonEnabled = comparisonMode !== "cities" && !!backendConfig?.enabled && comparisonCities.length > 0;
+  const differenceEnabled = comparisonEnabled && comparisonMode === "difference";
   const comparisonCity = comparisonCities.find(city => city.id === comparisonCityId) ?? comparisonCities[0];
   const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
   const comparison = useEmbeddingComparison(comparisonEnabled, backendConfig, comparisonCity, selectedLayer);
@@ -135,14 +136,14 @@ export const MapView = memo(function MapView({
     () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
     [cities, citySelection]
   );
-  const activeCities = comparisonEnabled && comparisonCity ? [comparisonCity, comparisonCity]
+  const activeCities = comparisonEnabled && comparisonCity ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
     : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities;
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
   const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
-  const statusLabel = comparisonEnabled ? "Views synced" : activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
+  const statusLabel = differenceEnabled ? "New − old" : comparisonEnabled ? "Views synced" : activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
@@ -238,7 +239,7 @@ export const MapView = memo(function MapView({
 
   return (
     <div
-      className={`map-shell${comparisonEnabled ? " is-embedding-comparison" : ""}${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
+      className={`map-shell${differenceEnabled ? " is-difference-mode" : ""}${comparisonEnabled ? " is-embedding-comparison" : ""}${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
         allLayersHidden ? " is-all-layers-hidden" : ""
       }`}
       data-tour-target="map"
@@ -266,8 +267,9 @@ export const MapView = memo(function MapView({
         </div>
         {comparisonCities.length > 0 && <label className="basemap-select comparison-mode-select">
           <span>View</span>
-          <select aria-label="Map comparison mode" value={comparisonEnabled ? "embeddings" : "cities"} onChange={e => setCompareEmbeddings(e.target.value === "embeddings")}>
+          <select aria-label="Map comparison mode" value={comparisonEnabled ? comparisonMode : "cities"} onChange={e => setComparisonMode(e.target.value as typeof comparisonMode)}>
             <option value="cities">Compare cities</option><option value="embeddings">Old vs new embedding</option>
+            <option value="difference">Difference mode</option>
           </select>
         </label>}
         {comparisonEnabled ? <label className="basemap-select comparison-city-select">
@@ -318,15 +320,15 @@ export const MapView = memo(function MapView({
       >
         {activeCities.map((city, index) => (
           <CityMapPane
-            key={`${comparisonEnabled ? "comparison" : "cities"}-${city.id}-${index}`}
+            key={`${comparisonEnabled ? comparisonMode : "cities"}-${city.id}-${index}`}
             city={city}
-            layers={comparisonEnabled ? comparison.paneLayers[index] : layers}
+            layers={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index] : layers}
             gradients={gradients}
             basemapId={basemapId}
-            selectedLayerId={comparisonEnabled ? comparison.paneLayers[index][0]?.id ?? null : selectedLayerId}
+            selectedLayerId={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index][0]?.id ?? null : selectedLayerId}
             onSelectLayer={comparisonEnabled ? () => { if (selectedLayerId) onSelectLayer(selectedLayerId); } : onSelectLayer}
-            registerComparisonMap={comparisonEnabled ? registerComparisonMap : undefined}
-            embeddingLabel={comparisonEnabled ? (index === 0 ? "Old embedding · 2B" : "New embedding · 8B / 4096") : undefined}
+            registerComparisonMap={comparisonEnabled && !differenceEnabled ? registerComparisonMap : undefined}
+            embeddingLabel={differenceEnabled ? `Difference · New − old ${scoreField}` : comparisonEnabled ? (index === 0 ? "Old embedding · 2B" : "New embedding · 8B / 4096") : undefined}
             loadingKey={comparisonEnabled ? `${city.id}:${index}` : city.id}
             onPriorityTileChange={!comparisonEnabled && onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
             markedPanos={markedPanos}
@@ -352,7 +354,12 @@ export const MapView = memo(function MapView({
       <MapProgressOverlay entries={progressEntries} />
       {comparisonEnabled && <div className="embedding-comparison-note" role="status">
         {comparison.error || (!selectedLayer ? "Select a saved prompt to compare embeddings." :
-          comparison.count ? `${comparison.count.toLocaleString()} matched panoramas · Same prompt · ${scoreField === "zscore" ? "Z-score within each embedding" : "Original scores"}` : "Loading comparison…")}
+          comparison.count ? `${comparison.count.toLocaleString()} matched panoramas · ${differenceEnabled ? `New − old ${scoreField}` : scoreField === "zscore" ? "Z-score within each embedding" : "Original scores"}` : "Loading comparison…")}
+        {differenceEnabled && comparison.count && !comparison.error ? <div className="difference-legend" aria-label="Difference color scale">
+          <span>Lower in new</span><span>0</span><span>Higher in new</span>
+          <div className="difference-legend-ramp" />
+          <span>≤ −{scoreField === "zscore" ? "3" : "0.2"}</span><span>New − old</span><span>≥ +{scoreField === "zscore" ? "3" : "0.2"}</span>
+        </div> : null}
       </div>}
       <MapRefreshOverlay active={semanticLayerOverlayActive} />
       <AllLayersHiddenOverlay active={allLayersHidden} />
@@ -914,8 +921,8 @@ function CityMapPane({
               .setHTML(
                 `<div class="popup-title">${layer.name}</div>
                  <div class="popup-row"><span>ID</span><span>${props.id ?? ""}</span></div>
-                 <div class="popup-row"><span>score</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
-                 <div class="popup-row"><span>zscore</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
+                 <div class="popup-row"><span>${layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score'}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
+                 <div class="popup-row"><span>${layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore'}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
               )
               .addTo(currentMap);
           };

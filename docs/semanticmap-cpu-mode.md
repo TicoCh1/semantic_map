@@ -68,6 +68,22 @@ GitHub Pages connects via `?backend=https://3wzy1s5xoo6s4c-8000.proxy.runpod.net
 
 ### Same-city embedding comparison (2026-09-17)
 
+**View > Difference mode** displays one city as a single difference map. For each
+aligned panorama, `score = new_score - old_score` and
+`zscore = new_zscore - old_zscore`; the differences are not standardized again.
+The existing Field selector chooses raw score or z-score difference. The fixed,
+zero-centered blue/white/red ramp spans -3 to +3 for z-score differences and -0.2
+to +0.2 for raw-score differences; values outside these ranges retain their actual
+popup values but saturate at the end colors. Blue means lower in new, red higher.
+Panorama popups label the values as deltas, and panorama retrieval remains available.
+
+Comparison responses now also include `embedding=difference` result URLs. Difference
+revisions depend on both input score revisions and use a separate tile cache. Tests
+cover sign, magnitude, identity, and cache isolation. Live checks validated 23,257
+points across four city tiles against the old/new values (float32 error < 1e-6).
+Current CPU service: PID 4011, log `/tmp/semanticmap-cpu-difference.log`; previous
+module backup `/workspace/backend/semantic_map/cpu_api.pre_difference_20260917.py`.
+
 Choose **View > Old vs new embedding**, select a city, and open a saved prompt.
 The left pane shows historical 2B scores and the right pane shows new 8B/4096
 scores for that same prompt and city. Only the selected prompt is displayed in
