@@ -7,7 +7,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 
 from .auth import require_backend_token
+from .ai_verification_api import create_ai_verification_router
 from .backend_config import get_backend_settings
+from .city_catalog import active_city_configs
 from .human_verification import HumanVerificationSampler
 from .human_verification_schemas import (
     HumanVerificationRatingBatch,
@@ -20,6 +22,7 @@ from .human_verification_storage import HumanVerificationStorage
 from .pano_service import AmbiguousPanoIdError, PanoCoordinateMismatchError, PanoServiceRegistry
 from .remote_schemas import PanoImageResponse
 from .result_storage import ResultStorage
+from .saved_results_api import create_saved_results_router
 
 
 settings = get_backend_settings()
@@ -41,6 +44,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(create_saved_results_router(settings, result_storage))
+app.include_router(create_ai_verification_router(settings, result_storage, rating_storage, pano_registry))
 
 IMMUTABLE_IMAGE_HEADERS = {"Cache-Control": "public, max-age=31536000, immutable"}
 
@@ -83,8 +88,26 @@ def ready() -> dict[str, object]:
     return {
         "status": "ready",
         "mode": "human_verification",
+        "downloads_enabled": True,
+        "query_submission_enabled": False,
+        "ai_verification_url": "/api/ai-verification",
         "dataset_ids": list(settings.default_dataset_ids),
         "pano_warmup_running": pano_warmup_task is not None and not pano_warmup_task.done(),
+    }
+
+
+@app.get("/api/capabilities")
+def capabilities() -> dict[str, object]:
+    return {
+        "mode": "human_verification",
+        "downloads_enabled": True,
+        "query_submission_enabled": False,
+        "ai_verification_url": "/api/ai-verification",
+        "dataset_id": settings.default_dataset_id,
+        "dataset_ids": list(settings.default_dataset_ids),
+        "dataset_group_id": settings.default_dataset_group_id,
+        "cities": active_city_configs(settings),
+        "results_url": "/api/scoring/results",
     }
 
 
@@ -115,6 +138,8 @@ def submit_ratings(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 
 @app.get(

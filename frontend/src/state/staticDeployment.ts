@@ -1,9 +1,13 @@
-export const STATIC_DEPLOYMENT_CONTACT_EMAIL = "shengtao.steven.xia@gmail.com";
+import { runtimeConfig } from "./runtimeConfig";
+
+export const STATIC_DEPLOYMENT_CONTACT_EMAIL = runtimeConfig.supportEmail;
 
 export const STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE =
-  `Dynamic search is unavailable due to static deployment. For more details or fully functional webapp, contact the author at ${STATIC_DEPLOYMENT_CONTACT_EMAIL}`;
+  "Dynamic search is unavailable in this static demo. Connect a backend to enable search." +
+  (STATIC_DEPLOYMENT_CONTACT_EMAIL ? ` Contact support at ${STATIC_DEPLOYMENT_CONTACT_EMAIL}` : "");
 
 export async function copyStaticDeploymentContactEmail(): Promise<void> {
+  if (!STATIC_DEPLOYMENT_CONTACT_EMAIL) return;
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(STATIC_DEPLOYMENT_CONTACT_EMAIL);
     return;

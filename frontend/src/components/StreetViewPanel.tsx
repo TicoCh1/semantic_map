@@ -6,7 +6,7 @@ import { Check, Copy, Maximize2, Minimize2, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type DragEvent } from "react";
 import { PANO_REFERENCE_DRAG_TYPE, type MarkedPano, type PanoReference } from "../api/types";
 import { cityConfigForDataset, cityConfigForId } from "../state/cities";
-import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type StreetViewPanelProps = {
   panos: MarkedPano[];
@@ -101,18 +101,18 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
           {selected?.status === "failed" ? (
             <div className="street-view-state street-view-error-state" role="status">
               <span>{selected.message || STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}</span>
-              <button
+              {STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
                 className={`street-view-contact-button${contactCopied ? " is-copied" : ""}`}
                 {...glassSurface({ material: "control", fade: [] })}
                 type="button"
                 onClick={() => void copyContactEmail()}
-                title="Copy author email"
-                aria-label="Copy author email"
+                title="Copy support email"
+                aria-label="Copy support email"
               >
                 <GlassMaterial />
                 {contactCopied ? <Check size={15} /> : <Copy size={15} />}
                 <span>{contactCopied ? "Copied" : "Copy email"}</span>
-              </button>
+              </button> : null}
             </div>
           ) : null}
           {selected?.status === "ready" ? (

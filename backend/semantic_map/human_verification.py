@@ -41,7 +41,7 @@ class SampleCandidate:
 class CompletedResultRef:
     dataset_id: str
     prompt_id: str
-    manifest_path: Path
+    manifest_path: Path | None
     result_revision: str | None
 
 
@@ -90,20 +90,9 @@ class HumanVerificationSampler:
 
         for entry in selected_prompt.results:
             dataset_id = entry.dataset_id
-            manifest_payload = self.storage.read_json(entry.manifest_path)
-            manifest = ResultManifest.model_validate(manifest_payload)
-            if manifest.dataset_group_id:
-                dataset_group_ids.add(manifest.dataset_group_id)
-
-            arrays = self.storage.read_score_arrays(
-                dataset_id,
-                entry.prompt_id,
-                revision=entry.result_revision,
-            )
-            if arrays is None:
-                raise FileNotFoundError(f"Saved score arrays are missing for {dataset_id}/{entry.prompt_id}")
-            scores, zscores = arrays
-            records = self._dataset_records(dataset_id)
+            dataset_group_id, scores, zscores, records = self._result_data(entry)
+            if dataset_group_id:
+                dataset_group_ids.add(dataset_group_id)
             if len(scores) != len(records) or len(zscores) != len(records):
                 raise RuntimeError(
                     f"Result array length mismatch for {dataset_id}: "
@@ -203,6 +192,18 @@ class HumanVerificationSampler:
             tasks=tasks,
             strata=strata,
         )
+
+    def _result_data(self, entry: CompletedResultRef):
+        """Read a matched identity/score source; sampling is independent of its layout."""
+        if entry.manifest_path is None:
+            raise ValueError("A saved result manifest is required")
+        manifest = ResultManifest.model_validate(self.storage.read_json(entry.manifest_path))
+        arrays = self.storage.read_score_arrays(
+            entry.dataset_id, entry.prompt_id, revision=entry.result_revision,
+        )
+        if arrays is None:
+            raise FileNotFoundError(f"Saved score arrays are missing for {entry.dataset_id}/{entry.prompt_id}")
+        return manifest.dataset_group_id, *arrays, self._dataset_records(entry.dataset_id)
 
     def _dataset_records(self, dataset_id: str) -> tuple[PanoRecord, ...]:
         records = self._records_by_dataset.get(dataset_id)

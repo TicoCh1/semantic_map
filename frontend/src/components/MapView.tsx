@@ -25,7 +25,7 @@ import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
 import { panoDatasetIdForPoint, panoPointKey } from "../state/panoDatasets";
 import { useEmbeddingComparison } from "../state/useEmbeddingComparison";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
-import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type MapViewProps = {
   backendConfig?: RemoteBackendConfig | null;
@@ -512,16 +512,16 @@ function MobileMapSearch({
           <span>Search unavailable in this demo</span>
         </div>
       )}
-      <button
+      {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
         type={liveSearchAvailable ? "submit" : "button"}
         className={liveSearchAvailable ? "" : contactCopied ? "is-copied" : "is-contact-copy"}
         disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() || !onCreatePrompt : false}
-        title={liveSearchAvailable ? "Create layer" : "Copy author email"}
-        aria-label={liveSearchAvailable ? "Create layer" : "Copy author email"}
+        title={liveSearchAvailable ? "Create layer" : "Copy support email"}
+        aria-label={liveSearchAvailable ? "Create layer" : "Copy support email"}
         onClick={liveSearchAvailable ? undefined : () => void copyContactEmail()}
       >
         {liveSearchAvailable ? <SendHorizontal size={17} /> : contactCopied ? <Check size={17} /> : <Copy size={17} />}
-      </button>
+      </button> : null}
     </form>
   );
 }
