@@ -85,6 +85,8 @@ class HumanVerificationStorage:
         user_agent: str | None = None,
     ) -> HumanVerificationRatingIngestResponse:
         received_at = utc_now()
+        if any(r.rater_id.startswith(('codex_ai_', 'ai:')) for r in batch.ratings) or 'Codex-AI-Verification' in (user_agent or ''):
+            raise ValueError('AI ratings must use /api/ai-verification/ratings, not the human channel')
         with self._lock, closing(self._connect()) as connection, connection:
             for rating in batch.ratings:
                 task_exists = connection.execute(
@@ -154,9 +156,17 @@ class HumanVerificationStorage:
         with self._lock, closing(self._connect()) as connection, connection:
             return self._stats(connection)
 
-    def prompt_completion_counts(self) -> dict[str, int]:
+    def prompt_completion_counts(self, dataset_revisions: dict[str, str] | None = None) -> dict[str, int]:
         """Return persisted rating rows per canonical prompt, including encores."""
-
+        scope = ""
+        parameters = []
+        if dataset_revisions is not None:
+            if not dataset_revisions:
+                return {}
+            scope = " AND (" + " OR ".join(
+                "(tasks.dataset_id = ? AND tasks.result_revision = ?)" for _ in dataset_revisions
+            ) + ")"
+            parameters = [value for pair in dataset_revisions.items() for value in pair]
         with self._lock, closing(self._connect()) as connection, connection:
             return {
                 str(prompt): int(count)
@@ -165,8 +175,11 @@ class HumanVerificationStorage:
                     SELECT studies.prompt, COUNT(*)
                     FROM verification_ratings AS ratings
                     JOIN verification_studies AS studies ON studies.study_id = ratings.study_id
-                    GROUP BY studies.prompt
-                    """
+                    JOIN verification_tasks AS tasks
+                      ON tasks.study_id = ratings.study_id AND tasks.task_id = ratings.task_id
+                    WHERE ratings.rating_kind = 'human'
+                    """ + scope + " GROUP BY studies.prompt",
+                    parameters,
                 )
             }
 
@@ -214,6 +227,7 @@ class HumanVerificationStorage:
             JOIN verification_tasks AS tasks
               ON tasks.study_id = ratings.study_id AND tasks.task_id = ratings.task_id
             JOIN verification_studies AS studies ON studies.study_id = ratings.study_id
+            WHERE ratings.rating_kind = 'human'
             ORDER BY ratings.received_at, ratings.study_id, tasks.task_order, ratings.rater_id
         """
         output = io.StringIO(newline="")
@@ -228,6 +242,7 @@ class HumanVerificationStorage:
             """
             SELECT COUNT(*), COUNT(DISTINCT rater_id), COUNT(DISTINCT study_id)
             FROM verification_ratings
+            WHERE rating_kind = 'human'
             """
         ).fetchone()
         total_prompts = connection.execute(
@@ -235,11 +250,12 @@ class HumanVerificationStorage:
             SELECT COUNT(DISTINCT studies.prompt)
             FROM verification_ratings AS ratings
             JOIN verification_studies AS studies ON studies.study_id = ratings.study_id
+            WHERE ratings.rating_kind = 'human'
             """
         ).fetchone()[0]
         rating_counts = {rating: 0 for rating in range(1, 6)}
         for rating, count in connection.execute(
-            "SELECT human_rating, COUNT(*) FROM verification_ratings GROUP BY human_rating"
+            "SELECT human_rating, COUNT(*) FROM verification_ratings WHERE rating_kind = 'human' GROUP BY human_rating"
         ):
             rating_counts[int(rating)] = int(count)
         prompts = [
@@ -254,6 +270,7 @@ class HumanVerificationStorage:
                 SELECT studies.prompt, COUNT(*), COUNT(DISTINCT ratings.rater_id), AVG(ratings.human_rating)
                 FROM verification_ratings AS ratings
                 JOIN verification_studies AS studies ON studies.study_id = ratings.study_id
+                WHERE ratings.rating_kind = 'human'
                 GROUP BY studies.prompt
                 ORDER BY COUNT(*) DESC, studies.prompt
                 """
@@ -331,6 +348,7 @@ class HumanVerificationStorage:
             """
         )
         rating_columns = {
+            "rating_kind": "TEXT NOT NULL DEFAULT 'human'",
             "client_ip": "TEXT",
             "visitor_label": "TEXT",
             "user_agent": "TEXT",
@@ -344,6 +362,28 @@ class HumanVerificationStorage:
         connection.execute(
             "CREATE INDEX IF NOT EXISTS verification_ratings_visitor ON verification_ratings(visitor_label)"
         )
+        # Preserve the earlier explicitly AI-labelled trial for audit, while excluding
+        # it from human sampling, exports and statistics. Never delete those rows.
+        connection.execute("""UPDATE verification_ratings SET rating_kind = 'legacy_ai'
+            WHERE substr(rater_id, 1, 9) = 'codex_ai_' OR substr(rater_id, 1, 3) = 'ai:'
+            OR instr(COALESCE(user_agent, ''), 'Codex-AI-Verification') > 0""")
+
+    def human_question_candidates(self) -> list[dict]:
+        """Private source records for matching; never send ratings/scores to an AI rater."""
+        with self._lock, closing(self._connect()) as connection, connection:
+            connection.row_factory = sqlite3.Row
+            rows = connection.execute("""
+                SELECT tasks.*, studies.prompt, COUNT(*) AS human_rating_count,
+                       MIN(ratings.received_at) AS first_human_rating_at
+                FROM verification_tasks AS tasks
+                JOIN verification_studies AS studies ON studies.study_id = tasks.study_id
+                JOIN verification_ratings AS ratings
+                  ON ratings.study_id = tasks.study_id AND ratings.task_id = tasks.task_id
+                WHERE ratings.rating_kind = 'human'
+                GROUP BY tasks.study_id, tasks.task_id
+                ORDER BY first_human_rating_at, tasks.study_id, tasks.task_id
+            """).fetchall()
+            return [dict(row) for row in rows]
 
 
 def utc_now() -> str:

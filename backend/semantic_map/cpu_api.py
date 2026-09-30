@@ -17,8 +17,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
 from .auth import require_backend_token
+from .access_log import install_access_logging
 from .backend_config import get_backend_settings
 from .city_catalog import active_city_configs
+from .cpu_verification import create_cpu_verification_router
 from .pano_service import PanoServiceRegistry, AmbiguousPanoIdError, PanoCoordinateMismatchError
 from .prompt_ids import normalize_prompt, utc_now
 from .remote_schemas import ScoringJobBatchCreate, ScoringJobCreate
@@ -144,31 +146,40 @@ class SavedScoreCatalog:
 
 def create_app(settings=None, experiment_root=None):
     settings = settings or get_backend_settings()
+    verification_settings = settings
     root = Path(os.getenv('CPU_CACHE_ROOT', str(settings.workspace_root / 'semantic_backend/cpu_map')))
     # Keep derived CPU tiles separate from all historical and GPU result revisions.
     settings = replace(settings, result_root=root/'results', tile_index_root=root/'tile_index')
     experiment_root = Path(experiment_root or os.getenv('CPU_EXPERIMENT_ROOT', str(settings.workspace_root/'semantic_backend/experiments')))
+    panos = PanoServiceRegistry(settings)
 
     @asynccontextmanager
     async def lifespan(app):
         app.state.catalog = SavedScoreCatalog(settings, experiment_root)
-        app.state.panos = PanoServiceRegistry(settings)
-        yield
+        app.state.panos = panos
+        try:
+            yield
+        finally:
+            panos.close()
 
     app = FastAPI(title='SemanticMap CPU saved-prompt mode', lifespan=lifespan)
     app.add_middleware(CORSMiddleware, allow_origins=['*'], allow_methods=['*'], allow_headers=['*'])
+    install_access_logging(app, settings.workspace_root)
+    app.include_router(create_cpu_verification_router(verification_settings, lambda: app.state.catalog, panos))
     protected = [Depends(require_backend_token)]
 
     @app.get('/api/ready')
     @app.get('/api/health')
     def ready():
         return dict(ready=True, mode='cpu', new_queries_enabled=False,
+                    verification_url='/api/verification', ai_verification_url='/api/ai-verification',
                     default_dataset_ids=list(app.state.catalog.datasets),
                     prompt_count=len(app.state.catalog.prompts))
 
     @app.get('/api/capabilities')
     def capabilities():
         return dict(mode='cpu', new_queries_enabled=False, saved_prompts_enabled=True,
+                    verification_url='/api/verification', ai_verification_url='/api/ai-verification',
                     embedding_comparison_dataset_ids=[d for d, v in app.state.catalog.datasets.items() if 'old' in v['variants']],
                     dataset_id=settings.default_dataset_id, dataset_ids=list(app.state.catalog.datasets),
                     dataset_group_id=settings.default_dataset_group_id, cities=active_city_configs(settings))

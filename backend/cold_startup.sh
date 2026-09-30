@@ -10,6 +10,9 @@ if [ -z "${WORKSPACE_ROOT:-}" ]; then
 fi
 
 BACKEND_DIR="${BACKEND_DIR:-${WORKSPACE_ROOT}/backend}"
+if [ -f "${BACKEND_DIR}/native_q90_defaults.sh" ]; then
+  source "${BACKEND_DIR}/native_q90_defaults.sh"
+fi
 QWEN_SOURCE_DIR="${QWEN_SOURCE_DIR:-${WORKSPACE_ROOT}/Qwen3-VL-Embedding}"
 QWEN_RUNTIME_DIR="${QWEN_RUNTIME_DIR:-/tmp/Qwen3-VL-Embedding}"
 MODEL_DIR="${MODEL_DIR:-${WORKSPACE_ROOT}/models/Qwen3-VL-Embedding-2B}"

@@ -33,6 +33,10 @@ if [ -f "${ENV_FILE}" ]; then
   source "${ENV_FILE}"
 fi
 
+if [ -f "${BACKEND_DIR}/native_q90_defaults.sh" ]; then
+  source "${BACKEND_DIR}/native_q90_defaults.sh"
+fi
+
 if [ -n "${CALLER_PUBLIC_BASE_URL}" ]; then
   export PUBLIC_BASE_URL="${CALLER_PUBLIC_BASE_URL}"
 fi

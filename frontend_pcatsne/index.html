@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UrbanFabric PCA/t-SNE Scale Viewer</title>
+  </head>
+  <body>
+    <main id="app">
+      <section id="map" aria-label="PCA t-SNE scale map"></section>
+      <aside class="scale-panel" aria-label="Scale controls">
+        <div class="scale-heading">
+          <span>UrbanFabric</span>
+          <strong>PCA/t-SNE Scale</strong>
+        </div>
+        <label class="dataset-label" for="dataset-select" hidden>
+          <span>Dataset</span>
+          <select id="dataset-select" class="dataset-select">
+            <option value="webmercator-center">WebMercator: center patches</option>
+            <option value="webmercator-grid">WebMercator: grouped patches</option>
+          </select>
+        </label>
+        <label class="scale-slider-label" for="scale-slider">
+          <span>Scale</span>
+          <output id="scale-output" for="scale-slider">2 km</output>
+        </label>
+        <input id="scale-slider" class="scale-slider" type="range" min="3600" max="57600" value="3600" step="10" />
+        <div class="scale-meta">
+          <span id="scale-axis-label">Axis 3.6 km</span>
+          <span id="zoom-label">Zoom</span>
+        </div>
+        <label class="scale-slider-label axis-slider-label" for="axis-slider">
+          <span>Axis</span>
+          <output id="axis-output" for="axis-slider">Short axis</output>
+        </label>
+        <input id="axis-slider" class="scale-slider axis-slider" type="range" min="0" max="1" value="1" step="0.01" />
+        <div id="layer-readout" class="layer-readout"></div>
+        <div id="grid-controls" class="grid-controls is-disabled" hidden>
+          <label class="scale-slider-label grid-slider-label" for="grid-transparency-slider">
+            <span>Grid transparency</span>
+            <output id="grid-transparency-output" for="grid-transparency-slider">66%</output>
+          </label>
+          <input id="grid-transparency-slider" class="scale-slider grid-slider" type="range" min="0" max="1" value="0.66" step="0.01" />
+          <label class="scale-slider-label grid-slider-label" for="grid-width-slider">
+            <span>Grid width</span>
+            <output id="grid-width-output" for="grid-width-slider">1.5 px</output>
+          </label>
+          <input id="grid-width-slider" class="scale-slider grid-slider" type="range" min="1" max="6" value="1.5" step="0.25" />
+        </div>
+        <div id="data-status" class="data-status">Loading point clouds</div>
+      </aside>
+      <section id="loading-overlay" class="loading-overlay" aria-live="polite" aria-label="Point cloud loading progress">
+        <div class="loading-panel">
+          <div class="loading-kicker">Preparing city scales</div>
+          <div class="loading-title">Loading PCA/t-SNE point clouds</div>
+          <div class="loading-track">
+            <div id="loading-bar" class="loading-bar"></div>
+          </div>
+          <div class="loading-meta">
+            <span id="loading-label">Waiting for map</span>
+            <span id="loading-percent">0%</span>
+          </div>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

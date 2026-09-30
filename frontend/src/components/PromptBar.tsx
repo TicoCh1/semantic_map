@@ -4,7 +4,7 @@ import { useState, type DragEvent } from "react";
 import { SavedPromptSearch } from "./SavedPromptSearch";
 import { saveRemoteBackendConfig } from "../api/client";
 import { PANO_REFERENCE_DRAG_TYPE, type PanoReference, type RemoteBackendConfig } from "../api/types";
-import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
+import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type PromptBarProps = {
   disabled?: boolean;
@@ -112,16 +112,16 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submit();
           }}
         /></GlassField>
-        <button
+        {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
           type="button"
           className={`primary-icon-button${liveSearchAvailable ? "" : " contact-copy-button"}${contactCopied ? " is-copied" : ""}`}
           disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() : disabled}
           onClick={() => (liveSearchAvailable ? void submit() : void copyContactEmail())}
-          title={liveSearchAvailable ? "Create layer" : "Copy author email"}
-          aria-label={liveSearchAvailable ? "Create layer" : "Copy author email"}
+          title={liveSearchAvailable ? "Create layer" : "Copy support email"}
+          aria-label={liveSearchAvailable ? "Create layer" : "Copy support email"}
         >
           {liveSearchAvailable ? <SendHorizontal size={18} /> : contactCopied ? <Check size={18} /> : <Copy size={18} />}
-        </button>
+        </button> : null}
       </div>}
     </section>
   );

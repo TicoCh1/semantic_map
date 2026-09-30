@@ -14,6 +14,7 @@ export type SemanticMapRuntimeConfig = {
   remoteBackendEnabled: boolean;
   staticFallbackDataBaseUrl: string;
   demoWatchdogUrl: string;
+  supportEmail: string;
 };
 
 declare global {
@@ -84,6 +85,7 @@ const defaultDatasetId = asString(rawRuntimeConfig.defaultDatasetId, "london_224
 const configuredRunpodUrl = normalizeRunpodProxyUrl(asString(rawRuntimeConfig.runpodUrl, envRunpodUrl));
 
 export const runtimeConfig: SemanticMapRuntimeConfig = {
+  supportEmail: asString(rawRuntimeConfig.supportEmail, envString("VITE_SUPPORT_EMAIL")),
   mode: rawRuntimeConfig.mode === "demo" ? "demo" : rawRuntimeConfig.mode === "screensaver" ? "screensaver" : "full",
   runpodUrl: configuredRunpodUrl,
   runpodToken: asString(rawRuntimeConfig.runpodToken, envString("VITE_EXHIBIT_RUNPOD_TOKEN")),

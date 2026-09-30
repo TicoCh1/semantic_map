@@ -1,0 +1,11 @@
+{
+  "name": "urbanfabric-pcatsne-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node ../frontend/node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5174 --configLoader runner",
+    "build": "node ../frontend/node_modules/vite/bin/vite.js build --base ./ --configLoader runner",
+    "preview": "node ../frontend/node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4174 --configLoader runner"
+  }
+}
