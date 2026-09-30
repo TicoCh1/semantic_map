@@ -1,8 +1,41 @@
 # Session Handoff Notes
 
-Updated: 2026-06-17
+Updated: 2026-09-30
 
 This file is a short memory aid for future sessions. It intentionally avoids repeating the main development spec in `semantic-map-frontend-dev.md`.
+
+## Semantic Map frontend UI handoff — 2026-09-30
+
+Current local UI source/build is documented in
+[Semantic Map frontend development notes](semantic-map-frontend-dev.md#current-local-ui-2026-09-30).
+The source release to `main` triggers GitHub Pages; check the workflow result.
+The portable package was not refreshed. This handoff does not change backend
+operational status.
+
+- Desktop/tablet/phone share the transparent glass pipeline and neutral chrome.
+  Surface blur is 6 px, nested control blur is 8 px, and fade distance is 0.
+  Control brightness correction is 80% of the parent correction, divided by the
+  parent brightness: dark controls are lighter than the parent, not darker.
+- Desktop has a hover/pin/close rail; up to 1023 px uses a tap-controlled sheet.
+  Ordinary phones up to 700 px show one city. The phone Basemap control is
+  removed; Max detail occupies its former row as an aria-pressed glass button.
+  Desktop/tablet keep Basemap, including OpenFreeMap Positron. Toolbar height
+  drives navigation clearance, and an open desktop panel constrains its width.
+- Attribution is in the control footer; city cards are removed; scale is a plain
+  labelled line. The tutorial has seven pages, starting with Welcome and a 3 px
+  full-viewport focus blur. Glass tuning is hidden.
+- Street-view placeholders are transparent and theme-aware. Copy-contact glass
+  is bounded to the button, keeping message text sharp. Panorama colours remain
+  unchanged. Histogram/gradient controls are compact and preserve data colours.
+- Preserve same-frame `map.resize()` + `map.redraw()` and source/layer reuse in
+  `mapResize.ts` / `semanticLayerRenderer.ts`; do not restore remove/re-add on
+  divider movement. All material recipes remain in `glass.css`.
+- The last UI validation passed `npm.cmd run build -- --configLoader runner`,
+  `test:glass` (3 tests) and `test:map` (6 tests). Browser viewport checks covered
+  phones, landscape, tablet, small desktop and 1440×1000, including toggle
+  click/keyboard states and light/dark street-view failure messages. Physical
+  touch hardware was not tested. Preview is local port 4173; rebuild before
+  reloading after source edits. Screenshots are in `artifacts/semantic-map-ui/`.
 
 ## Current Run State
 
@@ -52,6 +85,10 @@ Start-Process -FilePath "cmd.exe" -ArgumentList "/k title UrbanFabric Frontend D
   - `frontend/src/components/PromptBar.tsx` is back to prompt input plus create button only.
 
 ## 2026-06-17 GitHub Pages Mobile Update
+
+Historical release snapshot. The independent bubbles, clamped map height,
+pill scale and checkbox animation below have been superseded by the
+[September 30 frontend UI handoff](#semantic-map-frontend-ui-handoff--2026-09-30).
 
 - Mobile compact breakpoint is `max-width: 700px`.
 - On compact mobile startup, the app follows `prefers-color-scheme` for dark mode and default basemap until the user manually changes them. Manual markers are `semantic-map-theme-source=manual` and `semantic-map-basemap-source=manual`.

@@ -1,5 +1,9 @@
+import { GlassMaterial } from "../styles/GlassMaterial";
+import { applyGlassSurface, glassSurface, observeMapGlass } from "../styles/glass";
+import { updateSemanticLayer } from "../state/semanticLayerRenderer";
+import { createMapResizeScheduler } from "../state/mapResize";
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
-import { Check, Copy, Search, SendHorizontal } from "lucide-react";
+import { Check, Copy, Link2, Scan, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
@@ -30,6 +34,7 @@ type MapViewProps = {
   gradients: GradientPreset[];
   selectedLayerId: string | null;
   basemapId: BasemapId;
+  attributionHost?: HTMLElement | null;
   onBasemapChange: (basemapId: BasemapId) => void;
   onSelectLayer: (layerId: string) => void;
   onPriorityTileChange?: (cityId: CityId, tile: TileCoord | null) => void;
@@ -79,6 +84,7 @@ export const MapView = memo(function MapView({
   gradients,
   selectedLayerId,
   basemapId,
+  attributionHost,
   onBasemapChange,
   onSelectLayer,
   onPriorityTileChange,
@@ -121,6 +127,21 @@ export const MapView = memo(function MapView({
     map.on("move", sync);
     return () => { map.off("move", sync); comparisonMaps.current.delete(slot); };
   }, []);
+  const toolbarRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const toolbar = toolbarRef.current;
+    const shell = toolbar?.parentElement;
+    if (!toolbar || !shell) return;
+    const updateClearance = () => {
+      shell.style.setProperty("--map-toolbar-clearance", `${Math.ceil(toolbar.offsetTop + toolbar.offsetHeight + 12)}px`);
+    };
+    const observer = new ResizeObserver(updateClearance);
+    observer.observe(toolbar);
+    updateClearance();
+    window.addEventListener("resize", updateClearance);
+    return () => { observer.disconnect(); window.removeEventListener("resize", updateClearance); };
+  }, []);
+
   const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
   const [citySplit, setCitySplit] = useState(loadCitySplit);
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
@@ -199,9 +220,9 @@ export const MapView = memo(function MapView({
   const startCitySplitDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     if (compactViewport) return;
-    setDraggingCitySplit(true);
     const shell = event.currentTarget.closest(".city-map-layout") as HTMLElement | null;
     if (!shell) return;
+    setDraggingCitySplit(true);
     const rect = shell.getBoundingClientRect();
 
     const onMove = (moveEvent: globalThis.PointerEvent) => {
@@ -212,10 +233,12 @@ export const MapView = memo(function MapView({
       setDraggingCitySplit(false);
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
     };
 
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
   }, [compactViewport]);
 
   const handleCityRemoteTileZoomChange = useCallback((cityId: CityId, zoom: number) => {
@@ -239,18 +262,19 @@ export const MapView = memo(function MapView({
 
   return (
     <div
+      data-basemap={basemapId}
       className={`map-shell${differenceEnabled ? " is-difference-mode" : ""}${comparisonEnabled ? " is-embedding-comparison" : ""}${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
         allLayersHidden ? " is-all-layers-hidden" : ""
       }`}
       data-tour-target="map"
     >
-      {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
-        <div className="mobile-map-search cpu-map-search"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></div> :
+      <div ref={toolbarRef} className="map-toolbar" {...glassSurface()}><GlassMaterial />
+        {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
+        <div className="mobile-map-search cpu-map-search" {...glassSurface({ shape: "capsule" })}><GlassMaterial /><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></div> :
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
-      <div className="map-toolbar">
-        <div>
+        <div className="map-summary">
           <span>Semantic Map</span>
-          <strong>{title}</strong>
+          <strong title={title}>{title}</strong>
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
@@ -294,9 +318,9 @@ export const MapView = memo(function MapView({
             ))}
           </div>
         </div>}
-        <label className="basemap-select">
+        <label className="basemap-select basemap-source-select">
           <span>Basemap</span>
-          <select value={basemapId} onChange={(event) => onBasemapChange(event.target.value as BasemapId)}>
+          <select aria-label="Basemap" value={basemapId} onChange={(event) => onBasemapChange(event.target.value as BasemapId)}>
             {BASEMAPS.map((basemap) => (
               <option key={basemap.id} value={basemap.id}>
                 {basemap.name}
@@ -304,14 +328,19 @@ export const MapView = memo(function MapView({
             ))}
           </select>
         </label>
-        <label
+        <button
+          type="button"
           className={`map-detail-toggle${maxDetailAutoCancelled ? " is-auto-cancelled" : ""}`}
-          title="Max detail loads high-resolution semantic tiles. On phones it is limited to a 1 km scale to avoid crashes."
-        >
-          <input type="checkbox" checked={forceMaxDetail} onChange={(event) => handleForceMaxDetailChange(event.target.checked)} />
-          <span title="when enabled, map render time might be significantly delayed if viewing a large region">Max detail</span>
-        </label>
-        <div className="map-status">{statusLabel}</div>
+          {...glassSurface({ material: "control", fade: [] })}
+          aria-label="Max detail"
+          aria-pressed={forceMaxDetail}
+          title={`${forceMaxDetail ? "Disable" : "Enable"} max detail · High-resolution semantic tiles. On phones the scale is limited to 1 km.`}
+          onClick={() => handleForceMaxDetailChange(!forceMaxDetail)}
+        ><GlassMaterial />
+          {forceMaxDetail ? <Check size={14} strokeWidth={1.75} aria-hidden="true" /> : <Scan size={14} strokeWidth={1.5} aria-hidden="true" />}
+          <span>Max detail</span>
+        </button>
+        <div className="map-status" title={statusLabel} aria-label={statusLabel}><Link2 size={14} strokeWidth={1.5} aria-hidden="true" /></div>
       </div>
 
       <div
@@ -325,6 +354,7 @@ export const MapView = memo(function MapView({
             layers={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index] : layers}
             gradients={gradients}
             basemapId={basemapId}
+            attributionHost={attributionHost}
             selectedLayerId={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index][0]?.id ?? null : selectedLayerId}
             onSelectLayer={comparisonEnabled ? () => { if (selectedLayerId) onSelectLayer(selectedLayerId); } : onSelectLayer}
             registerComparisonMap={comparisonEnabled && !differenceEnabled ? registerComparisonMap : undefined}
@@ -344,15 +374,32 @@ export const MapView = memo(function MapView({
             onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
             splitIndex={index}
             compactControls={compactViewport}
+            resizing={draggingCitySplit}
           />
         ))}
         {activeCities.length === 2 ? (
-          <div className="city-split-resizer" onPointerDown={startCitySplitDrag} title="Resize city maps" aria-label="Resize city maps" />
+          <div
+            className="city-split-resizer"
+            onPointerDown={startCitySplitDrag}
+            title="Drag to resize city maps"
+            role="separator"
+            aria-label="Resize city maps"
+            aria-orientation="vertical"
+            aria-valuemin={MIN_CITY_SPLIT}
+            aria-valuemax={MAX_CITY_SPLIT}
+            aria-valuenow={Math.round(citySplit)}
+            tabIndex={compactViewport ? -1 : 0}
+            onKeyDown={(event) => {
+              if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+              event.preventDefault();
+              setCitySplit((current) => clampNumber(current + (event.key === "ArrowLeft" ? -2 : 2), MIN_CITY_SPLIT, MAX_CITY_SPLIT));
+            }}
+          />
         ) : null}
       </div>
 
       <MapProgressOverlay entries={progressEntries} />
-      {comparisonEnabled && <div className="embedding-comparison-note" role="status">
+      {comparisonEnabled && <div className="embedding-comparison-note" {...glassSurface()} role="status"><GlassMaterial />
         {comparison.error || (!selectedLayer ? "Select a saved prompt to compare embeddings." :
           comparison.count ? `${comparison.count.toLocaleString()} matched panoramas · ${differenceEnabled ? `New − old ${scoreField}` : scoreField === "zscore" ? "Z-score within each embedding" : "Original scores"}` : "Loading comparison…")}
         {differenceEnabled && comparison.count && !comparison.error ? <div className="difference-legend" aria-label="Difference color scale">
@@ -375,6 +422,7 @@ export const MapView = memo(function MapView({
 });
 
 type CityMapPaneProps = {
+  attributionHost?: HTMLElement | null;
   registerComparisonMap?: (slot: number, map: MapLibreMap) => () => void;
   embeddingLabel?: string;
   loadingKey: string;
@@ -398,6 +446,7 @@ type CityMapPaneProps = {
   onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
   splitIndex: number;
   compactControls: boolean;
+  resizing: boolean;
 };
 
 function MobileMapSearch({
@@ -443,11 +492,12 @@ function MobileMapSearch({
   return (
     <form
       className={`mobile-map-search${liveSearchAvailable ? "" : " is-static-unavailable"}`}
+      {...glassSurface({ shape: "capsule" })}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
-    >
+    ><GlassMaterial />
       <Search size={17} />
       {liveSearchAvailable ? (
         <input
@@ -459,10 +509,7 @@ function MobileMapSearch({
         />
       ) : (
         <div className="mobile-static-search-message" aria-label={STATIC_SEARCH_PLACEHOLDER}>
-          <div className="mobile-static-search-message-track">
-            <span>{STATIC_SEARCH_PLACEHOLDER}</span>
-            <span aria-hidden="true">{STATIC_SEARCH_PLACEHOLDER}</span>
-          </div>
+          <span>Search unavailable in this demo</span>
         </div>
       )}
       <button
@@ -480,6 +527,7 @@ function MobileMapSearch({
 }
 
 function CityMapPane({
+  attributionHost,
   registerComparisonMap,
   embeddingLabel,
   loadingKey,
@@ -502,10 +550,14 @@ function CityMapPane({
   onRemoteTileZoomChange,
   onSemanticLayerLoadingChange,
   splitIndex,
-  compactControls
+  compactControls,
+  resizing
 }: CityMapPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
+  const resizingRef = useRef(resizing);
+  const applyingResizeRef = useRef(false);
+  resizingRef.current = resizing;
   const basemapRef = useRef<BasemapId>(basemapId);
   const forceMaxDetailRef = useRef(forceMaxDetail);
   const forceMaxDetailChangeRef = useRef(onForceMaxDetailChange);
@@ -529,7 +581,6 @@ function CityMapPane({
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
   const [status, setStatus] = useState("Loading map");
   const [showMaxDetailWarning, setShowMaxDetailWarning] = useState(false);
-  const selectedLayerName = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
   const semanticDrawKey = useMemo(() => semanticLayerDrawKey(layers, gradients, city.id), [city.id, gradients, layers]);
   layersRef.current = layers;
   gradientsRef.current = gradients;
@@ -562,6 +613,10 @@ function CityMapPane({
     if (semanticRedrawTimerRef.current !== undefined) {
       window.clearTimeout(semanticRedrawTimerRef.current);
     }
+    if (resizingRef.current) {
+      semanticRedrawTimerRef.current = undefined;
+      return;
+    }
     semanticRedrawTimerRef.current = window.setTimeout(() => {
       semanticRedrawTimerRef.current = undefined;
       requestSemanticRedraw(generation);
@@ -582,7 +637,9 @@ function CityMapPane({
       center: city.center,
       zoom: compactControls ? zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, city.center[1]) : zoomForGroundScale(sharedGroundScaleRef.current, city.center[1]),
       minZoom: 2,
-      maxZoom: 18
+      maxZoom: 18,
+      trackResize: false,
+      attributionControl: false as const
     };
 
     const map = new maplibregl.Map(mapOptions);
@@ -591,6 +648,7 @@ function CityMapPane({
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     }
     map.addControl(new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" }), "bottom-right");
+    const detachGlass = observeMapGlass(map.getContainer());
     const detachDiagnostics = attachMapDiagnostics(map, {
       cityId: city.id,
       container: containerRef.current
@@ -613,6 +671,7 @@ function CityMapPane({
         semanticRedrawTimerRef.current = undefined;
       }
       detachDiagnostics();
+      detachGlass();
       unregisterComparisonMap?.();
       map.remove();
       mapRef.current = null;
@@ -623,13 +682,43 @@ function CityMapPane({
     const container = containerRef.current;
     const map = mapRef.current;
     if (!container || !map || !("ResizeObserver" in window)) return;
-    const observer = new ResizeObserver(() => {
-      map.resize();
-      scheduleSemanticRedraw(styleGenerationRef.current);
+    const resize = createMapResizeScheduler(map, {
+      beforeResize: () => { applyingResizeRef.current = true; },
+      afterResize: () => {
+        applyingResizeRef.current = false;
+        scheduleSemanticRedraw(styleGenerationRef.current);
+      }
     });
+    const observer = new ResizeObserver(resize.schedule);
     observer.observe(container);
-    return () => observer.disconnect();
-  }, []);
+    return () => {
+      observer.disconnect();
+      resize.dispose();
+    };
+    // Rebind when map creation replaces its instance; never resize a removed map.
+  }, [city.center, city.datasetId, city.id, city.name, compactControls]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !attributionHost || splitIndex !== 0) return;
+    // Keep MapLibre's source/style updates and deduplication, but mount its
+    // attribution in the shared sidebar footer instead of either map corner.
+    const attribution = new maplibregl.AttributionControl({
+      compact: false,
+      customAttribution: '<a href="https://maplibre.org/" target="_blank" rel="noopener noreferrer">MapLibre</a>'
+    });
+    attributionHost.append(attribution.onAdd(map));
+    return () => attribution.onRemove();
+  }, [attributionHost, splitIndex, city.center, city.datasetId, city.id, city.name, compactControls]);
+
+  useEffect(() => {
+    // Refresh new viewport tiles after pointer-up, even if no final size event fires.
+    if (!resizing) scheduleSemanticRedraw(styleGenerationRef.current);
+    else if (semanticRedrawTimerRef.current !== undefined) {
+      window.clearTimeout(semanticRedrawTimerRef.current);
+      semanticRedrawTimerRef.current = undefined;
+    }
+  }, [resizing]);
 
   useEffect(() => {
     forceMaxDetailRef.current = forceMaxDetail;
@@ -764,6 +853,8 @@ function CityMapPane({
     const map = mapRef.current;
     if (!map) return;
     const onViewportSettled = () => {
+      // resize() emits moveend although the camera did not move.
+      if (applyingResizeRef.current || resizingRef.current) return;
       if (compactControls && forceMaxDetailRef.current && isScaleBarPastLimit(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
         forceMaxDetailChangeRef.current(false, "scale_limit");
         return;
@@ -831,7 +922,7 @@ function CityMapPane({
           reportSemanticLoading(false);
           return;
         }
-        reportSemanticLoading(true);
+        reportSemanticLoading(![...drawnLayerIds.current].some((id) => currentMap.getLayer(id)));
 
         if (forceMaxDetailRef.current && maxDetailWarningTimer === undefined) {
           setShowMaxDetailWarning(false);
@@ -846,10 +937,18 @@ function CityMapPane({
           throw new Error("Map style is not ready");
         }
 
-        clearSemanticLayers(currentMap);
-
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
+        const wantedIds = new Set(layersToDraw.map((layer) => sourceIdForCityLayer(city.id, layer.id)));
+        // Remove only layers the user hid/deleted, retaining visible data during fetches.
+        for (const id of drawnLayerIds.current) {
+          if (wantedIds.has(id)) continue;
+          handlerCleanups.current.get(id)?.forEach((cleanup) => cleanup());
+          handlerCleanups.current.delete(id);
+          if (currentMap.getLayer(id)) currentMap.removeLayer(id);
+          if (currentMap.getSource(id)) currentMap.removeSource(id);
+          drawnLayerIds.current.delete(id);
+        }
         let displayedContent = false;
         for (const layer of layersToDraw) {
           const geojson = await loadLayerGeojsonForMap(
@@ -865,22 +964,16 @@ function CityMapPane({
 
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
           const gradient = layerGradient(layer, currentGradients);
-          if (currentMap.getLayer(sourceId)) currentMap.removeLayer(sourceId);
-          if (currentMap.getSource(sourceId)) currentMap.removeSource(sourceId);
-          currentMap.addSource(sourceId, { type: "geojson", data: geojson });
-          currentMap.addLayer({
-            id: sourceId,
-            type: "circle",
-            source: sourceId,
-            paint: {
+          updateSemanticLayer(currentMap, sourceId, geojson, {
               "circle-radius": circleRadiusExpression(layer),
               "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
               "circle-opacity": layer.style.opacity,
               "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
               "circle-stroke-width": 0,
               "circle-stroke-opacity": 0
-            }
           });
+
+          handlerCleanups.current.get(sourceId)?.forEach((cleanup) => cleanup());
 
           const onMouseEnter = () => {
             currentMap.getCanvas().style.cursor = "pointer";
@@ -916,7 +1009,7 @@ function CityMapPane({
             }
             const score = Number(props.score);
             const zscore = Number(props.zscore);
-            new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+            const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
               .setLngLat(pano ? [pano.lon, pano.lat] : event.lngLat)
               .setHTML(
                 `<div class="popup-title">${layer.name}</div>
@@ -925,6 +1018,7 @@ function CityMapPane({
                  <div class="popup-row"><span>${layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore'}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
               )
               .addTo(currentMap);
+            applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content"));
           };
 
           currentMap.on("mouseenter", sourceId, onMouseEnter);
@@ -991,16 +1085,11 @@ function CityMapPane({
   }, [city.id, redrawRequest, semanticDrawKey, onSemanticLayerLoadingChange]);
 
   return (
-    <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex}>
-      {embeddingLabel && <div className="embedding-pane-label">{embeddingLabel}</div>}
+    <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex} aria-label={`${city.name} map`} data-map-status={status}>
+      {embeddingLabel && <div className="embedding-pane-label" {...glassSurface()}><GlassMaterial />{embeddingLabel}</div>}
       <div ref={containerRef} className="map-container" />
-      <div className="city-map-label">
-        <span>{city.name}</span>
-        <strong>{selectedLayerName}</strong>
-        <small>{status}</small>
-      </div>
       {showMaxDetailWarning ? (
-        <div className="map-max-detail-warning">When max detailed is enable, map render time might be significantly delayed when viewing a large area</div>
+        <div className="map-max-detail-warning" {...glassSurface()}><GlassMaterial />When max detailed is enable, map render time might be significantly delayed when viewing a large area</div>
       ) : null}
     </section>
   );
@@ -1010,7 +1099,7 @@ function MapRefreshOverlay({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="map-refresh-overlay" role="status" aria-live="polite">
+    <div className="map-refresh-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
       <span className="map-refresh-spinner" aria-hidden="true" />
       <span>Updating semantic layers...</span>
     </div>
@@ -1021,7 +1110,7 @@ function AllLayersHiddenOverlay({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="map-hidden-layers-overlay" role="status" aria-live="polite">
+    <div className="map-hidden-layers-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
       <span>All semantic layers are hidden. Turn on an eye icon to display the map data.</span>
     </div>
   );
@@ -1031,7 +1120,8 @@ function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
   if (!entries.length) return null;
 
   return (
-    <div className="map-progress-overlay" role="status" aria-live="polite">
+    <div className="map-progress-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
+      <div className="glass-scroll-content">
       <div className="map-progress-title">
         <span>RunPod progress</span>
         <strong>{entries.length} active</strong>
@@ -1057,6 +1147,7 @@ function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );

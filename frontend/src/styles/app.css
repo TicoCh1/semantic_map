@@ -1601,7 +1601,8 @@ button:disabled {
 
 .intro-progress-row {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 6px;
 }
 
@@ -2762,7 +2763,6 @@ html.theme-dark-root .mobile-diagnostics-panel pre {
     font-size: 13px;
     font-weight: 750;
     line-height: 32px;
-    mask-image: linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 12px), transparent 100%);
     white-space: nowrap;
   }
 

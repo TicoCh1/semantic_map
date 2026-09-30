@@ -1,3 +1,5 @@
+import { GlassMaterial } from "../styles/GlassMaterial";
+import { glassSurface, observePanoramaGlass } from "../styles/glass";
 import { Viewer } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 import { Check, Copy, Maximize2, Minimize2, X } from "lucide-react";
@@ -40,8 +42,10 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
       defaultZoomLvl: 45,
       loadingTxt: "Loading"
     });
+    const detachGlass = observePanoramaGlass(container);
 
     return () => {
+      detachGlass();
       viewerRef.current?.destroy();
       viewerRef.current = null;
     };
@@ -86,24 +90,26 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
   }
 
   return (
-    <section className="street-view-panel" style={{ height }} data-tour-target="street-view">
+    <section className="street-view-panel" {...glassSurface({ fade: ["top"] })} style={{ height }} data-tour-target="street-view"><GlassMaterial />
       <div className="street-view-resizer" onPointerDown={startResize}>
         <span />
       </div>
       <div className="street-view-main">
         <div className="street-view-canvas" ref={containerRef}>
-          {!selected ? <div className="street-view-state">No pano selected</div> : null}
-          {selected?.status === "loading" ? <div className="street-view-state">Loading pano</div> : null}
+          {!selected ? <div className="street-view-state" role="status">No pano selected</div> : null}
+          {selected?.status === "loading" ? <div className="street-view-state" role="status">Loading pano</div> : null}
           {selected?.status === "failed" ? (
-            <div className="street-view-state street-view-error-state">
+            <div className="street-view-state street-view-error-state" role="status">
               <span>{selected.message || STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}</span>
               <button
                 className={`street-view-contact-button${contactCopied ? " is-copied" : ""}`}
+                {...glassSurface({ material: "control", fade: [] })}
                 type="button"
                 onClick={() => void copyContactEmail()}
                 title="Copy author email"
                 aria-label="Copy author email"
               >
+                <GlassMaterial />
                 {contactCopied ? <Check size={15} /> : <Copy size={15} />}
                 <span>{contactCopied ? "Copied" : "Copy email"}</span>
               </button>
@@ -189,7 +195,7 @@ function PanoLayerValues({
 
   if (!expanded) {
     return (
-      <div className="street-view-values street-view-values-compact" draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}>
+      <div className="street-view-values street-view-values-compact" {...glassSurface()} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}><GlassMaterial />
         <div className="street-view-window-row">
           <div className="street-view-compact-meta">
             <div>
@@ -210,7 +216,7 @@ function PanoLayerValues({
   }
 
   return (
-    <div className="street-view-values street-view-values-expanded" draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}>
+    <div className="street-view-values street-view-values-expanded" {...glassSurface()} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}><GlassMaterial />
       <div className="street-view-values-title">
         <span>Pano {pano.pano_id}</span>
         <div className="street-view-window-actions">

@@ -55,6 +55,10 @@ cd frontend
 npm.cmd run build
 ```
 
+Current desktop/tablet/phone UI, shared glass material parameters, responsive
+controls and local validation commands are documented in the
+[frontend development notes](docs/semantic-map-frontend-dev.md#current-local-ui-2026-09-30).
+
 ## GitHub Pages Frontend
 
 The React frontend can be published as a static GitHub Pages site. The repository supports both GitHub Pages source modes:

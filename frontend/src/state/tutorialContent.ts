@@ -3,14 +3,21 @@ export type TutorialPage = {
   title: string;
   body: string;
   items: string[];
-  target: "prompt" | "layers" | "histogram" | "style" | "map" | "street-view";
+  target: "prompt" | "layers" | "histogram" | "style" | "map" | "street-view" | null;
 };
 
 export const TUTORIAL_PAGES: TutorialPage[] = [
   {
-    eyebrow: "Start",
+    eyebrow: "Welcome",
+    title: "Discover how a city looks and feels",
+    body: "UrbanFabric turns street-view impressions into a map. Explore where different qualities appear across London and Shanghai, compare their patterns, and look at the street scenes behind each point. This short tour will show you how.",
+    items: [],
+    target: null
+  },
+  {
+    eyebrow: "Search",
     title: "Search street-view impressions with statements",
-    body: "UrbanFabric maps how strongly street-view scenes match a visual impression, so you can compare that impression across London and Shanghai. When both cities are visible, the map scales will be locked in synchronization for better map reading.",
+    body: "Describe something you want to find in a street scene. UrbanFabric scores how strongly each view matches your statement and displays the results as coloured points on the map.",
     items: [
       "Type any visual statement about the scene, not a question.",
       "Use prompts like `the street feels enclosed by tall buildings` or `the scene contains active shopfronts`.",
@@ -21,9 +28,9 @@ export const TUTORIAL_PAGES: TutorialPage[] = [
   {
     eyebrow: "Cities",
     title: "Control London and Shanghai views",
-    body: "The two map panes let you compare the same prompt between cities or focus on one city at a time.",
+    body: "Switch between London and Shanghai on a phone, or compare the two map panes on a larger screen.",
     items: [
-      "Use the London and Shanghai checkboxes in the map toolbar to show or hide each city.",
+      "Use the city controls in the map toolbar to choose London or Shanghai.",
       "When both cities are visible, the map scales will be locked in synchronization for better map reading.",
       "Drag the divider between the two maps to give more space to the city you are inspecting."
     ],

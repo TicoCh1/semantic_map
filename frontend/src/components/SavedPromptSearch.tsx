@@ -1,3 +1,5 @@
+import { GlassMaterial } from "../styles/GlassMaterial";
+import { glassSurface } from "../styles/glass";
 import { Search, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import type { RemoteBackendConfig } from "../api/types";
@@ -47,7 +49,7 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
   return <div className="saved-prompt-search" onBlur={e => {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
   }}>
-    <div className="saved-search-field">
+    <div className="saved-search-field" {...glassSurface({ material: "control", fade: [] })}><GlassMaterial />
       {busy ? <LoaderCircle size={17} className="saved-search-spinner" /> : <Search size={17} />}
       <input role="combobox" aria-label="Search saved prompts" aria-autocomplete="list"
         aria-expanded={open && !loading && !busy} aria-controls={listId}
@@ -66,7 +68,7 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
       <span className="saved-search-badge" title="Browse previously computed prompts">Saved</span>
     </div>
     {error && <div className="saved-search-error" role="alert">{error}</div>}
-    {open && !loading && !busy && <div className="saved-search-dropdown">
+    {open && !loading && !busy && <div className="saved-search-dropdown" {...glassSurface({ material: "control" })}><GlassMaterial />
       <div className="saved-search-caption">{matches.length ? `${matches.length} saved prompts` : "No matching prompts"}</div>
       <div id={listId} className="saved-prompt-results" role="listbox" aria-label="Saved prompts">
         {visible.map((prompt, i) => <button key={prompt} id={`${listId}-${i}`} role="option"

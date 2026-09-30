@@ -1,3 +1,5 @@
+import { GlassMaterial } from "./styles/GlassMaterial";
+import { glassSurface } from "./styles/glass";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
@@ -135,6 +137,7 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(loadInitialDarkMode);
   const [basemapId, setBasemapId] = useState<BasemapId>(loadInitialBasemapId);
+  const [attributionHost, setAttributionHost] = useState<HTMLDivElement | null>(null);
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
   const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
   const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
@@ -928,6 +931,8 @@ export function App() {
     <>
       <SplitPane
         className={darkMode ? "theme-dark" : ""}
+        revealControls={showExhibitIntro}
+        footer={<div ref={setAttributionHost} className="map-attribution" aria-label="Map attribution" />}
         left={
           <MapView
             cities={mapCities}
@@ -935,6 +940,7 @@ export function App() {
             gradients={data.gradients}
             selectedLayerId={data.state.selected_layer_id}
             basemapId={basemapId}
+            attributionHost={attributionHost}
             onBasemapChange={handleBasemapChange}
             onSelectLayer={handleMapSelectLayer}
             onPriorityTileChange={handlePriorityTileChange}
@@ -955,7 +961,7 @@ export function App() {
         right={sidebar}
       />
       {idleResetCountdown !== null ? (
-        <div className="idle-reset-warning">Long inactivity detected. Resetting in {idleResetCountdown} seconds.</div>
+        <div className="idle-reset-warning" {...glassSurface()}><GlassMaterial />Long inactivity detected. Resetting in {idleResetCountdown} seconds.</div>
       ) : null}
       {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={handleCloseExhibitIntro} /> : null}
       {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
@@ -971,6 +977,11 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
   const isLast = pageIndex === TUTORIAL_PAGES.length - 1;
 
   useEffect(() => {
+    // The welcome page focuses on the introduction rather than a specific control.
+    if (!page.target) {
+      setHighlightRect(null);
+      return;
+    }
     let activeElement: HTMLElement | null = null;
     let settleTimer: number | undefined;
 
@@ -1020,6 +1031,11 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="exhibit-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="exhibit-intro-title">
+      {isFirst ? (
+        <div className="tutorial-focus-backdrop" {...glassSurface({ material: "tutorial-focus", shape: "flush", fade: [] })} aria-hidden="true">
+          <GlassMaterial />
+        </div>
+      ) : null}
       {highlightRect ? (
         <div
           className="tour-highlight-frame"
@@ -1031,44 +1047,46 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
           }}
         />
       ) : null}
-      <div className="exhibit-modal">
-        <div className="exhibit-modal-top">
-          <span className="exhibit-modal-eyebrow">UrbanFabric tutorial</span>
-          <button className="icon-button exhibit-modal-close" onClick={onClose} title="Skip tutorial">
-            <X size={16} />
-          </button>
-        </div>
-        <div className="intro-progress-row" aria-label={`Tutorial step ${pageIndex + 1} of ${TUTORIAL_PAGES.length}`}>
-          {TUTORIAL_PAGES.map((item, index) => (
-            <button
-              className={`intro-progress-dot${index === pageIndex ? " is-active" : ""}`}
-              key={item.eyebrow}
-              onClick={() => setPageIndex(index)}
-              title={item.title}
-            />
-          ))}
-        </div>
-        <span className="intro-page-eyebrow">{page.eyebrow}</span>
-        <h2 id="exhibit-intro-title">{page.title}</h2>
-        <p>{page.body}</p>
-        <ul className="intro-step-list">
-          {page.items.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-        <div className="intro-modal-footer">
-          <button className="secondary-button" onClick={onClose}>
-            Skip tutorial
-          </button>
-          <div className="intro-modal-actions">
-            <button className="secondary-button" onClick={() => setPageIndex((index) => Math.max(0, index - 1))} disabled={isFirst}>
-              <ChevronLeft size={16} />
-              Back
+      <div className="exhibit-modal" {...glassSurface()}><GlassMaterial />
+        <div className="exhibit-modal-content glass-scroll-content">
+          <div className="exhibit-modal-top">
+            <span className="exhibit-modal-eyebrow">UrbanFabric tutorial</span>
+            <button className="icon-button exhibit-modal-close" onClick={onClose} title="Skip tutorial">
+              <X size={16} />
             </button>
-            <button className="primary-text-button" onClick={() => (isLast ? onClose() : setPageIndex((index) => index + 1))}>
-              {isLast ? "Start exploring" : "Next"}
-              {!isLast ? <ChevronRight size={16} /> : null}
+          </div>
+          <div className="intro-progress-row" aria-label={`Tutorial step ${pageIndex + 1} of ${TUTORIAL_PAGES.length}`}>
+            {TUTORIAL_PAGES.map((item, index) => (
+              <button
+                className={`intro-progress-dot${index === pageIndex ? " is-active" : ""}`}
+                key={item.eyebrow}
+                onClick={() => setPageIndex(index)}
+                title={item.title}
+              />
+            ))}
+          </div>
+          <span className="intro-page-eyebrow">{page.eyebrow}</span>
+          <h2 id="exhibit-intro-title">{page.title}</h2>
+          <p>{page.body}</p>
+          {page.items.length > 0 ? <ul className="intro-step-list">
+            {page.items.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul> : null}
+          <div className="intro-modal-footer">
+            <button className="secondary-button" onClick={onClose}>
+              Skip tutorial
             </button>
+            <div className="intro-modal-actions">
+              <button className="secondary-button" onClick={() => setPageIndex((index) => Math.max(0, index - 1))} disabled={isFirst}>
+                <ChevronLeft size={16} />
+                Back
+              </button>
+              <button className="primary-text-button" onClick={() => (isLast ? onClose() : setPageIndex((index) => index + 1))}>
+                {isLast ? "Start exploring" : "Next"}
+                {!isLast ? <ChevronRight size={16} /> : null}
+              </button>
+            </div>
           </div>
         </div>
       </div>

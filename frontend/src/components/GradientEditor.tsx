@@ -1,3 +1,5 @@
+import { GlassField, GlassMaterial } from "../styles/GlassMaterial";
+import { glassSurface } from "../styles/glass";
 import { Check, ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import type { GradientPreset, GradientStop, SemanticLayer } from "../api/types";
@@ -25,7 +27,9 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
   const [presetOpen, setPresetOpen] = useState(false);
   const [pointRadius, setPointRadius] = useState(DEFAULT_POINT_RADIUS);
   const [absoluteRadius, setAbsoluteRadius] = useState(false);
+  const [hexDraft, setHexDraft] = useState("");
   const stripRef = useRef<HTMLDivElement | null>(null);
+  const dragRef = useRef<{ index: number; left: number; width: number } | null>(null);
 
   useEffect(() => {
     setDraft(gradient ? copyGradient(gradient) : null);
@@ -35,9 +39,12 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
   }, [gradient?.id, layer?.id]);
 
   const stops = useMemo(() => [...(draft?.stops ?? [])].sort((a, b) => a.value - b.value), [draft]);
-  const stop = stops[selectedStop] ?? stops[0] ?? null;
+  // Keep editor indices stable while stops cross; only sort the rendered/saved ramp.
+  const stop = draft?.stops[selectedStop] ?? draft?.stops[0] ?? null;
   const savedDraft = draft ? gradients.find((item) => item.id === draft.id) : null;
   const canDeletePreset = Boolean(savedDraft && !savedDraft.is_default);
+  const hasCollidingStops = stops.some((item, index) => index > 0 && item.value <= stops[index - 1].value);
+  useEffect(() => setHexDraft(stop?.color ?? ""), [stop?.color, selectedStop, layer?.id]);
 
   if (!layer || !draft || !stop) {
     return (
@@ -55,7 +62,6 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       if (!current) return current;
       const next = copyGradient(current);
       mutator(next);
-      next.stops.sort((a, b) => a.value - b.value);
       return next;
     });
   }
@@ -72,23 +78,13 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
     setSelectedStop(index);
     const rect = stripRef.current?.getBoundingClientRect();
     if (!rect) return;
-
-    const onMove = (moveEvent: PointerEvent) => {
-      const value = clamp((moveEvent.clientX - rect.left) / rect.width, 0, 1);
-      updateDraft((next) => {
-        const target = next.stops[index];
-        if (target) target.value = value;
-      });
-    };
-    const onUp = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", onUp);
-    };
-    window.addEventListener("pointermove", onMove);
-    window.addEventListener("pointerup", onUp);
+    event.currentTarget.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = { index, left: rect.left, width: rect.width };
   }
 
   function addStop() {
+    if (!stop) return;
     const nextStop = {
       value: clamp(stop.value + 0.08, 0, 1),
       color: stop.color
@@ -127,7 +123,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
   async function applyToLayer() {
     const currentDraft = draft;
     const currentLayer = layer;
-    if (!currentDraft || !currentLayer) return;
+    if (!currentDraft || !currentLayer || hasCollidingStops) return;
 
     await onApply(
       {
@@ -146,7 +142,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
   async function savePreset() {
     const currentDraft = draft;
     const currentLayer = layer;
-    if (!currentDraft || !currentLayer) return;
+    if (!currentDraft || !currentLayer || hasCollidingStops) return;
 
     const normalized: GradientPreset = {
       ...currentDraft,
@@ -180,29 +176,13 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
 
   return (
     <section className="panel-section gradient-panel" data-tour-target="style">
-      <div className="section-heading with-action">
-        <div>
+      <div className="section-heading">
           <span>Colour Scheme</span>
           <strong>Gradient</strong>
-        </div>
-        <div className="heading-actions">
-          <button className="secondary-button" onClick={() => void applyToLayer()} title="Apply to layer">
-            <Check size={16} />
-            Apply
-          </button>
-          <button className="secondary-button" onClick={() => void savePreset()} title="Save preset">
-            <Save size={16} />
-            Save
-          </button>
-          <button className="danger-button compact-action" onClick={() => void deletePreset()} disabled={!canDeletePreset} title="Delete saved colour scheme">
-            <Trash2 size={16} />
-          </button>
-        </div>
       </div>
 
-      <label>Color ramp</label>
       <div className="preset-picker">
-        <button className="preset-trigger" onClick={() => setPresetOpen((open) => !open)}>
+        <button className="preset-trigger" aria-label="Choose color ramp" aria-expanded={presetOpen} onClick={() => setPresetOpen((open) => !open)}>
           <span className="preset-swatch">
             <span style={{ background: gradientCss({ ...draft, stops }) }} />
           </span>
@@ -210,7 +190,8 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
           <ChevronDown size={16} />
         </button>
         {presetOpen ? (
-          <div className="preset-menu">
+          <div className="preset-menu" {...glassSurface({ material: "control" })}><GlassMaterial />
+            <div className="glass-scroll-content">
             {gradients.map((preset) => (
               <button
                 key={preset.id}
@@ -220,7 +201,6 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
                   setDraft(next);
                   setSelectedStop(0);
                   setPresetOpen(false);
-                  void onApply({ ...next, score_min: layer.style.score_min, score_max: layer.style.score_max }, layer, pointRadius, absoluteRadius);
                 }}
               >
                 <span className="preset-swatch">
@@ -230,20 +210,12 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
                 <small>{preset.is_default ? "Preset" : "Saved"}</small>
               </button>
             ))}
+            </div>
           </div>
         ) : null}
       </div>
 
-      <label htmlFor="gradient-name">Preset name</label>
-      <input
-        id="gradient-name"
-        className="text-input"
-        value={draft.name}
-        onChange={(event) => updateDraft((next) => {
-          next.name = event.target.value;
-        })}
-      />
-
+      <div className="ramp-editor">
       <div
         ref={stripRef}
         className="gradient-strip"
@@ -257,42 +229,60 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
           });
         }}
       >
-        {stops.map((item, index) => (
+        {draft.stops.map((item, index) => (
           <button
-            key={`${item.color}-${index}`}
+            key={index}
             className={`gradient-stop${index === selectedStop ? " is-selected" : ""}`}
             style={{ left: `${item.value * 100}%`, "--stop-color": item.color } as CSSProperties}
             onClick={() => setSelectedStop(index)}
             onPointerDown={(event) => startStopDrag(event, index)}
+            onPointerMove={(event) => {
+              const drag = dragRef.current;
+              if (!drag) return;
+              const value = clamp((event.clientX - drag.left) / drag.width, 0, 1);
+              updateDraft((next) => { next.stops[drag.index].value = value; });
+            }}
+            onLostPointerCapture={() => { dragRef.current = null; }}
+            onPointerUp={(event) => { dragRef.current = null; event.currentTarget.releasePointerCapture(event.pointerId); }}
+            onKeyDown={(event) => {
+              const delta = event.shiftKey ? 0.1 : 0.01;
+              const value = event.key === "ArrowLeft" ? item.value - delta : event.key === "ArrowRight" ? item.value + delta
+                : event.key === "Home" ? 0 : event.key === "End" ? 1 : null;
+              if (value === null) return;
+              event.preventDefault();
+              setSelectedStop(index);
+              updateDraft((next) => { next.stops[index].value = clamp(value, 0, 1); });
+            }}
+            aria-label={`Color stop ${index + 1}`}
+            aria-pressed={index === selectedStop}
             title={`${Math.round(item.value * 1000) / 10}% ${item.color}`}
           />
         ))}
       </div>
-
-      <div className="gradient-tools">
-        <button className="secondary-button" onClick={addStop}>
-          <Plus size={16} />
-          Stop
-        </button>
-        <button className="danger-button" onClick={deleteStop} disabled={stops.length <= 2}>
-          <Trash2 size={16} />
-          Stop
-        </button>
+      <div className="ramp-endpoints"><span>Low</span><span>High</span></div>
+      {hasCollidingStops ? <p className="stop-position-error" role="status">Move overlapping stops apart before applying.</p> : null}
       </div>
 
-      <div className="point-style-controls">
-        <Slider label="Size" min={1} max={10} step={0.1} value={pointRadius} onChange={(value) => setPointRadius(clamp(value, 1, 10))} />
-        <label className="checkbox-row">
-          <input type="checkbox" checked={absoluteRadius} onChange={(event) => setAbsoluteRadius(event.target.checked)} />
-          <span>Absolute map size</span>
-        </label>
+      <div className="stop-editor-heading">
+        <span>Selected stop <strong>{selectedStop + 1}</strong></span>
+        <div className="gradient-tools">
+          <button className="secondary-button" onClick={addStop} title="Add color stop"><Plus size={14} />Add stop</button>
+          <button className="danger-button compact-action" onClick={deleteStop} disabled={stops.length <= 2} title="Delete selected color stop"><Trash2 size={14} /></button>
+        </div>
       </div>
-
-      <div className="stop-position-row">
-        <label htmlFor="stop-position">Stop position</label>
-        <div className="percent-input">
+      <div className="stop-editor-fields">
+        <div className="stop-color-field"><span>Color</span>
+          <div className="color-top-row">
+            <input aria-label="Stop color" className="native-color" type="color" value={stop.color} onChange={(event) => setHex(event.target.value)} />
+            <GlassField className="hex-glass-field"><input aria-label="Stop hex color" className="hex-input" value={hexDraft} maxLength={7}
+              onChange={(event) => { setHexDraft(event.target.value); setHex(event.target.value); }}
+              onBlur={() => setHexDraft(stop.color)} onKeyDown={(event) => { if (event.key === "Enter") { setHex(hexDraft); event.currentTarget.blur(); } }} /></GlassField>
+          </div>
+        </div>
+        <label className="stop-position-field" htmlFor="stop-position"><span>Position</span><GlassField className="percent-input">
           <input
             id="stop-position"
+            aria-label="Stop position"
             type="number"
             min={0}
             max={100}
@@ -302,14 +292,32 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
               target.value = clamp(Number(event.target.value) / 100, 0, 1);
             })}
           />
-          <span>%</span>
-        </div>
+          <span aria-hidden="true">%</span>
+        </GlassField></label>
       </div>
 
-      <div className="color-top-row">
-        <input className="native-color" type="color" value={stop.color} onChange={(event) => setHex(event.target.value)} />
-        <input className="hex-input" value={stop.color} onChange={(event) => setHex(event.target.value)} />
+      <div className="point-style-controls">
+        <Slider label="Point size" min={1} max={10} step={0.1} value={pointRadius} onChange={(value) => setPointRadius(clamp(value, 1, 10))} />
+        <label className="checkbox-row" title="Keep point size relative to the map as you zoom">
+          <input type="checkbox" checked={absoluteRadius} onChange={(event) => setAbsoluteRadius(event.target.checked)} />
+          <span>Scale points with map zoom</span>
+        </label>
       </div>
+      <div className="gradient-apply-row">
+        <button className="secondary-button style-apply" disabled={hasCollidingStops} onClick={() => void applyToLayer()} title="Apply to layer"><Check size={16} />Apply style</button>
+        <span>To selected layer</span>
+      </div>
+      <details className="preset-save">
+        <summary><Save size={14} />Save as preset<ChevronDown size={14} /></summary>
+        <div className="preset-save-fields">
+          <label htmlFor="gradient-name">Preset name</label>
+          <div className="preset-save-row">
+            <GlassField><input id="gradient-name" className="text-input" value={draft.name} onChange={(event) => updateDraft((next) => { next.name = event.target.value; })} /></GlassField>
+            <button className="secondary-button" disabled={hasCollidingStops} onClick={() => void savePreset()} title="Save preset"><Save size={15} />Save</button>
+            <button className="danger-button compact-action" onClick={() => void deletePreset()} disabled={!canDeletePreset} title="Delete saved colour scheme"><Trash2 size={15} /></button>
+          </div>
+        </div>
+      </details>
     </section>
   );
 }
@@ -332,8 +340,8 @@ function Slider({
   return (
     <div className="slider-row">
       <span>{label}</span>
-      <input type="range" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
-      <input type="number" min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <GlassField><input type="number" aria-label={`${label} value`} min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /></GlassField>
     </div>
   );
 }

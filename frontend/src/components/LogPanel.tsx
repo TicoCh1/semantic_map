@@ -8,7 +8,7 @@ type LogPanelProps = {
 };
 
 export function LogPanel({ entries, onClear }: LogPanelProps) {
-  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem("semantic-map-log-collapsed") === "true");
+  const [collapsed, setCollapsed] = useState(() => window.localStorage.getItem("semantic-map-log-collapsed") !== "false");
 
   useEffect(() => {
     window.localStorage.setItem("semantic-map-log-collapsed", collapsed ? "true" : "false");
@@ -19,7 +19,7 @@ export function LogPanel({ entries, onClear }: LogPanelProps) {
   return (
     <section className="panel-section log-panel">
       <div className="log-header">
-        <button className="log-toggle" onClick={() => setCollapsed((value) => !value)}>
+        <button className="log-toggle" aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
           {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
           <span>Runtime Log</span>
           {latest ? <small>{latest.message}</small> : <small>No events</small>}
