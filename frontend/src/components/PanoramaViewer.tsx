@@ -1,4 +1,5 @@
 import { Viewer } from "@photo-sphere-viewer/core";
+import { observePanoramaGlass } from "../styles/glass";
 import "@photo-sphere-viewer/core/index.css";
 import { useEffect, useRef, type ReactNode } from "react";
 
@@ -29,8 +30,10 @@ export function PanoramaViewer({ panoramaUrl, className = "", children }: Panora
       defaultZoomLvl: 45,
       loadingTxt: "Loading"
     });
+    const detachGlass = observePanoramaGlass(container);
 
     return () => {
+      detachGlass();
       viewerRef.current?.destroy();
       viewerRef.current = null;
     };

@@ -1,3 +1,4 @@
+import { applyGlassSurface } from "../styles/glass";
 type DiagnosticDetails = Record<string, unknown>;
 
 export type MobileDiagnosticEntry = {
@@ -237,6 +238,7 @@ function ensureDiagnosticsPanel() {
   if (panel) return;
   panel = document.createElement("div");
   panel.className = "mobile-diagnostics-panel";
+  applyGlassSurface(panel);
   panel.setAttribute("role", "status");
   panel.setAttribute("aria-live", "polite");
   document.body.appendChild(panel);

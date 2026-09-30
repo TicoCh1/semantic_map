@@ -1,6 +1,6 @@
 import type { StyleSpecification } from "@maplibre/maplibre-gl-style-spec";
 
-export type BasemapId = "osm" | "openfreemap_dark" | "sentinel2_cloudless";
+export type BasemapId = "osm" | "openfreemap_positron" | "openfreemap_dark" | "sentinel2_cloudless";
 
 type RasterBasemap = {
   id: BasemapId;
@@ -28,6 +28,12 @@ export const BASEMAPS: BasemapConfig[] = [
     tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
     attribution: "OpenStreetMap contributors",
     maxzoom: 19
+  },
+  {
+    id: "openfreemap_positron",
+    name: "OpenFreeMap Positron",
+    type: "style",
+    styleUrl: "https://tiles.openfreemap.org/styles/positron"
   },
   {
     id: "openfreemap_dark",

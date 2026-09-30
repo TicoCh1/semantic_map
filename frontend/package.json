@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173",
-    "build": "tsc -b && vite build",
-    "build:pages": "node scripts/pages-output.mjs clean && tsc -b && vite build --outDir ../docs --emptyOutDir false && node scripts/pages-output.mjs finalize",
-    "preview": "vite preview --host 127.0.0.1 --port 4173"
+    "check:glass": "node scripts/check-glass-pipeline.mjs",
+    "test:glass": "node --test scripts/glass-fade.test.mjs",
+    "build": "npm run check:glass && tsc -b && vite build",
+    "build:pages": "npm run check:glass && node scripts/pages-output.mjs clean && tsc -b && vite build --outDir ../docs --emptyOutDir false && node scripts/pages-output.mjs finalize",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "test:map": "node --test scripts/semantic-layer-renderer.test.mjs scripts/map-resize.test.mjs"
   },
   "dependencies": {
     "@photo-sphere-viewer/core": "^5.14.1",
@@ -22,6 +25,7 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "vite": "^6.0.7",
+    "postcss": "^8.5.12"
   }
 }

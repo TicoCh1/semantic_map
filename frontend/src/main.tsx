@@ -2,6 +2,8 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/app.css";
+import "./styles/minimal.css";
+import "./styles/glass.css";
 import { App } from "./App";
 import { DemoErrorBoundary } from "./components/DemoErrorBoundary";
 import { startDemoFrontendMonitor } from "./state/demoMonitor";

@@ -1,4 +1,6 @@
 import { Check } from "lucide-react";
+import { GlassField, GlassMaterial } from "../styles/GlassMaterial";
+import { glassSurface } from "../styles/glass";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { getLayerGeojson } from "../api/client";
 import type { GradientPreset, SemanticLayer } from "../api/types";
@@ -125,6 +127,7 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
 
   const canApplyRange =
     Boolean(layer && onRangeChange) &&
+    draftMin.trim() !== "" && draftMax.trim() !== "" &&
     Number.isFinite(Number(draftMin)) &&
     Number.isFinite(Number(draftMax)) &&
     Number(draftMin) < Number(draftMax) &&
@@ -153,7 +156,7 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
   }
 
   function handleRangeKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (event.key === "Enter") void applyRange();
+    if (event.key === "Enter" && canApplyRange) void applyRange();
   }
 
   async function changeProperty(property: string) {
@@ -190,65 +193,33 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
           <div className="histogram-meta">
             <label className="histogram-property-select">
               <span>Field</span>
-              <select value={layer.score_property || "score"} onChange={(event) => void changeProperty(event.target.value)} disabled={propertySaving}>
+              <GlassField><select value={layer.score_property || "score"} onChange={(event) => void changeProperty(event.target.value)} disabled={propertySaving}>
                 <option value="score">score</option>
                 <option value="zscore">zscore</option>
-              </select>
+              </select></GlassField>
             </label>
             <label className="histogram-property-select histogram-bucket-select">
               <span>Bucket</span>
-              <select value={histogram.bucketWidth} onChange={(event) => setBucketWidth(Number(event.target.value))}>
+              <GlassField><select value={histogram.bucketWidth} onChange={(event) => setBucketWidth(Number(event.target.value))}>
                 {BUCKET_WIDTH_OPTIONS.map((option) => (
                   <option value={option} key={option}>
                     {option}
                   </option>
                 ))}
-              </select>
+              </select></GlassField>
             </label>
-            <span>
-              n={histogram.visibleCount}/{values.length} | {formatValue(histogram.dataMin)} to {formatValue(histogram.dataMax)}
-            </span>
           </div>
-          <div className="histogram-range-row">
-            <label>
-              <span>Min</span>
-              <input
-                type="number"
-                step="0.5"
-                value={draftMin}
-                onChange={(event) => setDraftMin(event.target.value)}
-                onKeyDown={handleRangeKeyDown}
-              />
-            </label>
-            <label>
-              <span>Max</span>
-              <input
-                type="number"
-                step="0.5"
-                value={draftMax}
-                onChange={(event) => setDraftMax(event.target.value)}
-                onKeyDown={handleRangeKeyDown}
-              />
-            </label>
-            <button className="secondary-button compact-action" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
-              <Check size={15} />
-            </button>
+          <div className="histogram-stats">
+            <span><strong>{histogram.visibleCount.toLocaleString()}</strong> / {values.length.toLocaleString()} points</span>
+            <span title="Full data range">{formatValue(histogram.dataMin)} to {formatValue(histogram.dataMax)}</span>
           </div>
-          {rangeError ? <div className="histogram-range-error">{rangeError}</div> : null}
-          <div className="histogram-chart" aria-label={`${layer.name} score histogram`}>
+          <div className="histogram-chart" role="img" aria-label={`${layer.name} score histogram. ${histogram.visibleCount} of ${values.length} points in range ${formatValue(histogram.rangeMin)} to ${formatValue(histogram.rangeMax)}.`}>
             {histogram.bins.map((bin, index) => {
               const height = bin.count ? Math.max(4, (bin.count / histogram.maxCount) * 100) : 0;
-              return (
-                <div
-                  key={index}
-                  className="histogram-bar"
-                  style={{
-                    height: `${height}%`,
-                    background: bin.color
-                  }}
-                  title={`${bin.count}`}
-                />
-              );
+              const start = histogram.rangeMin + index * histogram.bucketWidth;
+              return <div key={index} className="histogram-bar"
+                style={{ height: `${height}%`, background: bin.color }}
+                title={`${formatValue(start)} – ${formatValue(Math.min(histogram.rangeMax, start + histogram.bucketWidth))}: ${bin.count.toLocaleString()} points`} />;
             })}
           </div>
           <div className="histogram-ramp" style={{ background: gradientCss(gradient) }} />
@@ -257,6 +228,34 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
             <span>{formatValue(histogram.midpoint)}</span>
             <span>{formatValue(histogram.rangeMax)}</span>
           </div>
+          <div className="histogram-range-row">
+            <label>
+              <span>Min</span>
+              <GlassField><input
+                type="number"
+                step="0.5"
+                value={draftMin}
+                onChange={(event) => setDraftMin(event.target.value)}
+                onKeyDown={handleRangeKeyDown}
+              /></GlassField>
+            </label>
+            <label>
+              <span>Max</span>
+              <GlassField><input
+                type="number"
+                step="0.5"
+                value={draftMax}
+                onChange={(event) => setDraftMax(event.target.value)}
+                onKeyDown={handleRangeKeyDown}
+              /></GlassField>
+            </label>
+            <button className="secondary-button range-apply" {...glassSurface({ material: "control", fade: [] })} onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
+              <GlassMaterial />
+              <Check size={15} />
+              {rangeSaving ? "Applying…" : "Set range"}
+            </button>
+          </div>
+          {rangeError ? <div className="histogram-range-error">{rangeError}</div> : null}
         </>
       )}
     </section>

@@ -1,0 +1,564 @@
+/* The shared glass and fade renderer in the Semantic Map frontend.
+   Surfaces select a shape, fade edges, and a named material, never inline values.
+   Fading extends OUTSIDE the content box, so text and hit targets remain unaffected. */
+:root {
+  --glass-light-brightness: 1.65;
+  --glass-light-contrast: .2;
+  --glass-dark-brightness: .32;
+  --glass-dark-contrast: .85;
+  --glass-default-brightness: var(--glass-light-brightness);
+  --glass-default-contrast: var(--glass-light-contrast);
+  --glass-default-blur: 6px;
+  --glass-default-fade-distance: 0px;
+  --glass-control-blur: 8px;
+  --glass-control-tone-strength: .8;
+  /* A nested control samples the toned panel. Divide the desired net brightness
+     by the panel brightness so dark mode lifts it instead of darkening twice. */
+  --glass-control-light-brightness: calc((1 + (var(--glass-light-brightness) - 1) * var(--glass-control-tone-strength)) / var(--glass-light-brightness));
+  --glass-control-dark-brightness: calc((1 + (var(--glass-dark-brightness) - 1) * var(--glass-control-tone-strength)) / var(--glass-dark-brightness));
+  --glass-control-contrast: 1;
+  --glass-control-brightness: var(--glass-control-light-brightness);
+  --glass-tutorial-focus-blur: 3px;
+  --glass-brightness: var(--glass-debug-brightness, var(--glass-default-brightness));
+  --glass-contrast: var(--glass-debug-contrast, var(--glass-default-contrast));
+  --glass-sample-count: 8;
+  --glass-blur: var(--glass-debug-blur, var(--glass-default-blur));
+  --glass-fade-distance: var(--glass-debug-fade-distance, var(--glass-default-fade-distance));
+}
+
+html.theme-dark-root, .split-pane.theme-dark {
+  --glass-control-brightness: var(--glass-control-dark-brightness);
+  --glass-default-brightness: var(--glass-dark-brightness);
+  --glass-default-contrast: var(--glass-dark-contrast);
+  --glass-brightness: var(--glass-debug-brightness, var(--glass-default-brightness));
+  --glass-contrast: var(--glass-debug-contrast, var(--glass-default-contrast));
+}
+
+/* Specificity intentionally beats legacy app and vendor surface declarations. */
+:is(#root, html) [data-glass] {
+  --glass-edge-top: 0;
+  --glass-edge-right: 0;
+  --glass-edge-bottom: 0;
+  --glass-edge-left: 0;
+  --glass-radius: var(--ui-radius);
+  isolation: isolate;
+  overflow: visible;
+  border: 0;
+  border-radius: var(--glass-radius);
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:is(#root, html) [data-glass-shape="capsule"] { --glass-radius: 999px; }
+:is(#root, html) [data-glass-shape="flush"] { --glass-radius: 0px; }
+:is(#root, html) [data-glass-fade~="top"] { --glass-edge-top: 1; }
+:is(#root, html) [data-glass-fade~="right"] { --glass-edge-right: 1; }
+:is(#root, html) [data-glass-fade~="bottom"] { --glass-edge-bottom: 1; }
+:is(#root, html) [data-glass-fade~="left"] { --glass-edge-left: 1; }
+
+/* Eight blur samples cover successive edge bands. The strongest sample fills
+   the core; the outer samples have genuinely smaller radii, not just less alpha.
+   The parent is deliberately unmasked/unfiltered to preserve the backdrop root. */
+:is(#root, html) [data-glass] > .glass-renderer {
+  --glass-top: calc(var(--glass-fade-distance) * var(--glass-edge-top));
+  --glass-right: calc(var(--glass-fade-distance) * var(--glass-edge-right));
+  --glass-bottom: calc(var(--glass-fade-distance) * var(--glass-edge-bottom));
+  --glass-left: calc(var(--glass-fade-distance) * var(--glass-edge-left));
+  position: absolute;
+  z-index: -1;
+  inset: calc(-1 * var(--glass-top)) calc(-1 * var(--glass-right)) calc(-1 * var(--glass-bottom)) calc(-1 * var(--glass-left));
+  /* The mask describes the rounded core and its outward fade separately. */
+  border-radius: 0;
+  --glass-core-radius: min(var(--glass-radius), calc(var(--glass-core-width) / 2), calc(var(--glass-core-height) / 2));
+  --glass-center-width: max(0px, calc(var(--glass-core-width) - 2 * var(--glass-core-radius)));
+  --glass-center-height: max(0px, calc(var(--glass-core-height) - 2 * var(--glass-core-radius)));
+  --glass-corner-left: calc(var(--glass-left) + var(--glass-core-radius));
+  --glass-corner-right: calc(var(--glass-right) + var(--glass-core-radius));
+  --glass-corner-top: calc(var(--glass-top) + var(--glass-core-radius));
+  --glass-corner-bottom: calc(var(--glass-bottom) + var(--glass-core-radius));
+  background: transparent;
+  pointer-events: none;
+}
+
+:is(#root, html) .glass-blur-layer,
+:is(#root, html) .glass-renderer::after {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  pointer-events: none;
+}
+
+:is(#root, html) .glass-blur-layer {
+  --glass-unit: calc(var(--glass-fade-distance) / var(--glass-sample-count));
+  --glass-band-start: calc(var(--glass-unit) * (var(--glass-sample) - 1));
+  --glass-band-middle: calc(var(--glass-unit) * var(--glass-sample));
+  --glass-band-end: calc(var(--glass-unit) * (var(--glass-sample) + 1));
+  --glass-mask-core: transparent;
+  --glass-sample-blur: calc(var(--glass-blur) * var(--glass-blur-weight));
+  backdrop-filter: blur(var(--glass-sample-blur));
+  -webkit-backdrop-filter: blur(var(--glass-sample-blur));
+}
+:is(#root, html) .glass-blur-layer:nth-child(1) { --glass-blur-weight: var(--glass-blur-weight-1); }
+:is(#root, html) .glass-blur-layer:nth-child(2) { --glass-blur-weight: var(--glass-blur-weight-2); }
+:is(#root, html) .glass-blur-layer:nth-child(3) { --glass-blur-weight: var(--glass-blur-weight-3); }
+:is(#root, html) .glass-blur-layer:nth-child(4) { --glass-blur-weight: var(--glass-blur-weight-4); }
+:is(#root, html) .glass-blur-layer:nth-child(5) { --glass-blur-weight: var(--glass-blur-weight-5); }
+:is(#root, html) .glass-blur-layer:nth-child(6) { --glass-blur-weight: var(--glass-blur-weight-6); }
+:is(#root, html) .glass-blur-layer:nth-child(7) { --glass-blur-weight: var(--glass-blur-weight-7); }
+:is(#root, html) .glass-blur-layer:nth-child(8) { --glass-blur-weight: var(--glass-blur-weight-8); }
+:is(#root, html) .glass-blur-layer:last-child { --glass-mask-core: #000; }
+
+/* Tone the actual backdrop once, after the blur samples. No color fill/scrim.
+   The shared fade returns brightness/contrast to the untouched map at the edge. */
+:is(#root, html) .glass-renderer::after {
+  content: "";
+  --glass-band-start: 0px;
+  --glass-band-middle: var(--glass-fade-distance);
+  --glass-band-end: var(--glass-fade-distance);
+  --glass-mask-core: #000;
+  backdrop-filter: contrast(var(--glass-contrast)) brightness(var(--glass-brightness));
+  -webkit-backdrop-filter: contrast(var(--glass-contrast)) brightness(var(--glass-brightness));
+}
+
+/* One nine-part mask for blur and tone: four circular corners, four edge
+   strips and the core. Corner centers belong to the measured control itself;
+   fade only adds distance outside that shape. At zero fade this is exactly
+   the rounded base control, with no dependence on the exterior material. */
+:is(#root, html) .glass-blur-layer, :is(#root, html) .glass-renderer::after {
+  --glass-tl-edge: max(var(--glass-edge-left), var(--glass-edge-top));
+  --glass-tl-radius: calc(var(--glass-core-radius) + var(--glass-fade-distance) * var(--glass-tl-edge));
+  --glass-tr-edge: max(var(--glass-edge-right), var(--glass-edge-top));
+  --glass-tr-radius: calc(var(--glass-core-radius) + var(--glass-fade-distance) * var(--glass-tr-edge));
+  --glass-br-edge: max(var(--glass-edge-right), var(--glass-edge-bottom));
+  --glass-br-radius: calc(var(--glass-core-radius) + var(--glass-fade-distance) * var(--glass-br-edge));
+  --glass-bl-edge: max(var(--glass-edge-left), var(--glass-edge-bottom));
+  --glass-bl-radius: calc(var(--glass-core-radius) + var(--glass-fade-distance) * var(--glass-bl-edge));
+  /* Fixed sampling positions; glassFade.ts supplies the one global curve.
+     Both halves of every blur band and all rounded corners share this profile. */
+  mask-image:
+    radial-gradient(circle at bottom right,
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 1 + var(--glass-band-middle) * 0) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-tl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-16))) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-end) * 0 + var(--glass-band-middle) * 1) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.9375 + var(--glass-band-start) * 0.0625) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.875 + var(--glass-band-start) * 0.125) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.8125 + var(--glass-band-start) * 0.1875) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.75 + var(--glass-band-start) * 0.25) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.6875 + var(--glass-band-start) * 0.3125) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.625 + var(--glass-band-start) * 0.375) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.5625 + var(--glass-band-start) * 0.4375) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.5 + var(--glass-band-start) * 0.5) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.4375 + var(--glass-band-start) * 0.5625) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.375 + var(--glass-band-start) * 0.625) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.3125 + var(--glass-band-start) * 0.6875) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.25 + var(--glass-band-start) * 0.75) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.1875 + var(--glass-band-start) * 0.8125) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.125 + var(--glass-band-start) * 0.875) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0.0625 + var(--glass-band-start) * 0.9375) * var(--glass-tl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) max(0px, calc(var(--glass-tl-radius) - (var(--glass-band-middle) * 0 + var(--glass-band-start) * 1) * var(--glass-tl-edge)))),
+    radial-gradient(circle at bottom left,
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 1 + var(--glass-band-middle) * 0) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-tr-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-16))) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-end) * 0 + var(--glass-band-middle) * 1) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.9375 + var(--glass-band-start) * 0.0625) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.875 + var(--glass-band-start) * 0.125) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.8125 + var(--glass-band-start) * 0.1875) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.75 + var(--glass-band-start) * 0.25) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.6875 + var(--glass-band-start) * 0.3125) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.625 + var(--glass-band-start) * 0.375) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.5625 + var(--glass-band-start) * 0.4375) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.5 + var(--glass-band-start) * 0.5) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.4375 + var(--glass-band-start) * 0.5625) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.375 + var(--glass-band-start) * 0.625) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.3125 + var(--glass-band-start) * 0.6875) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.25 + var(--glass-band-start) * 0.75) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.1875 + var(--glass-band-start) * 0.8125) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.125 + var(--glass-band-start) * 0.875) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0.0625 + var(--glass-band-start) * 0.9375) * var(--glass-tr-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) max(0px, calc(var(--glass-tr-radius) - (var(--glass-band-middle) * 0 + var(--glass-band-start) * 1) * var(--glass-tr-edge)))),
+    radial-gradient(circle at top left,
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 1 + var(--glass-band-middle) * 0) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-br-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-16))) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-end) * 0 + var(--glass-band-middle) * 1) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.9375 + var(--glass-band-start) * 0.0625) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.875 + var(--glass-band-start) * 0.125) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.8125 + var(--glass-band-start) * 0.1875) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.75 + var(--glass-band-start) * 0.25) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.6875 + var(--glass-band-start) * 0.3125) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.625 + var(--glass-band-start) * 0.375) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.5625 + var(--glass-band-start) * 0.4375) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.5 + var(--glass-band-start) * 0.5) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.4375 + var(--glass-band-start) * 0.5625) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.375 + var(--glass-band-start) * 0.625) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.3125 + var(--glass-band-start) * 0.6875) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.25 + var(--glass-band-start) * 0.75) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.1875 + var(--glass-band-start) * 0.8125) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.125 + var(--glass-band-start) * 0.875) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0.0625 + var(--glass-band-start) * 0.9375) * var(--glass-br-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) max(0px, calc(var(--glass-br-radius) - (var(--glass-band-middle) * 0 + var(--glass-band-start) * 1) * var(--glass-br-edge)))),
+    radial-gradient(circle at top right,
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 1 + var(--glass-band-middle) * 0) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-bl-edge))),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-16))) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-end) * 0 + var(--glass-band-middle) * 1) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.9375 + var(--glass-band-start) * 0.0625) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.875 + var(--glass-band-start) * 0.125) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.8125 + var(--glass-band-start) * 0.1875) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.75 + var(--glass-band-start) * 0.25) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.6875 + var(--glass-band-start) * 0.3125) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.625 + var(--glass-band-start) * 0.375) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.5625 + var(--glass-band-start) * 0.4375) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.5 + var(--glass-band-start) * 0.5) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.4375 + var(--glass-band-start) * 0.5625) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.375 + var(--glass-band-start) * 0.625) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.3125 + var(--glass-band-start) * 0.6875) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.25 + var(--glass-band-start) * 0.75) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.1875 + var(--glass-band-start) * 0.8125) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.125 + var(--glass-band-start) * 0.875) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0.0625 + var(--glass-band-start) * 0.9375) * var(--glass-bl-edge))),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) max(0px, calc(var(--glass-bl-radius) - (var(--glass-band-middle) * 0 + var(--glass-band-start) * 1) * var(--glass-bl-edge)))),
+    linear-gradient(to bottom,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc((var(--glass-band-start) * 1 + var(--glass-band-middle) * 0) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc((var(--glass-band-start) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc((var(--glass-band-start) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc((var(--glass-band-start) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc((var(--glass-band-start) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc((var(--glass-band-start) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc((var(--glass-band-start) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc((var(--glass-band-start) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc((var(--glass-band-start) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc((var(--glass-band-start) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc((var(--glass-band-start) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc((var(--glass-band-start) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc((var(--glass-band-start) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc((var(--glass-band-start) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc((var(--glass-band-start) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc((var(--glass-band-start) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-edge-top)),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc((var(--glass-band-start) * 0 + var(--glass-band-middle) * 1) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) calc((var(--glass-band-middle) * 0.9375 + var(--glass-band-end) * 0.0625) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) calc((var(--glass-band-middle) * 0.875 + var(--glass-band-end) * 0.125) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) calc((var(--glass-band-middle) * 0.8125 + var(--glass-band-end) * 0.1875) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) calc((var(--glass-band-middle) * 0.75 + var(--glass-band-end) * 0.25) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) calc((var(--glass-band-middle) * 0.6875 + var(--glass-band-end) * 0.3125) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) calc((var(--glass-band-middle) * 0.625 + var(--glass-band-end) * 0.375) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) calc((var(--glass-band-middle) * 0.5625 + var(--glass-band-end) * 0.4375) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) calc((var(--glass-band-middle) * 0.5 + var(--glass-band-end) * 0.5) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) calc((var(--glass-band-middle) * 0.4375 + var(--glass-band-end) * 0.5625) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) calc((var(--glass-band-middle) * 0.375 + var(--glass-band-end) * 0.625) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) calc((var(--glass-band-middle) * 0.3125 + var(--glass-band-end) * 0.6875) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) calc((var(--glass-band-middle) * 0.25 + var(--glass-band-end) * 0.75) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) calc((var(--glass-band-middle) * 0.1875 + var(--glass-band-end) * 0.8125) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) calc((var(--glass-band-middle) * 0.125 + var(--glass-band-end) * 0.875) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) calc((var(--glass-band-middle) * 0.0625 + var(--glass-band-end) * 0.9375) * var(--glass-edge-top)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) calc((var(--glass-band-middle) * 0 + var(--glass-band-end) * 1) * var(--glass-edge-top))),
+    linear-gradient(to left,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc((var(--glass-band-start) * 1 + var(--glass-band-middle) * 0) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc((var(--glass-band-start) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc((var(--glass-band-start) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc((var(--glass-band-start) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc((var(--glass-band-start) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc((var(--glass-band-start) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc((var(--glass-band-start) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc((var(--glass-band-start) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc((var(--glass-band-start) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc((var(--glass-band-start) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc((var(--glass-band-start) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc((var(--glass-band-start) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc((var(--glass-band-start) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc((var(--glass-band-start) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc((var(--glass-band-start) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc((var(--glass-band-start) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-edge-right)),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc((var(--glass-band-start) * 0 + var(--glass-band-middle) * 1) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) calc((var(--glass-band-middle) * 0.9375 + var(--glass-band-end) * 0.0625) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) calc((var(--glass-band-middle) * 0.875 + var(--glass-band-end) * 0.125) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) calc((var(--glass-band-middle) * 0.8125 + var(--glass-band-end) * 0.1875) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) calc((var(--glass-band-middle) * 0.75 + var(--glass-band-end) * 0.25) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) calc((var(--glass-band-middle) * 0.6875 + var(--glass-band-end) * 0.3125) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) calc((var(--glass-band-middle) * 0.625 + var(--glass-band-end) * 0.375) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) calc((var(--glass-band-middle) * 0.5625 + var(--glass-band-end) * 0.4375) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) calc((var(--glass-band-middle) * 0.5 + var(--glass-band-end) * 0.5) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) calc((var(--glass-band-middle) * 0.4375 + var(--glass-band-end) * 0.5625) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) calc((var(--glass-band-middle) * 0.375 + var(--glass-band-end) * 0.625) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) calc((var(--glass-band-middle) * 0.3125 + var(--glass-band-end) * 0.6875) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) calc((var(--glass-band-middle) * 0.25 + var(--glass-band-end) * 0.75) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) calc((var(--glass-band-middle) * 0.1875 + var(--glass-band-end) * 0.8125) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) calc((var(--glass-band-middle) * 0.125 + var(--glass-band-end) * 0.875) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) calc((var(--glass-band-middle) * 0.0625 + var(--glass-band-end) * 0.9375) * var(--glass-edge-right)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) calc((var(--glass-band-middle) * 0 + var(--glass-band-end) * 1) * var(--glass-edge-right))),
+    linear-gradient(to top,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc((var(--glass-band-start) * 1 + var(--glass-band-middle) * 0) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc((var(--glass-band-start) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc((var(--glass-band-start) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc((var(--glass-band-start) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc((var(--glass-band-start) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc((var(--glass-band-start) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc((var(--glass-band-start) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc((var(--glass-band-start) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc((var(--glass-band-start) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc((var(--glass-band-start) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc((var(--glass-band-start) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc((var(--glass-band-start) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc((var(--glass-band-start) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc((var(--glass-band-start) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc((var(--glass-band-start) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc((var(--glass-band-start) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-edge-bottom)),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc((var(--glass-band-start) * 0 + var(--glass-band-middle) * 1) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) calc((var(--glass-band-middle) * 0.9375 + var(--glass-band-end) * 0.0625) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) calc((var(--glass-band-middle) * 0.875 + var(--glass-band-end) * 0.125) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) calc((var(--glass-band-middle) * 0.8125 + var(--glass-band-end) * 0.1875) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) calc((var(--glass-band-middle) * 0.75 + var(--glass-band-end) * 0.25) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) calc((var(--glass-band-middle) * 0.6875 + var(--glass-band-end) * 0.3125) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) calc((var(--glass-band-middle) * 0.625 + var(--glass-band-end) * 0.375) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) calc((var(--glass-band-middle) * 0.5625 + var(--glass-band-end) * 0.4375) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) calc((var(--glass-band-middle) * 0.5 + var(--glass-band-end) * 0.5) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) calc((var(--glass-band-middle) * 0.4375 + var(--glass-band-end) * 0.5625) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) calc((var(--glass-band-middle) * 0.375 + var(--glass-band-end) * 0.625) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) calc((var(--glass-band-middle) * 0.3125 + var(--glass-band-end) * 0.6875) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) calc((var(--glass-band-middle) * 0.25 + var(--glass-band-end) * 0.75) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) calc((var(--glass-band-middle) * 0.1875 + var(--glass-band-end) * 0.8125) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) calc((var(--glass-band-middle) * 0.125 + var(--glass-band-end) * 0.875) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) calc((var(--glass-band-middle) * 0.0625 + var(--glass-band-end) * 0.9375) * var(--glass-edge-bottom)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) calc((var(--glass-band-middle) * 0 + var(--glass-band-end) * 1) * var(--glass-edge-bottom))),
+    linear-gradient(to right,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc((var(--glass-band-start) * 1 + var(--glass-band-middle) * 0) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc((var(--glass-band-start) * 0.9375 + var(--glass-band-middle) * 0.0625) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc((var(--glass-band-start) * 0.875 + var(--glass-band-middle) * 0.125) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc((var(--glass-band-start) * 0.8125 + var(--glass-band-middle) * 0.1875) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc((var(--glass-band-start) * 0.75 + var(--glass-band-middle) * 0.25) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc((var(--glass-band-start) * 0.6875 + var(--glass-band-middle) * 0.3125) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc((var(--glass-band-start) * 0.625 + var(--glass-band-middle) * 0.375) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc((var(--glass-band-start) * 0.5625 + var(--glass-band-middle) * 0.4375) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc((var(--glass-band-start) * 0.5 + var(--glass-band-middle) * 0.5) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc((var(--glass-band-start) * 0.4375 + var(--glass-band-middle) * 0.5625) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc((var(--glass-band-start) * 0.375 + var(--glass-band-middle) * 0.625) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc((var(--glass-band-start) * 0.3125 + var(--glass-band-middle) * 0.6875) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc((var(--glass-band-start) * 0.25 + var(--glass-band-middle) * 0.75) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc((var(--glass-band-start) * 0.1875 + var(--glass-band-middle) * 0.8125) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc((var(--glass-band-start) * 0.125 + var(--glass-band-middle) * 0.875) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc((var(--glass-band-start) * 0.0625 + var(--glass-band-middle) * 0.9375) * var(--glass-edge-left)),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc((var(--glass-band-start) * 0 + var(--glass-band-middle) * 1) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-15))) calc((var(--glass-band-middle) * 0.9375 + var(--glass-band-end) * 0.0625) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-14))) calc((var(--glass-band-middle) * 0.875 + var(--glass-band-end) * 0.125) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-13))) calc((var(--glass-band-middle) * 0.8125 + var(--glass-band-end) * 0.1875) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-12))) calc((var(--glass-band-middle) * 0.75 + var(--glass-band-end) * 0.25) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-11))) calc((var(--glass-band-middle) * 0.6875 + var(--glass-band-end) * 0.3125) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-10))) calc((var(--glass-band-middle) * 0.625 + var(--glass-band-end) * 0.375) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-9))) calc((var(--glass-band-middle) * 0.5625 + var(--glass-band-end) * 0.4375) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-8))) calc((var(--glass-band-middle) * 0.5 + var(--glass-band-end) * 0.5) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-7))) calc((var(--glass-band-middle) * 0.4375 + var(--glass-band-end) * 0.5625) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-6))) calc((var(--glass-band-middle) * 0.375 + var(--glass-band-end) * 0.625) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-5))) calc((var(--glass-band-middle) * 0.3125 + var(--glass-band-end) * 0.6875) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-4))) calc((var(--glass-band-middle) * 0.25 + var(--glass-band-end) * 0.75) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-3))) calc((var(--glass-band-middle) * 0.1875 + var(--glass-band-end) * 0.8125) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-2))) calc((var(--glass-band-middle) * 0.125 + var(--glass-band-end) * 0.875) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-1))) calc((var(--glass-band-middle) * 0.0625 + var(--glass-band-end) * 0.9375) * var(--glass-edge-left)),
+      color-mix(in srgb, var(--glass-mask-core), #000 calc(100% * var(--glass-fade-alpha-0))) calc((var(--glass-band-middle) * 0 + var(--glass-band-end) * 1) * var(--glass-edge-left))),
+    linear-gradient(var(--glass-mask-core), var(--glass-mask-core));
+  mask-size:
+    var(--glass-corner-left) var(--glass-corner-top),
+    var(--glass-corner-right) var(--glass-corner-top),
+    var(--glass-corner-right) var(--glass-corner-bottom),
+    var(--glass-corner-left) var(--glass-corner-bottom),
+    var(--glass-center-width) var(--glass-corner-top),
+    var(--glass-corner-right) var(--glass-center-height),
+    var(--glass-center-width) var(--glass-corner-bottom),
+    var(--glass-corner-left) var(--glass-center-height),
+    var(--glass-center-width) var(--glass-center-height);
+  mask-position: left top, right top, right bottom, left bottom,
+    var(--glass-corner-left) top, right var(--glass-corner-top),
+    var(--glass-corner-left) bottom, left var(--glass-corner-top),
+    var(--glass-corner-left) var(--glass-corner-top);
+  mask-repeat: no-repeat;
+  mask-composite: add;
+}
+
+/* Without fading, the browser clips each filter to one continuous rounded box.
+   Nine adjacent mask tiles can leave subpixel seams inside a fractional-sized
+   control. No tiles or intermediate blur bands are needed for a solid core. */
+html[data-glass-fade-mode="solid"] :is(#root, body) .glass-blur-layer, html[data-glass-fade-mode="solid"] :is(#root, body) .glass-renderer::after {
+  mask-image: none;
+  border-radius: var(--glass-radius);
+}
+
+/* Secondary controls gently tone the already processed sidebar backdrop.
+   Contrast stays neutral so the parent's compression is not applied twice. */
+:is(#root, html) [data-glass-material="control"] > .glass-renderer {
+  --glass-blur: var(--glass-control-blur);
+  --glass-brightness: var(--glass-control-brightness);
+  --glass-contrast: var(--glass-control-contrast);
+}
+.glass-field { position: relative; min-width: 0; }
+/* The opening tutorial focuses attention without adding a tint or blurring text. */
+:is(#root, html) [data-glass-material="tutorial-focus"] > .glass-renderer {
+  --glass-blur: var(--glass-tutorial-focus-blur);
+  --glass-brightness: 1;
+  --glass-contrast: 1;
+}
+.tutorial-focus-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+html[data-glass-fade-mode="solid"] :is(#root, body) .glass-blur-layer:not(:last-child) {
+  display: none;
+}
+
+/* Foreground divider lines use the same fade distance, without a glass background. */
+.split-pane .city-split-resizer::before {
+  --glass-top: var(--glass-fade-distance);
+  --glass-right: 0px;
+  --glass-bottom: var(--glass-fade-distance);
+  --glass-left: 0px;
+}
+
+.split-pane .city-split-resizer::before {
+  mask-image:
+    linear-gradient(to right,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc(var(--glass-left) * 0),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc(var(--glass-left) * 0.0625),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc(var(--glass-left) * 0.125),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc(var(--glass-left) * 0.1875),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc(var(--glass-left) * 0.25),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc(var(--glass-left) * 0.3125),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc(var(--glass-left) * 0.375),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc(var(--glass-left) * 0.4375),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc(var(--glass-left) * 0.5),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc(var(--glass-left) * 0.5625),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc(var(--glass-left) * 0.625),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc(var(--glass-left) * 0.6875),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc(var(--glass-left) * 0.75),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc(var(--glass-left) * 0.8125),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc(var(--glass-left) * 0.875),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc(var(--glass-left) * 0.9375),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc(var(--glass-left) * 1),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc(100% - var(--glass-right) * 1),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc(100% - var(--glass-right) * 0.9375),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc(100% - var(--glass-right) * 0.875),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc(100% - var(--glass-right) * 0.8125),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc(100% - var(--glass-right) * 0.75),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc(100% - var(--glass-right) * 0.6875),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc(100% - var(--glass-right) * 0.625),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc(100% - var(--glass-right) * 0.5625),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc(100% - var(--glass-right) * 0.5),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc(100% - var(--glass-right) * 0.4375),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc(100% - var(--glass-right) * 0.375),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc(100% - var(--glass-right) * 0.3125),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc(100% - var(--glass-right) * 0.25),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc(100% - var(--glass-right) * 0.1875),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc(100% - var(--glass-right) * 0.125),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc(100% - var(--glass-right) * 0.0625),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc(100% - var(--glass-right) * 0)),
+    linear-gradient(to bottom,
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc(var(--glass-top) * 0),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc(var(--glass-top) * 0.0625),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc(var(--glass-top) * 0.125),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc(var(--glass-top) * 0.1875),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc(var(--glass-top) * 0.25),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc(var(--glass-top) * 0.3125),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc(var(--glass-top) * 0.375),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc(var(--glass-top) * 0.4375),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc(var(--glass-top) * 0.5),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc(var(--glass-top) * 0.5625),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc(var(--glass-top) * 0.625),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc(var(--glass-top) * 0.6875),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc(var(--glass-top) * 0.75),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc(var(--glass-top) * 0.8125),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc(var(--glass-top) * 0.875),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc(var(--glass-top) * 0.9375),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc(var(--glass-top) * 1),
+      rgb(0 0 0 / var(--glass-fade-alpha-16)) calc(100% - var(--glass-bottom) * 1),
+      rgb(0 0 0 / var(--glass-fade-alpha-15)) calc(100% - var(--glass-bottom) * 0.9375),
+      rgb(0 0 0 / var(--glass-fade-alpha-14)) calc(100% - var(--glass-bottom) * 0.875),
+      rgb(0 0 0 / var(--glass-fade-alpha-13)) calc(100% - var(--glass-bottom) * 0.8125),
+      rgb(0 0 0 / var(--glass-fade-alpha-12)) calc(100% - var(--glass-bottom) * 0.75),
+      rgb(0 0 0 / var(--glass-fade-alpha-11)) calc(100% - var(--glass-bottom) * 0.6875),
+      rgb(0 0 0 / var(--glass-fade-alpha-10)) calc(100% - var(--glass-bottom) * 0.625),
+      rgb(0 0 0 / var(--glass-fade-alpha-9)) calc(100% - var(--glass-bottom) * 0.5625),
+      rgb(0 0 0 / var(--glass-fade-alpha-8)) calc(100% - var(--glass-bottom) * 0.5),
+      rgb(0 0 0 / var(--glass-fade-alpha-7)) calc(100% - var(--glass-bottom) * 0.4375),
+      rgb(0 0 0 / var(--glass-fade-alpha-6)) calc(100% - var(--glass-bottom) * 0.375),
+      rgb(0 0 0 / var(--glass-fade-alpha-5)) calc(100% - var(--glass-bottom) * 0.3125),
+      rgb(0 0 0 / var(--glass-fade-alpha-4)) calc(100% - var(--glass-bottom) * 0.25),
+      rgb(0 0 0 / var(--glass-fade-alpha-3)) calc(100% - var(--glass-bottom) * 0.1875),
+      rgb(0 0 0 / var(--glass-fade-alpha-2)) calc(100% - var(--glass-bottom) * 0.125),
+      rgb(0 0 0 / var(--glass-fade-alpha-1)) calc(100% - var(--glass-bottom) * 0.0625),
+      rgb(0 0 0 / var(--glass-fade-alpha-0)) calc(100% - var(--glass-bottom) * 0));
+  mask-size: 100% 100%;
+  mask-repeat: no-repeat;
+  mask-composite: intersect;
+}
+
+/* Only hosts without an existing absolute/fixed positioning context need this. */
+.map-summary, .city-toggle-group, .basemap-select, .map-detail-toggle, .map-status,
+.maplibregl-popup-content, .maplibregl-ctrl-group, .maplibregl-ctrl-scale, .psv-notification-content {
+  position: relative;
+}
+
+/* Scrolling belongs to foreground children; it must never crop the glass layer. */
+.glass-scroll-content { max-height: inherit; overflow: auto; }
+.map-progress-overlay > .glass-scroll-content { max-height: calc(min(48vh, 360px) - 22px); }
+.street-view-values-expanded .street-view-values-list { max-height: 140px; overflow: auto; }
+.preset-menu > .glass-scroll-content { max-height: 260px; }
+.mobile-diagnostics-panel > pre { overflow: auto; }
+
+/* Keep outlines and hover fills in the foreground, with no second glass layer. */
+.split-pane .sidebar-rail:hover { background: transparent; }
+.split-pane .maplibregl-ctrl-group button { background: transparent; }
+.exhibit-modal-backdrop { background: transparent; }
+.psv-tooltip-arrow { display: none; }
+.split-pane .psv-panel-content { color: var(--ui-text); }

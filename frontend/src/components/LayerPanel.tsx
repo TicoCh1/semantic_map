@@ -1,5 +1,8 @@
+import { useRef, useState } from "react";
 import { Eye, EyeOff, GripVertical, RefreshCw, Trash2 } from "lucide-react";
 import type { GradientPreset, SemanticLayer } from "../api/types";
+import { GlassMaterial } from "../styles/GlassMaterial";
+import { glassSurface } from "../styles/glass";
 import { gradientCss, layerGradient } from "../state/color";
 
 type LayerPanelProps = {
@@ -29,6 +32,9 @@ export function LayerPanel({
   disabled = false,
   highlightHiddenEyes = false
 }: LayerPanelProps) {
+  const touchDrag = useRef<{ id: string; target: string; after: boolean } | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
+
   function handleDrop(draggedId: string, targetId: string, placeAfter: boolean) {
     if (draggedId === targetId) return;
     const next = [...layers];
@@ -67,7 +73,9 @@ export function LayerPanel({
           return (
             <div
               key={layer.id}
-              className={`layer-row${layer.id === selectedLayerId ? " is-selected" : ""}`}
+              className={`layer-row${layer.id === selectedLayerId ? " is-selected" : ""}${layer.id === dropTarget ? " is-drop-target" : ""}`}
+              data-layer-id={layer.id}
+              {...glassSurface({ material: "control", fade: [] })}
               draggable
               onClick={() => onSelect(layer.id)}
               onDragStart={(event) => {
@@ -82,6 +90,7 @@ export function LayerPanel({
                 handleDrop(draggedId, layer.id, event.clientY > rect.top + rect.height / 2);
               }}
             >
+              <GlassMaterial />
               <button
                 className="icon-button visibility-button"
                 title={layer.visible ? "Hide layer" : "Show layer"}
@@ -92,7 +101,43 @@ export function LayerPanel({
               >
                 {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
               </button>
-              <GripVertical className="drag-icon" size={18} />
+              <button
+                type="button"
+                className="layer-drag-handle"
+                aria-label={`Reorder ${layer.name}`}
+                title="Drag to reorder · Arrow keys move up or down"
+                disabled={disabled}
+                onClick={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+                  event.preventDefault();
+                  const index = layers.findIndex((item) => item.id === layer.id);
+                  const target = layers[index + (event.key === "ArrowUp" ? -1 : 1)];
+                  if (target) handleDrop(layer.id, target.id, event.key === "ArrowDown");
+                }}
+                onPointerDown={(event) => {
+                  if (event.pointerType === "mouse") return;
+                  event.preventDefault(); event.stopPropagation();
+                  event.currentTarget.setPointerCapture(event.pointerId);
+                  touchDrag.current = { id: layer.id, target: layer.id, after: false };
+                }}
+                onPointerMove={(event) => {
+                  const drag = touchDrag.current;
+                  if (!drag || drag.id !== layer.id) return;
+                  const row = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-layer-id]");
+                  if (!row || !event.currentTarget.closest(".layer-list")?.contains(row)) return;
+                  const rect = row.getBoundingClientRect();
+                  drag.target = row.dataset.layerId!;
+                  drag.after = event.clientY > rect.top + rect.height / 2;
+                  setDropTarget(drag.target === drag.id ? null : drag.target);
+                }}
+                onPointerUp={() => {
+                  const drag = touchDrag.current;
+                  touchDrag.current = null; setDropTarget(null);
+                  if (drag) handleDrop(drag.id, drag.target, drag.after);
+                }}
+                onPointerCancel={() => { touchDrag.current = null; setDropTarget(null); }}
+              ><GripVertical className="drag-icon" size={18} /></button>
               <div className="layer-text">
                 <div className="layer-title">{layer.name}</div>
                 <div className="layer-prompt">{layer.status === "ready" ? layer.prompt : `${layer.prompt} - ${layer.status}`}</div>
