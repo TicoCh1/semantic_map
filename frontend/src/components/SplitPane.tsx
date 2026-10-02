@@ -39,7 +39,8 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
     const onKey = (event: KeyboardEvent) => { if (event.key === "Tab") keyboardInput.current = true; };
     const onPointer = (event: PointerEvent) => {
       keyboardInput.current = false;
-      if (!dock.current?.contains(event.target as Node)) closeControls();
+      // A pinned drawer must survive clicking or starting a panorama drag outside it.
+      if (!pinned && !dock.current?.contains(event.target as Node)) closeControls();
     };
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("pointerdown", onPointer, true);
@@ -47,7 +48,7 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("pointerdown", onPointer, true);
     };
-  }, [closeControls]);
+  }, [closeControls, pinned]);
 
   useEffect(() => {
     const desktop = window.matchMedia("(min-width: 1024px)");

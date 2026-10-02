@@ -603,6 +603,10 @@ html.theme-dark-root .exhibit-modal {
 .split-pane .street-view-strip { scrollbar-width: thin; scrollbar-color: var(--ui-line) transparent; }
 .split-pane .street-view-chip { min-height: 36px; padding: 8px 10px; font-weight: 500; }
 .split-pane .street-view-chip.is-selected { outline: 1px solid var(--ui-line); outline-offset: -1px; }
+@media (min-width: 1024px) {
+  .split-pane .street-view-main { grid-template-columns: 172px minmax(0, 1fr); }
+  .split-pane .street-view-strip { order: -1; }
+}
 #root .split-pane .street-view-canvas :is(.psv-container, .psv-loader-container) { background: transparent; color: var(--ui-text); }
 #root .split-pane .street-view-canvas :is(.psv-loader, .psv-loader-text, .psv-panel, .psv-tooltip, .psv-notification-content) { color: var(--ui-text); }
 #root .split-pane .street-view-canvas .psv-button { color: var(--ui-text); }
