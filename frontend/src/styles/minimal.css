@@ -601,12 +601,23 @@ html.theme-dark-root .exhibit-modal {
 #root .split-pane :is(.street-view-contact-button, .street-view-window-button):hover { background: var(--ui-hover); }
 #root .split-pane :is(.street-view-compact-meta span, .street-view-values-title, .street-view-values-meta span) { color: var(--ui-muted); }
 #root .split-pane :is(.street-view-compact-meta strong, .street-view-values-title strong, .street-view-values-meta, .street-view-value-row) { color: var(--ui-text); }
-.split-pane .street-view-strip { scrollbar-width: thin; scrollbar-color: var(--ui-line) transparent; }
-.split-pane .street-view-chip { min-height: 36px; padding: 8px 10px; font-weight: 500; }
+.split-pane .street-view-main { position: relative; display: block; }
+.split-pane .street-view-canvas { width: 100%; height: 100%; }
+/* A single scrolling row floats over the panorama without reserving image space. */
+.split-pane .street-view-strip {
+  position: absolute; z-index: 3; top: 10px; left: 10px;
+  display: flex; flex-direction: row; gap: 8px;
+  width: max-content; max-width: calc(100% - 20px); padding: 2px;
+  overflow-x: auto; overflow-y: hidden; border: 0;
+  scrollbar-width: thin; scrollbar-color: var(--ui-line) transparent;
+}
+#root .split-pane .street-view-chip {
+  position: relative; flex: 0 0 auto; min-width: 142px;
+  min-height: 36px; padding: 8px 10px; background: transparent; font-weight: 500;
+}
 .split-pane .street-view-chip.is-selected { outline: 1px solid var(--ui-line); outline-offset: -1px; }
 @media (min-width: 1024px) {
-  .split-pane .street-view-main { grid-template-columns: 172px minmax(0, 1fr); }
-  .split-pane .street-view-strip { order: -1; }
+  .split-pane:has(.sidebar-dock.is-open) .street-view-strip { max-width: calc(100% - var(--right-width) - 20px); }
 }
 #root .split-pane .street-view-canvas :is(.psv-container, .psv-loader-container) { background: transparent; color: var(--ui-text); }
 #root .split-pane .street-view-canvas :is(.psv-loader, .psv-loader-text, .psv-panel, .psv-tooltip, .psv-notification-content) { color: var(--ui-text); }

@@ -125,13 +125,15 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
             />
           ) : null}
         </div>
-        <div className="street-view-strip">
+        <div className="street-view-strip" role="group" aria-label="Selected street views">
           {panos.map((pano) => {
             const key = panoKey(pano);
             return (
               <button
                 key={key}
                 className={`street-view-chip${key === (selected ? panoKey(selected) : "") ? " is-selected" : ""}`}
+                {...glassSurface({ fade: [] })}
+                aria-pressed={key === (selected ? panoKey(selected) : "")}
                 draggable={pano.status === "ready"}
                 onDragStart={(event) => startPanoReferenceDrag(event, pano)}
                 onClick={() => onSelectPano(key)}
@@ -141,6 +143,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
                 }}
                 type="button"
               >
+                <GlassMaterial />
                 <span>{pano.pano_id}</span>
                 <small>{pano.status === "ready" ? formatPanoDate(panoCaptureDate(pano)) ?? "No date" : pano.status}</small>
                 <X
