@@ -676,7 +676,7 @@ function CityMapPane({
       map.remove();
       mapRef.current = null;
     };
-  }, [city.center, city.datasetId, city.id, city.name, compactControls]);
+  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls]);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -696,7 +696,7 @@ function CityMapPane({
       resize.dispose();
     };
     // Rebind when map creation replaces its instance; never resize a removed map.
-  }, [city.center, city.datasetId, city.id, city.name, compactControls]);
+  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -709,7 +709,7 @@ function CityMapPane({
     });
     attributionHost.append(attribution.onAdd(map));
     return () => attribution.onRemove();
-  }, [attributionHost, splitIndex, city.center, city.datasetId, city.id, city.name, compactControls]);
+  }, [attributionHost, splitIndex, city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls]);
 
   useEffect(() => {
     // Refresh new viewport tiles after pointer-up, even if no final size event fires.
@@ -850,6 +850,8 @@ function CityMapPane({
   }, [basemapId, city.name]);
 
   useEffect(() => {
+    // Remote capabilities can replace the city/dataset after initial mount.
+    // Rebind to every replacement map, not just changes to the callback.
     const map = mapRef.current;
     if (!map) return;
     const onViewportSettled = () => {
@@ -874,7 +876,7 @@ function CityMapPane({
       map.off("zoomend", onViewportSettled);
       map.off("moveend", onViewportSettled);
     };
-  }, [compactControls, onSharedGroundScaleChange]);
+  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, onSharedGroundScaleChange]);
 
   useEffect(() => {
     const map = mapRef.current;
@@ -883,14 +885,16 @@ function CityMapPane({
     const nextZoom = zoomForGroundScale(sharedGroundScale, map.getCenter().lat);
     if (Math.abs(map.getZoom() - nextZoom) < 0.01) return;
     applyingScaleSyncRef.current = true;
-    map.jumpTo({ zoom: nextZoom });
-    window.setTimeout(() => {
+    try {
+      // jumpTo emits camera events synchronously; suppress only those events.
+      map.jumpTo({ zoom: nextZoom });
+    } finally {
       applyingScaleSyncRef.current = false;
-      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
-      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
-      scheduleSemanticRedraw(styleGenerationRef.current);
-    }, 0);
-  }, [sharedGroundScale]);
+    }
+    reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    scheduleSemanticRedraw(styleGenerationRef.current);
+  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, sharedGroundScale]);
 
   useEffect(() => {
     const map = mapRef.current;
