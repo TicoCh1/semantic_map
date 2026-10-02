@@ -353,7 +353,8 @@ html.theme-dark-root .exhibit-modal {
     grid-template-rows: minmax(0, 1fr);
   }
   .split-pane .city-split-resizer {
-    z-index: 7;
+    /* Keep the map divider below the street-view overlay (z-index: 4). */
+    z-index: 3;
     width: 17px;
     margin: 0 -8px;
     border: 0;
