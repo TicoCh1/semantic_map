@@ -1,5 +1,5 @@
-import { GlassField, GlassMaterial } from "../styles/GlassMaterial";
-import { glassSurface } from "../styles/glass";
+import { GlassSwitch, DopplerRange } from "@form-glass/react";
+import { Glass, GlassButton, GlassField } from "@form-glass/react";
 import { Check, ChevronDown, Plus, Save, Trash2 } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
 import type { GradientPreset, GradientStop, SemanticLayer } from "../api/types";
@@ -190,7 +190,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
           <ChevronDown size={16} />
         </button>
         {presetOpen ? (
-          <div className="preset-menu" {...glassSurface({ material: "control" })}><GlassMaterial />
+          <Glass className="preset-menu" fade={[]} material="control">
             <div className="glass-scroll-content">
             {gradients.map((preset) => (
               <button
@@ -211,7 +211,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
               </button>
             ))}
             </div>
-          </div>
+          </Glass>
         ) : null}
       </div>
 
@@ -266,7 +266,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       <div className="stop-editor-heading">
         <span>Selected stop <strong>{selectedStop + 1}</strong></span>
         <div className="gradient-tools">
-          <button className="secondary-button" onClick={addStop} title="Add color stop"><Plus size={14} />Add stop</button>
+          <GlassButton className="secondary-button" onClick={addStop} title="Add color stop"><Plus size={14} />Add stop</GlassButton>
           <button className="danger-button compact-action" onClick={deleteStop} disabled={stops.length <= 2} title="Delete selected color stop"><Trash2 size={14} /></button>
         </div>
       </div>
@@ -298,13 +298,10 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
 
       <div className="point-style-controls">
         <Slider label="Point size" min={1} max={10} step={0.1} value={pointRadius} onChange={(value) => setPointRadius(clamp(value, 1, 10))} />
-        <label className="checkbox-row" title="Keep point size relative to the map as you zoom">
-          <input type="checkbox" checked={absoluteRadius} onChange={(event) => setAbsoluteRadius(event.target.checked)} />
-          <span>Scale points with map zoom</span>
-        </label>
+        <GlassSwitch className="point-scale-switch" label="Scale points with map zoom" checked={absoluteRadius} onChange={setAbsoluteRadius} />
       </div>
       <div className="gradient-apply-row">
-        <button className="secondary-button style-apply" disabled={hasCollidingStops} onClick={() => void applyToLayer()} title="Apply to layer"><Check size={16} />Apply style</button>
+        <GlassButton className="secondary-button style-apply" disabled={hasCollidingStops} onClick={() => void applyToLayer()} title="Apply to layer"><Check size={16} />Apply style</GlassButton>
         <span>To selected layer</span>
       </div>
       <details className="preset-save">
@@ -313,7 +310,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
           <label htmlFor="gradient-name">Preset name</label>
           <div className="preset-save-row">
             <GlassField><input id="gradient-name" className="text-input" value={draft.name} onChange={(event) => updateDraft((next) => { next.name = event.target.value; })} /></GlassField>
-            <button className="secondary-button" disabled={hasCollidingStops} onClick={() => void savePreset()} title="Save preset"><Save size={15} />Save</button>
+            <GlassButton className="secondary-button" disabled={hasCollidingStops} onClick={() => void savePreset()} title="Save preset"><Save size={15} />Save</GlassButton>
             <button className="danger-button compact-action" onClick={() => void deletePreset()} disabled={!canDeletePreset} title="Delete saved colour scheme"><Trash2 size={15} /></button>
           </div>
         </div>
@@ -340,7 +337,7 @@ function Slider({
   return (
     <div className="slider-row">
       <span>{label}</span>
-      <input type="range" aria-label={label} min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} />
+      <DopplerRange label={label} min={min} max={max} step={step} value={value} onChange={onChange} />
       <GlassField><input type="number" aria-label={`${label} value`} min={min} max={max} step={step} value={value} onChange={(event) => onChange(Number(event.target.value))} /></GlassField>
     </div>
   );

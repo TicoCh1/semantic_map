@@ -1,7 +1,12 @@
-import { GlassMaterial } from "../styles/GlassMaterial";
-import { applyGlassSurface, glassSurface, observeMapGlass } from "../styles/glass";
+import { ThemedSelect } from "./ThemedSelect";
+import { Glass, GlassButton } from "@form-glass/react";
+import { applyGlassSurface, observeMapGlass } from "../styles/glass";
 import { updateSemanticLayer } from "../state/semanticLayerRenderer";
 import { createMapResizeScheduler } from "../state/mapResize";
+import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
+import { SceneResources } from "../state/sceneResources";
+import { preserveSceneStyle } from "../state/mapSceneStyle";
+import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
 import { Check, Copy, Link2, Scan, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -52,8 +57,6 @@ type MapViewProps = {
 };
 
 const REMOTE_MAX_DETAIL_ZOOM = 13;
-const MAX_LAYER_GEOJSON_CACHE_ENTRIES = 80;
-const MAX_REMOTE_TILE_CACHE_ENTRIES = 192;
 const CITY_SELECTION_KEY = "semantic-map-selected-cities-v2";
 const MOBILE_CITY_KEY = "semantic-map-mobile-city-v1";
 const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
@@ -109,28 +112,10 @@ export const MapView = memo(function MapView({
   const comparisonCity = comparisonCities.find(city => city.id === comparisonCityId) ?? comparisonCities[0];
   const selectedLayer = layers.find(layer => layer.id === selectedLayerId);
   const comparison = useEmbeddingComparison(comparisonEnabled, backendConfig, comparisonCity, selectedLayer);
-  const comparisonMaps = useRef(new Map<number, MapLibreMap>());
-  const syncingCamera = useRef(false);
-  const registerComparisonMap = useCallback((slot: number, map: MapLibreMap) => {
-    const peer = [...comparisonMaps.current.values()][0];
-    if (peer) map.jumpTo({ center: peer.getCenter(), zoom: peer.getZoom(), bearing: peer.getBearing(), pitch: peer.getPitch() });
-    comparisonMaps.current.set(slot, map);
-    const sync = () => {
-      if (syncingCamera.current) return;
-      syncingCamera.current = true;
-      try {
-        for (const other of comparisonMaps.current.values()) {
-          if (other !== map) other.jumpTo({ center: map.getCenter(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() });
-        }
-      } finally { syncingCamera.current = false; }
-    };
-    map.on("move", sync);
-    return () => { map.off("move", sync); comparisonMaps.current.delete(slot); };
-  }, []);
   const toolbarRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const toolbar = toolbarRef.current;
-    const shell = toolbar?.parentElement;
+    const shell = toolbarRef.current;
+    const toolbar = shell?.querySelector<HTMLElement>(".map-toolbar");
     if (!toolbar || !shell) return;
     const updateClearance = () => {
       shell.style.setProperty("--map-toolbar-clearance", `${Math.ceil(toolbar.offsetTop + toolbar.offsetHeight + 12)}px`);
@@ -148,9 +133,11 @@ export const MapView = memo(function MapView({
   const [compactViewport, setCompactViewport] = useState(isCompactMapViewport);
   const [forceMaxDetail, setForceMaxDetail] = useState(() => window.localStorage.getItem("semantic-map-force-max-detail") === "true");
   const [maxDetailAutoCancelled, setMaxDetailAutoCancelled] = useState(false);
-  const [sharedGroundScale, setSharedGroundScale] = useState(() =>
+  const [sharedGroundScale] = useState(() =>
     groundScaleForZoom(zoomForScaleBarMeters(DEFAULT_SCALE_BAR_METERS, cities[0]?.center[1] ?? 0), cities[0]?.center[1] ?? 0)
   );
+  const sceneCamera = useMemo(() => new MapSceneCamera(sharedGroundScale), [sharedGroundScale]);
+  const sceneResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({});
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
   const desktopCities = useMemo(
@@ -262,15 +249,16 @@ export const MapView = memo(function MapView({
 
   return (
     <div
+      ref={toolbarRef}
       data-basemap={basemapId}
       className={`map-shell${differenceEnabled ? " is-difference-mode" : ""}${comparisonEnabled ? " is-embedding-comparison" : ""}${draggingCitySplit ? " is-city-dragging" : ""}${semanticLayerOverlayActive ? " is-refreshing-layers" : ""}${
         allLayersHidden ? " is-all-layers-hidden" : ""
       }`}
       data-tour-target="map"
     >
-      <div ref={toolbarRef} className="map-toolbar" {...glassSurface()}><GlassMaterial />
+      <Glass className="map-toolbar" fade={["top", "right", "bottom", "left"]}>
         {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
-        <div className="mobile-map-search cpu-map-search" {...glassSurface({ shape: "capsule" })}><GlassMaterial /><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></div> :
+        <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></Glass> :
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
         <div className="map-summary">
           <span>Semantic Map</span>
@@ -291,57 +279,57 @@ export const MapView = memo(function MapView({
         </div>
         {comparisonCities.length > 0 && <label className="basemap-select comparison-mode-select">
           <span>View</span>
-          <select aria-label="Map comparison mode" value={comparisonEnabled ? comparisonMode : "cities"} onChange={e => setComparisonMode(e.target.value as typeof comparisonMode)}>
+          <ThemedSelect label="Map comparison mode" value={comparisonEnabled ? comparisonMode : "cities"} onValueChange={e => setComparisonMode(e as typeof comparisonMode)}>
             <option value="cities">Compare cities</option><option value="embeddings">Old vs new embedding</option>
             <option value="difference">Difference mode</option>
-          </select>
+          </ThemedSelect>
         </label>}
         {comparisonEnabled ? <label className="basemap-select comparison-city-select">
           <span>City</span>
-          <select aria-label="Embedding comparison city" value={comparisonCity?.id} onChange={e => setComparisonCityId(e.target.value)}>
+          <ThemedSelect label="Embedding comparison city" value={comparisonCity?.id} onValueChange={e => setComparisonCityId(e)}>
             {comparisonCities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
-          </select>
+          </ThemedSelect>
         </label> : <div className="city-toggle-group city-source-selectors">
           <span>Map sources</span>
           <div>
             {desktopCities.map((city, slot) => (
               <label className="city-toggle" key={`${slot}-${city.id}`}>
                 <span>{slot === 0 ? "Left" : "Right"}</span>
-                <select value={city.id} onChange={(event) => selectCitySlot(slot, event.target.value)}>
+                <ThemedSelect label={slot === 0 ? "Left city" : "Right city"} value={city.id} onValueChange={event => selectCitySlot(slot, event)}>
                   {cities.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.name}
                     </option>
                   ))}
-                </select>
+                </ThemedSelect>
               </label>
             ))}
           </div>
         </div>}
         <label className="basemap-select basemap-source-select">
           <span>Basemap</span>
-          <select aria-label="Basemap" value={basemapId} onChange={(event) => onBasemapChange(event.target.value as BasemapId)}>
+          <ThemedSelect label="Basemap" value={basemapId} onValueChange={event => onBasemapChange(event as BasemapId)}>
             {BASEMAPS.map((basemap) => (
               <option key={basemap.id} value={basemap.id}>
                 {basemap.name}
               </option>
             ))}
-          </select>
+          </ThemedSelect>
         </label>
-        <button
+        <GlassButton
           type="button"
           className={`map-detail-toggle${maxDetailAutoCancelled ? " is-auto-cancelled" : ""}`}
-          {...glassSurface({ material: "control", fade: [] })}
+          fade={[]} material="control"
           aria-label="Max detail"
           aria-pressed={forceMaxDetail}
           title={`${forceMaxDetail ? "Disable" : "Enable"} max detail · High-resolution semantic tiles. On phones the scale is limited to 1 km.`}
           onClick={() => handleForceMaxDetailChange(!forceMaxDetail)}
-        ><GlassMaterial />
+        >
           {forceMaxDetail ? <Check size={14} strokeWidth={1.75} aria-hidden="true" /> : <Scan size={14} strokeWidth={1.5} aria-hidden="true" />}
           <span>Max detail</span>
-        </button>
+        </GlassButton>
         <div className="map-status" title={statusLabel} aria-label={statusLabel}><Link2 size={14} strokeWidth={1.5} aria-hidden="true" /></div>
-      </div>
+      </Glass>
 
       <div
         className={`city-map-layout${activeCities.length === 2 ? " has-two-cities" : ""}`}
@@ -357,7 +345,9 @@ export const MapView = memo(function MapView({
             attributionHost={attributionHost}
             selectedLayerId={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index][0]?.id ?? null : selectedLayerId}
             onSelectLayer={comparisonEnabled ? () => { if (selectedLayerId) onSelectLayer(selectedLayerId); } : onSelectLayer}
-            registerComparisonMap={comparisonEnabled && !differenceEnabled ? registerComparisonMap : undefined}
+            sceneCamera={sceneCamera}
+            cameraMode={comparisonEnabled ? "camera" : "resolution"}
+            sceneResources={sceneResources}
             embeddingLabel={differenceEnabled ? `Difference · New − old ${scoreField}` : comparisonEnabled ? (index === 0 ? "Old embedding · 2B" : "New embedding · 8B / 4096") : undefined}
             loadingKey={comparisonEnabled ? `${city.id}:${index}` : city.id}
             onPriorityTileChange={!comparisonEnabled && onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
@@ -368,7 +358,6 @@ export const MapView = memo(function MapView({
             forceMaxDetail={forceMaxDetail}
             onForceMaxDetailChange={handleForceMaxDetailChange}
             sharedGroundScale={sharedGroundScale}
-            onSharedGroundScaleChange={setSharedGroundScale}
             sharedRemoteTileZoom={sharedRemoteTileZoom}
             onRemoteTileZoomChange={(zoom) => handleCityRemoteTileZoomChange(city.id, zoom)}
             onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
@@ -399,7 +388,7 @@ export const MapView = memo(function MapView({
       </div>
 
       <MapProgressOverlay entries={progressEntries} />
-      {comparisonEnabled && <div className="embedding-comparison-note" {...glassSurface()} role="status"><GlassMaterial />
+      {comparisonEnabled && <Glass className="embedding-comparison-note" fade={[]} role="status">
         {comparison.error || (!selectedLayer ? "Select a saved prompt to compare embeddings." :
           comparison.count ? `${comparison.count.toLocaleString()} matched panoramas · ${differenceEnabled ? `New − old ${scoreField}` : scoreField === "zscore" ? "Z-score within each embedding" : "Original scores"}` : "Loading comparison…")}
         {differenceEnabled && comparison.count && !comparison.error ? <div className="difference-legend" aria-label="Difference color scale">
@@ -407,7 +396,7 @@ export const MapView = memo(function MapView({
           <div className="difference-legend-ramp" />
           <span>≤ −{scoreField === "zscore" ? "3" : "0.2"}</span><span>New − old</span><span>≥ +{scoreField === "zscore" ? "3" : "0.2"}</span>
         </div> : null}
-      </div>}
+      </Glass>}
       <MapRefreshOverlay active={semanticLayerOverlayActive} />
       <AllLayersHiddenOverlay active={allLayersHidden} />
       <StreetViewPanel
@@ -421,9 +410,17 @@ export const MapView = memo(function MapView({
   );
 });
 
+export type LayerDataProvider = (layer: SemanticLayer, cityId: CityId) => Promise<FeatureCollection>;
+
 type CityMapPaneProps = {
+  dataProvider?: LayerDataProvider;
+  selectionArea?: FeatureCollection;
+  onMapReady?: (map: MapLibreMap) => (() => void);
+  popupLabels?: { score: string; zscore: string };
   attributionHost?: HTMLElement | null;
-  registerComparisonMap?: (slot: number, map: MapLibreMap) => () => void;
+  sceneCamera?: MapSceneCamera;
+  cameraMode?: "resolution" | "camera";
+  sceneResources?: SceneResources<FeatureCollection>;
   embeddingLabel?: string;
   loadingKey: string;
   city: CityConfig;
@@ -440,7 +437,7 @@ type CityMapPaneProps = {
   forceMaxDetail: boolean;
   onForceMaxDetailChange: (enabled: boolean, reason?: "user" | "scale_limit") => void;
   sharedGroundScale: number;
-  onSharedGroundScaleChange: (scale: number) => void;
+  onSharedGroundScaleChange?: (scale: number) => void;
   sharedRemoteTileZoom: number;
   onRemoteTileZoomChange: (zoom: number) => void;
   onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
@@ -490,14 +487,13 @@ function MobileMapSearch({
   }
 
   return (
-    <form
-      className={`mobile-map-search${liveSearchAvailable ? "" : " is-static-unavailable"}`}
-      {...glassSurface({ shape: "capsule" })}
+    <Glass className={`mobile-map-search${liveSearchAvailable ? "" : " is-static-unavailable"}`} shape="capsule" fade={[]}>
+    <form className="mobile-search-form"
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
-    ><GlassMaterial />
+    >
       <Search size={17} />
       {liveSearchAvailable ? (
         <input
@@ -522,13 +518,19 @@ function MobileMapSearch({
       >
         {liveSearchAvailable ? <SendHorizontal size={17} /> : contactCopied ? <Check size={17} /> : <Copy size={17} />}
       </button> : null}
-    </form>
+    </form></Glass>
   );
 }
 
-function CityMapPane({
+export function CityMapPane({
+  dataProvider,
+  selectionArea,
+  onMapReady,
+  popupLabels,
   attributionHost,
-  registerComparisonMap,
+  sceneCamera,
+  cameraMode = "resolution",
+  sceneResources,
   embeddingLabel,
   loadingKey,
   city,
@@ -572,10 +574,14 @@ function CityMapPane({
   const styleGenerationRef = useRef(0);
   const drawnLayerIds = useRef<Set<string>>(new Set());
   const handlerCleanups = useRef<Map<string, Array<() => void>>>(new Map());
-  const geojsonCache = useRef<Map<string, FeatureCollection>>(new Map());
-  const remoteTileCache = useRef<Map<string, FeatureCollection>>(new Map());
+  const localResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
+  const resources = sceneResources ?? localResources;
   const layersRef = useRef(layers);
   const gradientsRef = useRef(gradients);
+  const dataProviderRef = useRef(dataProvider);
+  const selectionAreaRef = useRef(selectionArea);
+  dataProviderRef.current = dataProvider;
+  selectionAreaRef.current = selectionArea;
   const applyingScaleSyncRef = useRef(false);
   const semanticRedrawTimerRef = useRef<number | undefined>(undefined);
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
@@ -619,6 +625,11 @@ function CityMapPane({
     }
     semanticRedrawTimerRef.current = window.setTimeout(() => {
       semanticRedrawTimerRef.current = undefined;
+      const map = mapRef.current;
+      if (map) {
+        reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+        reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      }
       requestSemanticRedraw(generation);
     }, delayMs);
   }
@@ -631,6 +642,7 @@ function CityMapPane({
     styleGenerationRef.current = generation;
     basemapRef.current = initialBasemap.id;
 
+    installBasemapTransport();
     const mapOptions = {
       container: containerRef.current,
       style: basemapStyle(initialBasemap),
@@ -639,6 +651,7 @@ function CityMapPane({
       minZoom: 2,
       maxZoom: 18,
       trackResize: false,
+      transformRequest: sceneTileRequest,
       attributionControl: false as const
     };
 
@@ -660,7 +673,15 @@ function CityMapPane({
     });
     map.on("error", (event) => setStatus(event.error?.message ?? "Map error"));
     mapRef.current = map;
-    const unregisterComparisonMap = registerComparisonMap?.(splitIndex, map);
+    const publishViewport = () => {
+      const container = map.getContainer();
+      container.dataset.mapZoom = String(map.getZoom());
+      container.dataset.groundMetersPerPixel = String(MAPLIBRE_METERS_PER_PIXEL_ZOOM0 / groundScaleForZoom(map.getZoom(), map.getCenter().lat));
+      container.dataset.mapCenter = `${map.getCenter().lng},${map.getCenter().lat}`;
+    };
+    map.on("render", publishViewport);
+    const unregisterSceneCamera = sceneCamera?.register(map, cameraMode, () => applyingResizeRef.current || resizingRef.current);
+    const unregisterLocalMap = onMapReady?.(map);
     requestSemanticRedraw(generation, `Loading ${city.name}`);
     reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
@@ -672,7 +693,8 @@ function CityMapPane({
       }
       detachDiagnostics();
       detachGlass();
-      unregisterComparisonMap?.();
+      unregisterSceneCamera?.();
+      unregisterLocalMap?.();
       map.remove();
       mapRef.current = null;
     };
@@ -724,8 +746,6 @@ function CityMapPane({
     forceMaxDetailRef.current = forceMaxDetail;
     const map = mapRef.current;
     if (!map) return;
-    remoteTileCache.current.clear();
-    geojsonCache.current.clear();
     if (compactControls && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
       reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
@@ -832,15 +852,15 @@ function CityMapPane({
     styleGenerationRef.current = generation;
     basemapRef.current = nextBasemap.id;
     setStatus(`Loading ${nextBasemap.name}`);
-    clearSemanticLayers(map);
-
     const onStyleReady = () => {
       requestSemanticRedraw(generation, `${city.name} ${nextBasemap.name} ready`);
     };
 
     map.once("style.load", onStyleReady);
     map.once("idle", onStyleReady);
-    map.setStyle(basemapStyle(nextBasemap));
+    map.setStyle(basemapStyle(nextBasemap), {
+      transformStyle: (previous, next) => preserveSceneStyle(previous, next, new Set([...drawnLayerIds.current, "reference-selection"]))
+    });
     requestSemanticRedraw(generation);
 
     return () => {
@@ -854,33 +874,37 @@ function CityMapPane({
     // Rebind to every replacement map, not just changes to the callback.
     const map = mapRef.current;
     if (!map) return;
-    const onViewportSettled = () => {
+    const onViewportSettled = (event: { sceneCameraSync?: boolean }) => {
       // resize() emits moveend although the camera did not move.
       if (applyingResizeRef.current || resizingRef.current) return;
+      if (event.sceneCameraSync) {
+        // Peer jumpTo emits moveend on every animation frame. Its tile/data
+        // work is settled separately; camera motion itself stays immediate.
+        scheduleSemanticRedraw(styleGenerationRef.current);
+        return;
+      }
       if (compactControls && forceMaxDetailRef.current && isScaleBarPastLimit(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
         forceMaxDetailChangeRef.current(false, "scale_limit");
         return;
       }
-      if (!applyingScaleSyncRef.current) {
+      if (!sceneCamera && !applyingScaleSyncRef.current) {
         const nextScale = groundScaleForZoom(map.getZoom(), map.getCenter().lat);
         sharedGroundScaleRef.current = nextScale;
-        onSharedGroundScaleChange(nextScale);
+        onSharedGroundScaleChange?.(nextScale);
       }
       reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
       scheduleSemanticRedraw(styleGenerationRef.current);
     };
-    map.on("zoomend", onViewportSettled);
     map.on("moveend", onViewportSettled);
     return () => {
-      map.off("zoomend", onViewportSettled);
       map.off("moveend", onViewportSettled);
     };
   }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, onSharedGroundScaleChange]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || sceneCamera) return;
     sharedGroundScaleRef.current = sharedGroundScale;
     const nextZoom = zoomForGroundScale(sharedGroundScale, map.getCenter().lat);
     if (Math.abs(map.getZoom() - nextZoom) < 0.01) return;
@@ -941,6 +965,15 @@ function CityMapPane({
           throw new Error("Map style is not ready");
         }
 
+        const area = selectionAreaRef.current;
+        if (area) {
+          const areaSource = currentMap.getSource("reference-selection") as maplibregl.GeoJSONSource | undefined;
+          if (areaSource) areaSource.setData(area);
+          else currentMap.addSource("reference-selection", { type: "geojson", data: area });
+          if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
+          if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
+        }
+
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
         const wantedIds = new Set(layersToDraw.map((layer) => sourceIdForCityLayer(city.id, layer.id)));
@@ -958,15 +991,17 @@ function CityMapPane({
           const geojson = await loadLayerGeojsonForMap(
             layer,
             currentMap,
-            geojsonCache.current,
-            remoteTileCache.current,
-            forceMaxDetailRef.current,
+            resources,
             sharedRemoteTileZoomRef.current,
-            city.id
+            city.id,
+            dataProviderRef.current
           );
           if (cancelled || generation !== styleGenerationRef.current) return;
 
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
+          // A new scoring job can temporarily have no published tiles. Keep
+          // its last visible result until replacement content becomes ready.
+          if (!geojson.features.length && isLayerWaitingForRemoteData(layer, city.id) && currentMap.getLayer(sourceId)) continue;
           const gradient = layerGradient(layer, currentGradients);
           updateSemanticLayer(currentMap, sourceId, geojson, {
               "circle-radius": circleRadiusExpression(layer),
@@ -1000,11 +1035,10 @@ function CityMapPane({
                 pano.lat,
                 layersRef.current,
                 currentMap,
-                geojsonCache.current,
-                remoteTileCache.current,
-                forceMaxDetailRef.current,
+                resources,
                 sharedRemoteTileZoomRef.current,
-                city.id
+                city.id,
+                dataProviderRef.current
               ).then((layerValues) => {
                 if (!cancelled && layerValues.length) {
                   markPanoRef.current({ ...pano, layer_values: layerValues });
@@ -1018,8 +1052,8 @@ function CityMapPane({
               .setHTML(
                 `<div class="popup-title">${layer.name}</div>
                  <div class="popup-row"><span>ID</span><span>${props.id ?? ""}</span></div>
-                 <div class="popup-row"><span>${layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score'}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
-                 <div class="popup-row"><span>${layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore'}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
+                 <div class="popup-row"><span>${popupLabels?.score ?? (layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score')}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
+                 <div class="popup-row"><span>${popupLabels?.zscore ?? (layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore')}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
               )
               .addTo(currentMap);
             applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content"));
@@ -1090,10 +1124,10 @@ function CityMapPane({
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex} aria-label={`${city.name} map`} data-map-status={status}>
-      {embeddingLabel && <div className="embedding-pane-label" {...glassSurface()}><GlassMaterial />{embeddingLabel}</div>}
+      {embeddingLabel && <Glass className="embedding-pane-label" fade={[]}>{embeddingLabel}</Glass>}
       <div ref={containerRef} className="map-container" />
       {showMaxDetailWarning ? (
-        <div className="map-max-detail-warning" {...glassSurface()}><GlassMaterial />When max detailed is enable, map render time might be significantly delayed when viewing a large area</div>
+        <Glass className="map-max-detail-warning" fade={[]}>When max detailed is enable, map render time might be significantly delayed when viewing a large area</Glass>
       ) : null}
     </section>
   );
@@ -1103,10 +1137,10 @@ function MapRefreshOverlay({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="map-refresh-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
+    <Glass className="map-refresh-overlay" fade={[]} role="status" aria-live="polite">
       <span className="map-refresh-spinner" aria-hidden="true" />
       <span>Updating semantic layers...</span>
-    </div>
+    </Glass>
   );
 }
 
@@ -1114,9 +1148,9 @@ function AllLayersHiddenOverlay({ active }: { active: boolean }) {
   if (!active) return null;
 
   return (
-    <div className="map-hidden-layers-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
+    <Glass className="map-hidden-layers-overlay" fade={[]} role="status" aria-live="polite">
       <span>All semantic layers are hidden. Turn on an eye icon to display the map data.</span>
-    </div>
+    </Glass>
   );
 }
 
@@ -1124,7 +1158,7 @@ function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
   if (!entries.length) return null;
 
   return (
-    <div className="map-progress-overlay" {...glassSurface()} role="status" aria-live="polite"><GlassMaterial />
+    <Glass className="map-progress-overlay" fade={[]} role="status" aria-live="polite">
       <div className="glass-scroll-content">
       <div className="map-progress-title">
         <span>RunPod progress</span>
@@ -1153,7 +1187,7 @@ function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
         })}
       </div>
       </div>
-    </div>
+    </Glass>
   );
 }
 
@@ -1202,17 +1236,16 @@ async function collectPanoLayerValues(
   panoLat: number,
   layers: SemanticLayer[],
   map: MapLibreMap,
-  layerCache: Map<string, FeatureCollection>,
-  remoteTileCache: Map<string, FeatureCollection>,
-  forceMaxDetail: boolean,
+  resources: SceneResources<FeatureCollection>,
   remoteTileZoom: number,
-  cityId: CityId
+  cityId: CityId,
+  dataProvider?: LayerDataProvider
 ): Promise<PanoLayerValue[]> {
   const values = await Promise.all(
     layers
       .filter((layer) => layer.status === "ready")
       .map(async (layer) => {
-        const geojson = await loadLayerGeojsonForMap(layer, map, layerCache, remoteTileCache, forceMaxDetail, remoteTileZoom, cityId);
+        const geojson = await loadLayerGeojsonForMap(layer, map, resources, remoteTileZoom, cityId, dataProvider);
         const matchingFeatures = geojson.features.filter((item) => {
           const props = item.properties ?? {};
           const featureDatasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : datasetId;
@@ -1261,70 +1294,41 @@ function pointFeatureDistanceSquared(feature: GeoJSON.Feature, lon: number, lat:
 async function loadLayerGeojsonForMap(
   layer: SemanticLayer,
   map: MapLibreMap,
-  layerCache: Map<string, FeatureCollection>,
-  remoteTileCache: Map<string, FeatureCollection>,
-  forceMaxDetail: boolean,
+  resources: SceneResources<FeatureCollection>,
   remoteTileZoom: number,
-  cityId: CityId
+  cityId: CityId,
+  dataProvider?: LayerDataProvider
 ): Promise<FeatureCollection> {
+  if (dataProvider) return dataProvider(layer, cityId);
   const sourcePath = getLayerSourcePath(layer, cityId);
   if (!isRemoteTileTemplate(sourcePath)) {
-    const cacheKey = `${cityId}:${layer.id}:${sourcePath || "empty"}`;
-    let geojson = getCachedFeatureCollection(layerCache, cacheKey);
-    if (!geojson) {
-      geojson = await getLayerGeojson(layer.id, cityId);
-      setCachedFeatureCollection(layerCache, cacheKey, geojson, MAX_LAYER_GEOJSON_CACHE_ENTRIES);
-    }
-    return geojson;
+    return resources.load(`${cityId}:${layer.id}:${sourcePath}:${layer.status}`, () => getLayerGeojson(layer.id, cityId), {
+      cacheable: data => data.features.length > 0
+    });
   }
-
   const usesStaticFallback = isStaticFallbackTileTemplate(sourcePath);
   const tileZoom = usesStaticFallback ? REMOTE_MAX_DETAIL_ZOOM : remoteTileZoom;
-  const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom, forceMaxDetail || usesStaticFallback), usesStaticFallback);
-  const combinedKey = `${cityId}:${layer.id}:${sourcePath}:${tiles.map((tile) => `${tile.z}/${tile.x}/${tile.y}`).join("|")}`;
-  const cached = getCachedFeatureCollection(layerCache, combinedKey);
-  if (cached) return cached;
+  const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom), usesStaticFallback);
   if (!tiles.length) return emptyFeatureCollection();
-
-  let collections: FeatureCollection[];
+  const combinedKey = `view:${sourcePath}:${tiles.map(tile => `${tile.z}/${tile.x}/${tile.y}`).join("|")}`;
+  let complete = true;
   try {
-    collections = await Promise.all(
-      tiles.map(async (tile) => {
-        const tileUrlKey = `${cityId}:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`;
-        const cachedTile = getCachedFeatureCollection(remoteTileCache, tileUrlKey);
-        if (cachedTile) return cachedTile;
-        const geojson = await getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y);
-        setCachedFeatureCollection(remoteTileCache, tileUrlKey, geojson, MAX_REMOTE_TILE_CACHE_ENTRIES);
-        return geojson;
-      })
-    );
+    // Aggregation must not occupy a request slot while waiting for tile loaders.
+    return await resources.load(combinedKey, async () => {
+      const collections = await Promise.all(tiles.map(tile => resources.load(
+        `tile:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`,
+        () => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y),
+        { cacheable: data => data.features.length > 0 }
+      )));
+      complete = collections.every(data => data.features.length > 0);
+      return mergeFeatureCollections(collections);
+    }, { scheduled: false, cacheable: () => complete });
   } catch {
     return getLayerFallbackGeojson(layer.id, cityId);
   }
-  const merged = mergeFeatureCollections(collections);
-  setCachedFeatureCollection(layerCache, combinedKey, merged, MAX_LAYER_GEOJSON_CACHE_ENTRIES);
-  return merged;
 }
 
-function getCachedFeatureCollection(cache: Map<string, FeatureCollection>, key: string): FeatureCollection | undefined {
-  const value = cache.get(key);
-  if (!value) return undefined;
-  cache.delete(key);
-  cache.set(key, value);
-  return value;
-}
-
-function setCachedFeatureCollection(cache: Map<string, FeatureCollection>, key: string, value: FeatureCollection, maxEntries: number) {
-  if (cache.has(key)) cache.delete(key);
-  cache.set(key, value);
-  while (cache.size > maxEntries) {
-    const oldest = cache.keys().next().value as string | undefined;
-    if (!oldest) break;
-    cache.delete(oldest);
-  }
-}
-
-function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number, forceMaxDetail = false): Array<{ z: number; x: number; y: number }> {
+function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number): Array<{ z: number; x: number; y: number }> {
   const bounds = map.getBounds();
   const z = clampInteger(remoteTileZoom, 10, REMOTE_MAX_DETAIL_ZOOM);
   return tilesForBounds(bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth(), z);
@@ -1388,16 +1392,6 @@ function lonLatToTile(lat: number, lon: number, z: number): { x: number; y: numb
   };
 }
 
-function groundScaleForZoom(zoom: number, lat: number): number {
-  return 2 ** zoom / latitudeCos(lat);
-}
-
-function zoomForGroundScale(scale: number, lat: number): number {
-  const scaledWorld = scale * latitudeCos(lat);
-  if (!Number.isFinite(scaledWorld) || scaledWorld <= 0) return DEFAULT_CITY_CONFIGS[0].initialZoom;
-  return clampNumber(Math.log(scaledWorld) / Math.LN2, 2, 18);
-}
-
 function zoomForScaleBarMeters(targetMeters: number, lat: number): number {
   const targetMaxDistance = targetMeters * 1.1;
   const metersPerPixel = targetMaxDistance / SCALE_CONTROL_MAX_WIDTH;
@@ -1420,11 +1414,6 @@ function zoomToScaleBarIfNeeded(map: MapLibreMap, limitMeters: number): boolean 
     essential: true
   });
   return true;
-}
-
-function latitudeCos(lat: number): number {
-  const clampedLat = clampNumber(lat, -85.05112878, 85.05112878);
-  return Math.max(0.001, Math.cos((clampedLat * Math.PI) / 180));
 }
 
 function clampInteger(value: number, min: number, max: number): number {

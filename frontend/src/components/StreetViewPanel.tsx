@@ -1,5 +1,5 @@
-import { GlassMaterial } from "../styles/GlassMaterial";
-import { glassSurface, observePanoramaGlass } from "../styles/glass";
+import { Glass, GlassButton } from "@form-glass/react";
+import { observePanoramaGlass } from "../styles/glass";
 import { Viewer } from "@photo-sphere-viewer/core";
 import "@photo-sphere-viewer/core/index.css";
 import { Check, Copy, Maximize2, Minimize2, X } from "lucide-react";
@@ -22,7 +22,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
   const [contactCopied, setContactCopied] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const viewerRef = useRef<Viewer | null>(null);
-  const chipRefs = useRef<Map<string, HTMLButtonElement>>(new Map());
+  const stripRef = useRef<HTMLDivElement>(null);
   const selected = useMemo(() => panos.find((pano) => panoKey(pano) === selectedPanoKey) ?? panos[0] ?? null, [panos, selectedPanoKey]);
 
   useEffect(() => {
@@ -53,7 +53,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
 
   useEffect(() => {
     if (!selected?.pano_id) return;
-    chipRefs.current.get(panoKey(selected))?.scrollIntoView({
+    stripRef.current?.querySelector<HTMLButtonElement>('[aria-pressed="true"]')?.scrollIntoView({
       block: "nearest",
       inline: "nearest"
     });
@@ -90,7 +90,7 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
   }
 
   return (
-    <section className="street-view-panel" {...glassSurface({ fade: ["top"] })} style={{ height }} data-tour-target="street-view"><GlassMaterial />
+    <Glass className="street-view-panel" fade={[]} style={{ height }} data-tour-target="street-view">
       <div className="street-view-resizer" onPointerDown={startResize}>
         <span />
       </div>
@@ -101,18 +101,18 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
           {selected?.status === "failed" ? (
             <div className="street-view-state street-view-error-state" role="status">
               <span>{selected.message || STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}</span>
-              {STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
+              {STATIC_DEPLOYMENT_CONTACT_EMAIL ? <GlassButton
                 className={`street-view-contact-button${contactCopied ? " is-copied" : ""}`}
-                {...glassSurface({ material: "control", fade: [] })}
+                fade={[]} material="control"
                 type="button"
                 onClick={() => void copyContactEmail()}
                 title="Copy support email"
                 aria-label="Copy support email"
               >
-                <GlassMaterial />
+
                 {contactCopied ? <Check size={15} /> : <Copy size={15} />}
                 <span>{contactCopied ? "Copied" : "Copy email"}</span>
-              </button> : null}
+              </GlassButton> : null}
             </div>
           ) : null}
           {selected?.status === "ready" ? (
@@ -125,25 +125,21 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
             />
           ) : null}
         </div>
-        <div className="street-view-strip" role="group" aria-label="Selected street views">
+        <div ref={stripRef} className="street-view-strip" role="group" aria-label="Selected street views">
           {panos.map((pano) => {
             const key = panoKey(pano);
             return (
-              <button
+              <GlassButton
                 key={key}
                 className={`street-view-chip${key === (selected ? panoKey(selected) : "") ? " is-selected" : ""}`}
-                {...glassSurface({ fade: [] })}
+                fade={[]}
                 aria-pressed={key === (selected ? panoKey(selected) : "")}
                 draggable={pano.status === "ready"}
                 onDragStart={(event) => startPanoReferenceDrag(event, pano)}
                 onClick={() => onSelectPano(key)}
-                ref={(node) => {
-                  if (node) chipRefs.current.set(key, node);
-                  else chipRefs.current.delete(key);
-                }}
                 type="button"
               >
-                <GlassMaterial />
+
                 <span>{pano.pano_id}</span>
                 <small>{pano.status === "ready" ? formatPanoDate(panoCaptureDate(pano)) ?? "No date" : pano.status}</small>
                 <X
@@ -153,12 +149,12 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
                     onRemovePano(key);
                   }}
                 />
-              </button>
+              </GlassButton>
             );
           })}
         </div>
       </div>
-    </section>
+    </Glass>
   );
 }
 
@@ -198,7 +194,7 @@ function PanoLayerValues({
 
   if (!expanded) {
     return (
-      <div className="street-view-values street-view-values-compact" {...glassSurface()} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}><GlassMaterial />
+      <Glass className="street-view-values street-view-values-compact" fade={[]} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}>
         <div className="street-view-window-row">
           <div className="street-view-compact-meta">
             <div>
@@ -214,12 +210,12 @@ function PanoLayerValues({
             <Maximize2 size={13} />
           </button>
         </div>
-      </div>
+      </Glass>
     );
   }
 
   return (
-    <div className="street-view-values street-view-values-expanded" {...glassSurface()} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}><GlassMaterial />
+    <Glass className="street-view-values street-view-values-expanded" fade={[]} draggable={pano.status === "ready"} onDragStart={onReferenceDragStart}>
       <div className="street-view-values-title">
         <span>Pano {pano.pano_id}</span>
         <div className="street-view-window-actions">
@@ -240,7 +236,7 @@ function PanoLayerValues({
           );
         })}
       </div>
-    </div>
+    </Glass>
   );
 }
 

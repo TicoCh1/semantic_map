@@ -1,5 +1,6 @@
+import { GlassSwitch } from "@form-glass/react";
+import { GlassButton, GlassField } from "@form-glass/react";
 import { Check, Copy, SendHorizontal } from "lucide-react";
-import { GlassField } from "../styles/GlassMaterial";
 import { useState, type DragEvent } from "react";
 import { SavedPromptSearch } from "./SavedPromptSearch";
 import { saveRemoteBackendConfig } from "../api/client";
@@ -88,10 +89,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
       <label htmlFor="prompt-input">Prompt</label>
       {backendConfig && !remoteConfigLocked ? (
         <div className="backend-config-row">
-          <label className="checkbox-row">
-            <input type="checkbox" checked={backendConfig.enabled} onChange={(event) => void updateConfig({ enabled: event.target.checked })} />
-            <span>RunPod</span>
-          </label>
+          <GlassSwitch label="RunPod" checked={backendConfig.enabled} onChange={enabled => void updateConfig({ enabled })} />
           <GlassField><input
             className="backend-url-input"
             aria-label="Backend URL"
@@ -112,7 +110,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submit();
           }}
         /></GlassField>
-        {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
+        {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <GlassButton
           type="button"
           className={`primary-icon-button${liveSearchAvailable ? "" : " contact-copy-button"}${contactCopied ? " is-copied" : ""}`}
           disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() : disabled}
@@ -121,7 +119,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
           aria-label={liveSearchAvailable ? "Create layer" : "Copy support email"}
         >
           {liveSearchAvailable ? <SendHorizontal size={18} /> : contactCopied ? <Check size={18} /> : <Copy size={18} />}
-        </button> : null}
+        </GlassButton> : null}
       </div>}
     </section>
   );

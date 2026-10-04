@@ -1,0 +1,10 @@
+import React from "react";
+import ReactDOM from "react-dom/client";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "../styles/app.css";
+import "@form-glass/react/styles.css";
+import "../styles/minimal.css";
+import "../styles/glass.css";
+import "./region.css";
+import { RegionApp } from "./RegionApp";
+ReactDOM.createRoot(document.getElementById("root")!).render(<React.StrictMode><RegionApp /></React.StrictMode>);

@@ -1,5 +1,6 @@
-import { GlassMaterial } from "./styles/GlassMaterial";
-import { glassSurface } from "./styles/glass";
+import { GlassSwitch } from "@form-glass/react";
+import { SemanticGlassProvider } from "./styles/SemanticGlassProvider";
+import { GlassButton, Glass } from "@form-glass/react";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
@@ -276,8 +277,6 @@ export function App() {
 
   useEffect(() => {
     window.localStorage.setItem("semantic-map-theme", darkMode ? "dark" : "light");
-    document.documentElement.classList.toggle("theme-dark-root", darkMode);
-    return () => document.documentElement.classList.remove("theme-dark-root");
   }, [darkMode]);
 
   useEffect(() => {
@@ -850,16 +849,16 @@ export function App() {
 
   if (!data) {
     return (
-      <div className="boot-screen">
+      <SemanticGlassProvider dark={darkMode}><div className="boot-screen">
         <div className="boot-panel">
           <strong>Semantic Map</strong>
           <span>{loading ? "Loading" : error ?? "No state loaded"}</span>
-          <button className="secondary-button" onClick={() => void refresh()}>
+          <GlassButton className="secondary-button" onClick={() => void refresh()}>
             <RefreshCw size={16} />
             Reload
-          </button>
+          </GlassButton>
         </div>
-      </div>
+      </div></SemanticGlassProvider>
     );
   }
 
@@ -867,19 +866,16 @@ export function App() {
     <div className="sidebar-content">
       <div className="sidebar-top-bar">
         {runtimeConfig.mode === "screensaver" ? (
-          <button className="secondary-button intro-button compact-action" onClick={() => setShowScreensaver(true)} title="Start screensaver" aria-label="Start screensaver">
+          <GlassButton className="secondary-button intro-button compact-action" onClick={() => setShowScreensaver(true)} title="Start screensaver" aria-label="Start screensaver">
             <MonitorPlay size={16} />
-          </button>
+          </GlassButton>
         ) : (
-          <button className="secondary-button intro-button" onClick={() => setShowExhibitIntro(true)}>
+          <GlassButton className="secondary-button intro-button" onClick={() => setShowExhibitIntro(true)}>
             <Info size={16} />
             Project intro
-          </button>
+          </GlassButton>
         )}
-        <label className="theme-toggle">
-          <input type="checkbox" checked={darkMode} onChange={(event) => handleDarkModeChange(event.target.checked)} />
-          <span>Dark mode</span>
-        </label>
+        <GlassSwitch className="theme-toggle" label="Dark mode" checked={darkMode} onChange={handleDarkModeChange} />
       </div>
       <PromptBar
         disabled={loading}
@@ -928,7 +924,7 @@ export function App() {
   );
 
   return (
-    <>
+    <SemanticGlassProvider dark={darkMode}>
       <SplitPane
         className={darkMode ? "theme-dark" : ""}
         revealControls={showExhibitIntro}
@@ -961,11 +957,11 @@ export function App() {
         right={sidebar}
       />
       {idleResetCountdown !== null ? (
-        <div className="idle-reset-warning" {...glassSurface()}><GlassMaterial />Long inactivity detected. Resetting in {idleResetCountdown} seconds.</div>
+        <Glass className="idle-reset-warning" fade={[]}>Long inactivity detected. Resetting in {idleResetCountdown} seconds.</Glass>
       ) : null}
       {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={handleCloseExhibitIntro} /> : null}
       {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
-    </>
+    </SemanticGlassProvider>
   );
 }
 
@@ -1032,9 +1028,9 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
   return (
     <div className="exhibit-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="exhibit-intro-title">
       {isFirst ? (
-        <div className="tutorial-focus-backdrop" {...glassSurface({ material: "tutorial-focus", shape: "flush", fade: [] })} aria-hidden="true">
-          <GlassMaterial />
-        </div>
+        <Glass className="tutorial-focus-backdrop" fade={[]} shape="flush" material="tutorial-focus" aria-hidden="true">
+
+        </Glass>
       ) : null}
       {highlightRect ? (
         <div
@@ -1047,7 +1043,7 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
           }}
         />
       ) : null}
-      <div className="exhibit-modal" {...glassSurface()}><GlassMaterial />
+      <Glass className="exhibit-modal" fade={[]}>
         <div className="exhibit-modal-content glass-scroll-content">
           <div className="exhibit-modal-top">
             <span className="exhibit-modal-eyebrow">UrbanFabric tutorial</span>
@@ -1074,22 +1070,22 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
             ))}
           </ul> : null}
           <div className="intro-modal-footer">
-            <button className="secondary-button" onClick={onClose}>
+            <GlassButton className="secondary-button" onClick={onClose}>
               Skip tutorial
-            </button>
+            </GlassButton>
             <div className="intro-modal-actions">
-              <button className="secondary-button" onClick={() => setPageIndex((index) => Math.max(0, index - 1))} disabled={isFirst}>
+              <GlassButton className="secondary-button" onClick={() => setPageIndex((index) => Math.max(0, index - 1))} disabled={isFirst}>
                 <ChevronLeft size={16} />
                 Back
-              </button>
-              <button className="primary-text-button" onClick={() => (isLast ? onClose() : setPageIndex((index) => index + 1))}>
+              </GlassButton>
+              <GlassButton className="primary-text-button" onClick={() => (isLast ? onClose() : setPageIndex((index) => index + 1))}>
                 {isLast ? "Start exploring" : "Next"}
                 {!isLast ? <ChevronRight size={16} /> : null}
-              </button>
+              </GlassButton>
             </div>
           </div>
         </div>
-      </div>
+      </Glass>
     </div>
   );
 }

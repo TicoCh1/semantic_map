@@ -95,8 +95,10 @@ export function attachMapDiagnostics(map: DiagnosticMap, options: AttachMapDiagn
       stack: event.error?.stack?.slice(0, 1600) ?? null
     });
   };
-  const onMoveEnd = () => recordMapSnapshot("map_moveend");
-  const onZoomEnd = () => recordMapSnapshot("map_zoomend");
+  // Shared camera followers emit synthetic end events during every frame.
+  // Avoid synchronous localStorage telemetry writes throughout a gesture.
+  const onMoveEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) recordMapSnapshot("map_moveend"); };
+  const onZoomEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) recordMapSnapshot("map_zoomend"); };
   const onIdle = () => recordMapSnapshot("map_idle");
   const onContextLost = (event: Event) => {
     event.preventDefault();

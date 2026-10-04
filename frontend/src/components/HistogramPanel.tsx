@@ -1,14 +1,15 @@
+import { ThemedSelect } from "./ThemedSelect";
+import { GlassButton, GlassField } from "@form-glass/react";
 import { Check } from "lucide-react";
-import { GlassField, GlassMaterial } from "../styles/GlassMaterial";
-import { glassSurface } from "../styles/glass";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { getLayerGeojson } from "../api/client";
-import type { GradientPreset, SemanticLayer } from "../api/types";
+import type { FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
 import { gradientColorForScore, gradientCss } from "../state/color";
 
 type HistogramPanelProps = {
   layer: SemanticLayer | null;
   gradient: GradientPreset | null;
+  data?: FeatureCollection;
   onRangeChange?: (layer: SemanticLayer, scoreMin: number, scoreMax: number) => Promise<void>;
   onPropertyChange?: (layer: SemanticLayer, property: string) => Promise<void>;
 };
@@ -21,7 +22,7 @@ type HistogramBin = {
 const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 
-export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,7 +53,7 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
 
     setLoading(true);
     setError(null);
-    void getLayerGeojson(layer.id)
+    void (data ? Promise.resolve(data) : getLayerGeojson(layer.id))
       .then((geojson) => {
         if (cancelled) return;
         const property = layer.score_property || "score";
@@ -71,7 +72,7 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
     return () => {
       cancelled = true;
     };
-  }, [layer?.id, layer?.source_path, layer?.score_property]);
+  }, [data, layer?.id, layer?.source_path, layer?.score_property]);
 
   useEffect(() => {
     const scoreMin = layer?.style.score_min ?? gradient?.score_min ?? 0;
@@ -118,8 +119,8 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
       rangeMin,
       rangeMax,
       midpoint: rangeMin + span / 2,
-      dataMin: Math.min(...values),
-      dataMax: Math.max(...values),
+      dataMin: values.reduce((minimum, value) => Math.min(minimum, value), Infinity),
+      dataMax: values.reduce((maximum, value) => Math.max(maximum, value), -Infinity),
       visibleCount,
       bucketWidth: safeBucketWidth
     };
@@ -193,20 +194,20 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
           <div className="histogram-meta">
             <label className="histogram-property-select">
               <span>Field</span>
-              <GlassField><select value={layer.score_property || "score"} onChange={(event) => void changeProperty(event.target.value)} disabled={propertySaving}>
+              <ThemedSelect label="Score field" value={layer.score_property || "score"} onValueChange={event => void changeProperty(event)} disabled={propertySaving}>
                 <option value="score">score</option>
                 <option value="zscore">zscore</option>
-              </select></GlassField>
+              </ThemedSelect>
             </label>
             <label className="histogram-property-select histogram-bucket-select">
               <span>Bucket</span>
-              <GlassField><select value={histogram.bucketWidth} onChange={(event) => setBucketWidth(Number(event.target.value))}>
+              <ThemedSelect label="Histogram bucket width" value={histogram.bucketWidth} onValueChange={event => setBucketWidth(Number(event))}>
                 {BUCKET_WIDTH_OPTIONS.map((option) => (
                   <option value={option} key={option}>
                     {option}
                   </option>
                 ))}
-              </select></GlassField>
+              </ThemedSelect>
             </label>
           </div>
           <div className="histogram-stats">
@@ -249,11 +250,11 @@ export function HistogramPanel({ layer, gradient, onRangeChange, onPropertyChang
                 onKeyDown={handleRangeKeyDown}
               /></GlassField>
             </label>
-            <button className="secondary-button range-apply" {...glassSurface({ material: "control", fade: [] })} onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
-              <GlassMaterial />
+            <GlassButton className="secondary-button range-apply" fade={[]} material="control" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
+
               <Check size={15} />
               {rangeSaving ? "Applying…" : "Set range"}
-            </button>
+            </GlassButton>
           </div>
           {rangeError ? <div className="histogram-range-error">{rangeError}</div> : null}
         </>

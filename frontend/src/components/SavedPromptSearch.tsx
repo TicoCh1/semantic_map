@@ -1,5 +1,4 @@
-import { GlassMaterial } from "../styles/GlassMaterial";
-import { glassSurface } from "../styles/glass";
+import { Glass } from "@form-glass/react";
 import { Search, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import type { RemoteBackendConfig } from "../api/types";
@@ -49,7 +48,7 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
   return <div className="saved-prompt-search" onBlur={e => {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
   }}>
-    <div className="saved-search-field" {...glassSurface({ material: "control", fade: [] })}><GlassMaterial />
+    <Glass className="saved-search-field" fade={[]} material="control">
       {busy ? <LoaderCircle size={17} className="saved-search-spinner" /> : <Search size={17} />}
       <input role="combobox" aria-label="Search saved prompts" aria-autocomplete="list"
         aria-expanded={open && !loading && !busy} aria-controls={listId}
@@ -66,9 +65,9 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
           if (e.key === "Enter" && open && visible[active]) { e.preventDefault(); void choose(visible[active]); }
         }} />
       <span className="saved-search-badge" title="Browse previously computed prompts">Saved</span>
-    </div>
+    </Glass>
     {error && <div className="saved-search-error" role="alert">{error}</div>}
-    {open && !loading && !busy && <div className="saved-search-dropdown" {...glassSurface({ material: "control" })}><GlassMaterial />
+    {open && !loading && !busy && <Glass className="saved-search-dropdown" fade={[]} material="control">
       <div className="saved-search-caption">{matches.length ? `${matches.length} saved prompts` : "No matching prompts"}</div>
       <div id={listId} className="saved-prompt-results" role="listbox" aria-label="Saved prompts">
         {visible.map((prompt, i) => <button key={prompt} id={`${listId}-${i}`} role="option"
@@ -78,6 +77,6 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
         </button>)}
       </div>
       {!matches.length && <div className="saved-search-empty">Try another word. Only saved prompts are available.</div>}
-    </div>}
+    </Glass>}
   </div>;
 }

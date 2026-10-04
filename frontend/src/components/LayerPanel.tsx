@@ -1,8 +1,7 @@
+import { Glass } from "@form-glass/react";
 import { useRef, useState } from "react";
 import { Eye, EyeOff, GripVertical, RefreshCw, Trash2 } from "lucide-react";
 import type { GradientPreset, SemanticLayer } from "../api/types";
-import { GlassMaterial } from "../styles/GlassMaterial";
-import { glassSurface } from "../styles/glass";
 import { gradientCss, layerGradient } from "../state/color";
 
 type LayerPanelProps = {
@@ -71,11 +70,11 @@ export function LayerPanel({
         {layers.map((layer) => {
           const gradient = layerGradient(layer, gradients);
           return (
-            <div
+            <Glass
               key={layer.id}
               className={`layer-row${layer.id === selectedLayerId ? " is-selected" : ""}${layer.id === dropTarget ? " is-drop-target" : ""}`}
               data-layer-id={layer.id}
-              {...glassSurface({ material: "control", fade: [] })}
+              fade={[]} material="control"
               draggable
               onClick={() => onSelect(layer.id)}
               onDragStart={(event) => {
@@ -90,7 +89,7 @@ export function LayerPanel({
                 handleDrop(draggedId, layer.id, event.clientY > rect.top + rect.height / 2);
               }}
             >
-              <GlassMaterial />
+
               <button
                 className="icon-button visibility-button"
                 title={layer.visible ? "Hide layer" : "Show layer"}
@@ -155,7 +154,7 @@ export function LayerPanel({
               >
                 <Trash2 size={15} />
               </button>
-            </div>
+            </Glass>
           );
         })}
       </div>

@@ -2,6 +2,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./styles/app.css";
+import "@form-glass/react/styles.css";
 import "./styles/minimal.css";
 import "./styles/glass.css";
 import { App } from "./App";

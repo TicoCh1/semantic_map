@@ -1019,6 +1019,10 @@ export async function getAppState(): Promise<AppStateResponse> {
   return { state, gradients };
 }
 
+export async function getGradientPresets(): Promise<GradientPreset[]> {
+  return loadGradientsSync();
+}
+
 export async function updateAppState(state: LayerState): Promise<LayerState> {
   return saveStateSync(state);
 }
