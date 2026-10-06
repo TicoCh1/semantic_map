@@ -1,4 +1,5 @@
-import { ChevronDown, ChevronRight, Trash2 } from "lucide-react";
+import { GlassButton, GlassDisclosure, GlassScrollArea } from "@form-glass/react";
+import { Trash2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { RemoteLogEntry } from "../api/types";
 
@@ -18,17 +19,11 @@ export function LogPanel({ entries, onClear }: LogPanelProps) {
 
   return (
     <section className="panel-section log-panel">
-      <div className="log-header">
-        <button className="log-toggle" aria-expanded={!collapsed} onClick={() => setCollapsed((value) => !value)}>
-          {collapsed ? <ChevronRight size={15} /> : <ChevronDown size={15} />}
-          <span>Runtime Log</span>
-          {latest ? <small>{latest.message}</small> : <small>No events</small>}
-        </button>
-        <button className="icon-button" onClick={onClear} disabled={!entries.length} title="Clear log">
-          <Trash2 size={15} />
-        </button>
-      </div>
-      {!collapsed ? (
+      <GlassDisclosure className="runtime-disclosure" open={!collapsed} onOpenChange={next => setCollapsed(!next)} label="Runtime log">
+        <div className="log-header"><span>{latest?.message ?? "No events"}</span>
+          <GlassButton className="icon-button" onClick={onClear} disabled={!entries.length} title="Clear log" aria-label="Clear log"><Trash2 size={15}/></GlassButton>
+        </div>
+        <GlassScrollArea maxHeight="260px" label="Runtime events">
         <div className="log-body">
           {entries.length ? (
             entries.map((entry) => (
@@ -50,7 +45,8 @@ export function LogPanel({ entries, onClear }: LogPanelProps) {
             <div className="log-empty">No backend events yet</div>
           )}
         </div>
-      ) : null}
+        </GlassScrollArea>
+      </GlassDisclosure>
     </section>
   );
 }

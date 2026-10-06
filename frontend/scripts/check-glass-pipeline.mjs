@@ -5,7 +5,7 @@ import postcss from "postcss";
 const root=fileURLToPath(new URL("../",import.meta.url));
 const errors=[];
 const pkg=JSON.parse(await fs.readFile(path.join(root,"package.json"),"utf8"));
-if(pkg.dependencies["@form-glass/react"]!=="file:vendor/form-glass-react-0.1.0.tgz") errors.push("Use the vendored, versioned FORM package");
+if(pkg.dependencies["@form-glass/react"]!=="file:vendor/form-glass-react-0.3.1.tgz") errors.push("Use the vendored, versioned FORM package");
 for(const entry of ["src/main.tsx","src/region/main.tsx"]){
  const text=await fs.readFile(path.join(root,entry),"utf8");
  if((text.match(/@form-glass\/react\/styles.css/g)||[]).length!==1) errors.push(`${entry}: import FORM styles once`);

@@ -1,6 +1,6 @@
 import { ThemedSelect } from "../components/ThemedSelect";
 import { SemanticGlassProvider } from "../styles/SemanticGlassProvider";
-import { GlassButton, Glass, GlassField } from "@form-glass/react";
+import { GlassButton, GlassPanel as Glass, GlassInput, GlassSwitch, GlassLink } from "@form-glass/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import { RotateCcw } from "lucide-react";
@@ -111,7 +111,7 @@ export function RegionApp(){
       <p className="region-help">Blue source points are the actual references used for PCA. Source and target cameras move independently.</p>
     </section>
     <section className="panel-section"><div className="section-heading"><span>PCA selection</span><strong>Fixed factors · direct product</strong></div>
-      <div className="region-axis-grid">{Array.from({length:8},(_,j)=><div key={j} className="region-axis"><label><input type="checkbox" aria-label={`Include PCA ${j+1}`} checked={!!(mask&(1<<j))} onChange={()=>setMask(mask^(1<<j))}/>PCA {j+1}<small>{meta?((meta.axis_variances[j]/meta.axis_variances.reduce((a,b)=>a+b,0))*meta.explained_variance_fraction*100).toFixed(2):"—"}% variance</small></label><button aria-label={`Show only PCA ${j+1}`} onClick={()=>setMask(1<<j)}>Only</button></div>)}</div>
+      <div className="region-axis-grid">{Array.from({length:8},(_,j)=><div key={j} className="region-axis"><div><GlassSwitch label={`PCA ${j+1}`} checked={!!(mask&(1<<j))} onChange={()=>setMask(mask^(1<<j))}/><small>{meta?((meta.axis_variances[j]/meta.axis_variances.reduce((a,b)=>a+b,0))*meta.explained_variance_fraction*100).toFixed(2):"—"}% variance</small></div><GlassButton aria-label={`Show only PCA ${j+1}`} onClick={()=>setMask(1<<j)}>Only</GlassButton></div>)}</div>
       <GlassButton className="secondary-button" onClick={()=>setMask(255)}>Select all 8</GlassButton>
       <p className="region-help">{meta?(meta.explained_variance_fraction*100).toFixed(1):"—"}% source variance retained. Selecting another axis adds a constraint to the raw product.</p>
     </section>
@@ -120,16 +120,16 @@ export function RegionApp(){
     <GradientEditor layer={targetLayer} gradient={currentGradient} gradients={presets} onApply={apply} onSavePreset={save} onDeletePreset={remove}/>
     <p className="region-help">Point size follows map zoom. Click a source or target point to load its panorama.</p>
     <section className="panel-section"><div className="section-heading"><span>Street view</span><strong>Panorama API</strong></div>
-      <GlassField><input className="region-api-input" type="url" aria-label="Street view API URL" value={streetApi} onChange={event=>setStreetApi(event.target.value)}/></GlassField>
+      <GlassInput label="Street view API URL" className="region-api-input" type="url" value={streetApi} onChange={event=>setStreetApi(event.target.value)}/>
       <GlassButton className="secondary-button" disabled={!isUsableRemoteBackendUrl(streetApi)} onClick={useStreetApi}>Use API</GlassButton>
       <p className="region-help">Uses the Semantic Map backend configuration. Images load when a point is selected.</p>
       {selectedPano?.status==="failed"&&<GlassButton className="secondary-button" onClick={()=>streetView.mark(selectedPano)}>Retry panorama</GlassButton>}
       {!!streetView.panos.length&&<GlassButton className="secondary-button" onClick={()=>{clearPanos();setInspected(null);}}>Close street view</GlassButton>}
     </section>
-    {inspected&&<section className="panel-section"><div className="section-heading"><span>Selected panorama</span><strong>{inspected.city_id} · {inspected.pano_id}</strong></div><p className="region-help">{inspected.lat.toFixed(6)}, {inspected.lon.toFixed(6)}</p><a href={`https://www.google.com/maps/search/?api=1&query=${inspected.lat},${inspected.lon}`} target="_blank" rel="noreferrer">Open location</a></section>}
+    {inspected&&<section className="panel-section"><div className="section-heading"><span>Selected panorama</span><strong>{inspected.city_id} · {inspected.pano_id}</strong></div><p className="region-help">{inspected.lat.toFixed(6)}, {inspected.lon.toFixed(6)}</p><GlassLink href={`https://www.google.com/maps/search/?api=1&query=${inspected.lat},${inspected.lon}`} target="_blank" rel="noreferrer">Open location</GlassLink></section>}
     <p className="region-help">All PCA and product scores were computed on RunPod. This view only displays the saved experiments.</p>
   </div>;
-  return <SemanticGlassProvider dark={dark}><SplitPane className={`region-comparison${dark?" theme-dark":""}`} revealControls right={controls} footer={<div ref={setAttributionHost} className="map-attribution" aria-label="Map attribution"/>} left={<div className="map-shell region-map-shell" data-basemap={basemap}>
+  return <SemanticGlassProvider dark={dark}><SplitPane className={`region-comparison${dark?" theme-dark":""}`} revealControls right={controls} footer={<div ref={setAttributionHost} className="map-attribution" data-glass-audit-ignore="vendor-attribution" aria-label="Map attribution"/>} left={<div className="map-shell region-map-shell" data-basemap={basemap}>
     <Glass className="map-toolbar" fade={["top", "right", "bottom", "left"]}><div className="map-summary"><span>Semantic Map</span><strong>Region comparison</strong></div>
       <label className="basemap-select region-case"><span>Experiment</span><ThemedSelect label="Region experiment" value={caseId} onValueChange={e =>setCaseId(e)}><option value="colosseo">Colosseum → London</option><option value="stpauls">St Paul's → Rome</option></ThemedSelect></label>
       <label className="basemap-select"><span>Basemap</span><ThemedSelect label="Basemap" value={basemap} onValueChange={e =>setBasemap(e as BasemapId)}>{BASEMAPS.map(base=><option key={base.id} value={base.id}>{base.name}</option>)}</ThemedSelect></label>

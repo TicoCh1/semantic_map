@@ -250,7 +250,7 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
                 onKeyDown={handleRangeKeyDown}
               /></GlassField>
             </label>
-            <GlassButton className="secondary-button range-apply" fade={[]} material="control" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
+            <GlassButton className="secondary-button range-apply" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
 
               <Check size={15} />
               {rangeSaving ? "Applying…" : "Set range"}

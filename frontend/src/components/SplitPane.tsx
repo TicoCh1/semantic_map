@@ -17,7 +17,9 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
   const [pinned, setPinned] = useState(false);
   const [shown, setShown] = useState(false);
   const open = revealControls || dragging || pinned;
-  const present = open || shown;
+  // The expanded view is not a compact view's foreground. Keep it out of paint
+  // until FORM has hidden the old view and prepared the expansion geometry.
+  const present = shown;
 
   const blurControls = useCallback(() => {
     const active = document.activeElement;
@@ -26,15 +28,23 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
   const closeControls = useCallback(() => {
     setPinned(false);
     blurControls();
+    dock.current?.querySelector<HTMLElement>(".controls-launcher")?.focus({ preventScroll: true });
   }, [blurControls]);
 
   const prepareReveal = useCallback((opening: boolean) => {
     if (opening) setShown(true);
   }, []);
-  const revealOriginBox = useCallback(() => ({
-    width: 32,
-    height: window.matchMedia("(min-width: 1024px)").matches ? (dock.current?.offsetHeight ?? window.innerHeight) : 44
-  }), []);
+  const commitReveal = useCallback((opening: boolean) => {
+    // FORM may reveal compact contents after contraction. This drawer has only
+    // an external launcher, so there is no compact foreground to show again.
+    if (!opening) setShown(false);
+  }, []);
+  // A fixed external launcher and persistent, resizable contents require the
+  // public low-level reveal API; FORM still owns all phase/geometry animation.
+  const revealOriginBox = useCallback(() => {
+    const rect = dock.current?.querySelector(".controls-launcher")?.getBoundingClientRect();
+    return rect ? { width: rect.width, height: rect.height, left: rect.left, top: rect.top } : null;
+  }, []);
 
   const startDrag = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -78,10 +88,10 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
           ariaLabel="Map controls" checked={open}
           onChange={(next) => { if (next) setPinned(true); else closeControls(); }} />
         <Glass className="sidebar-drawer" fade={["left"]} shape="flush"
-          reveal={open} onRevealPrepare={prepareReveal} onRevealCommit={setShown}
+          reveal={open} onRevealPrepare={prepareReveal} onRevealCommit={commitReveal}
           revealOriginBox={revealOriginBox} aria-hidden={!open}>
           <div className="split-resizer" onPointerDown={startDrag} title="Resize controls" />
-          <aside id="map-controls" className="split-side" aria-label="Map controls"><GlassScrollArea className="control-scroll" viewportClassName="control-scroll-viewport" label="Scroll map controls">{right}</GlassScrollArea></aside>
+          <aside id="map-controls" className="split-side" aria-label="Map controls"><GlassScrollArea className="control-scroll" viewportClassName="control-scroll-viewport" label="Scroll map controls" height="100%">{right}</GlassScrollArea></aside>
           {footer && <footer className="sidebar-footer">{footer}</footer>}
         </Glass>
       </div>

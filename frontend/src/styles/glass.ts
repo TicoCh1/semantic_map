@@ -17,6 +17,7 @@ export function applyGlassSurface(host: Element | null, geometry: GlassGeometry 
   mount.className = "vendor-glass-mount";
   mount.setAttribute("aria-hidden", "true");
   host.setAttribute("data-vendor-glass", "");
+  host.setAttribute("data-glass-audit-ignore", "vendor-adapter");
   host.prepend(mount);
   surfaces.set(host, { id: ++nextId, host, mount, geometry: { ...geometry, fade: [] } });
   publish();
@@ -24,7 +25,7 @@ export function applyGlassSurface(host: Element | null, geometry: GlassGeometry 
 function forgetSurface(host: Element) {
   const surface = surfaces.get(host);
   if (!surface) return;
-  surfaces.delete(host); surface.mount.remove(); host.removeAttribute("data-vendor-glass");
+  surfaces.delete(host); surface.mount.remove(); host.removeAttribute("data-vendor-glass"); host.removeAttribute("data-glass-audit-ignore");
 }
 function observeVendorGlass(container: HTMLElement, selector: string, geometry: (element: Element) => GlassGeometry) {
   const scan = (element: Element) => {
@@ -50,7 +51,7 @@ function observeVendorGlass(container: HTMLElement, selector: string, geometry: 
   };
 }
 export function observeMapGlass(container: HTMLElement) {
-  return observeVendorGlass(container, ".maplibregl-ctrl-group", () => ({}));
+  return observeVendorGlass(container, ".maplibregl-ctrl-group", () => ({ material: "control" }));
 }
 export function observePanoramaGlass(container: HTMLElement) {
   return observeVendorGlass(container, ".psv-navbar, .psv-panel, .psv-tooltip, .psv-notification-content", element => ({

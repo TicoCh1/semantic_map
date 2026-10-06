@@ -1,4 +1,4 @@
-import { Glass } from "@form-glass/react";
+import { Glass, GlassInput, GlassButton, GlassScrollArea } from "@form-glass/react";
 import { Search, ArrowUpRight, LoaderCircle } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import type { RemoteBackendConfig } from "../api/types";
@@ -48,9 +48,9 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
   return <div className="saved-prompt-search" onBlur={e => {
     if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOpen(false);
   }}>
-    <Glass className="saved-search-field" fade={[]} material="control">
+    <div className="saved-search-field">
       {busy ? <LoaderCircle size={17} className="saved-search-spinner" /> : <Search size={17} />}
-      <input role="combobox" aria-label="Search saved prompts" aria-autocomplete="list"
+      <GlassInput label="Search saved prompts" type="search" role="combobox" aria-label="Search saved prompts" aria-autocomplete="list"
         aria-expanded={open && !loading && !busy} aria-controls={listId}
         aria-activedescendant={open && visible[active] ? `${listId}-${active}` : undefined}
         placeholder={loading ? "Loading prompts…" : "Search saved prompts…"} value={query}
@@ -65,17 +65,17 @@ export function SavedPromptSearch({ config, disabled, onCreate }: {
           if (e.key === "Enter" && open && visible[active]) { e.preventDefault(); void choose(visible[active]); }
         }} />
       <span className="saved-search-badge" title="Browse previously computed prompts">Saved</span>
-    </Glass>
+    </div>
     {error && <div className="saved-search-error" role="alert">{error}</div>}
     {open && !loading && !busy && <Glass className="saved-search-dropdown" fade={[]} material="control">
       <div className="saved-search-caption">{matches.length ? `${matches.length} saved prompts` : "No matching prompts"}</div>
-      <div id={listId} className="saved-prompt-results" role="listbox" aria-label="Saved prompts">
-        {visible.map((prompt, i) => <button key={prompt} id={`${listId}-${i}`} role="option"
+      <GlassScrollArea maxHeight="260px" label="Saved prompts"><div id={listId} className="saved-prompt-results" role="listbox" aria-label="Saved prompts">
+        {visible.map((prompt, i) => <GlassButton key={prompt} id={`${listId}-${i}`} role="option"
           aria-selected={i === active} className="saved-search-option" type="button" disabled={disabled}
           onMouseEnter={() => setActive(i)} onClick={() => void choose(prompt)}>
           <span>{prompt}</span><ArrowUpRight size={15} aria-hidden="true" />
-        </button>)}
-      </div>
+        </GlassButton>)}
+      </div></GlassScrollArea>
       {!matches.length && <div className="saved-search-empty">Try another word. Only saved prompts are available.</div>}
     </Glass>}
   </div>;

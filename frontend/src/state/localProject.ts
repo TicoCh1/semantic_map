@@ -1,3 +1,4 @@
+import { normalizePointShape } from "./semanticLayerRenderer";
 import type {
   AppStateResponse,
   CityId,
@@ -13,6 +14,8 @@ import type {
   RemoteBackendConfig,
   RemoteLogEntry,
   RemoteResultManifest,
+  RerankCalibrationJob,
+  RerankColorRange,
   ScoringJob,
   ScoringJobBatchResponse,
   SemanticLayer,
@@ -872,6 +875,7 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
         stops: raw.style.stops?.length ? raw.style.stops.map(normalizeStop).sort((a, b) => a.value - b.value) : clone(gradient.stops),
         opacity: clamp(Number(raw.style.opacity ?? gradient.opacity), 0, 1),
         point_radius: clamp(Number(raw.style.point_radius ?? DEFAULT_POINT_RADIUS), 0.25, 128),
+        point_shape: normalizePointShape(raw.style.point_shape),
         absolute_radius: Boolean(raw.style.absolute_radius)
       }
     : layerStyleFromGradient(gradient);
@@ -891,7 +895,8 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     score_property: raw.score_property || "zscore",
     style,
     status: raw.status || "ready",
-    created_at: raw.created_at || utcNow()
+    created_at: raw.created_at || utcNow(),
+    rerank_calibration: raw.rerank_calibration || null
   };
 }
 
@@ -966,7 +971,9 @@ function applyStaticFallbackToExhibitLayers(state: LayerState): LayerState {
     const spec = exhibitSpecForLayer(layer);
     if (!spec) return layer;
     const candidates = layerSourcePathCandidates(layer);
-    if (canUseRemoteBackend && candidates.some((sourcePath) => isRemoteTileTemplate(sourcePath) && !isStaticFallbackTileTemplate(sourcePath))) {
+    if (canUseRemoteBackend && candidates.some((sourcePath) =>
+      (isRemoteTileTemplate(sourcePath) && !isStaticFallbackTileTemplate(sourcePath)) ||
+      Boolean(parsePendingJobSource(sourcePath)) || isLegacyPendingSource(sourcePath))) {
       return layer;
     }
     if (candidates.some((sourcePath) => isStaticFallbackTileTemplate(sourcePath))) {
@@ -1044,6 +1051,7 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
     const gradient = gradientById(nextGradients, spec.gradientId);
     const previousLayer = previousByPrompt.get(spec.prompt);
     const reusableRemote = previousLayer && shouldReuseExhibitRemoteSource(previousLayer);
+    const calibratedRange = reusableRemote ? previousLayer.rerank_calibration?.color_range : undefined;
     const id = previousLayer?.id || layerIdForPrompt(spec.prompt, usedIds);
     usedIds.add(id);
     const style = {
@@ -1065,7 +1073,8 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       score_min: spec.scoreMin,
       score_max: spec.scoreMax,
       point_radius: EXHIBIT_POINT_RADIUS,
-      absolute_radius: false
+      absolute_radius: false,
+      ...(calibratedRange ? { score_min: calibratedRange.lower, score_max: calibratedRange.upper } : {})
     };
 
     const fallbackSources = staticFallbackSources(spec.staticDataKey);
@@ -1083,7 +1092,8 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       score_property: reusableRemote ? previousLayer.score_property : fallbackSources.score_property,
       style,
       status: reusableRemote ? previousLayer.status : fallbackSources.status,
-      created_at: previousLayer?.created_at || utcNow()
+      created_at: previousLayer?.created_at || utcNow(),
+      rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null
     };
   });
 
@@ -1375,7 +1385,8 @@ async function submitRemoteScoringForLayer(
   updateLayerSync(layer.id, {
     status: "running",
     source_path: `remote://pending/${layer.id}`,
-    source_paths: submittingSourcePaths
+    source_paths: submittingSourcePaths,
+    rerank_calibration: null
   });
 
   try {
@@ -1398,7 +1409,7 @@ async function submitRemoteScoringForLayer(
       cityConfigsForRemoteBackend(config).map((city) => [city.id, pending])
     ) as Partial<Record<CityId, string>>;
     updateLayerSync(layer.id, {
-      status: job.status === "ready" ? "ready" : "running",
+      status: "running",
       source_path: pending,
       source_paths: pendingSourcePaths,
       query_type: submitted.query_type || layer.query_type,
@@ -1828,6 +1839,61 @@ export async function loadPanoImage(
   };
 }
 
+async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, job: ScoringJob): Promise<RerankColorRange | undefined> {
+  if (config.mode === "cpu" || job.query_type === "pano_reference" || !job.results?.length) return;
+  try {
+    const capabilityResponse = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/calibration/capabilities"), {
+      headers: remoteAuthHeaders(config)
+    });
+    if (capabilityResponse.status === 404) return;
+    if (!capabilityResponse.ok) throw new Error(`Reranker availability check failed (${capabilityResponse.status})`);
+    const capability = await capabilityResponse.json() as { enabled: boolean; reason?: string };
+    if (!capability.enabled) return;
+    emitRemoteJobLog(layerId, { ...job, status: "scoring", current_stage: "reranking", message: "Calibrating colour range from batched street-view reranking…" });
+    const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/calibration/jobs"), {
+      method: "POST", headers: { ...remoteAuthHeaders(config), "Content-Type": "application/json" },
+      body: JSON.stringify({ results: job.results, sampling: "uniform_zscore_64" })
+    });
+    if (!response.ok) throw new Error(`Reranker calibration request failed (${response.status})`);
+    let calibration = await response.json() as RerankCalibrationJob;
+    for (let attempt = 0; attempt < 600; attempt += 1) {
+      if (calibration.status === "disabled") return;
+      if (calibration.status === "failed") throw new Error(calibration.error || "Reranker calibration failed");
+      if (calibration.status === "ready") {
+        const range = calibration.color_range;
+        if (range && range.field === "zscore" && [range.mean, range.lower, range.upper].every(Number.isFinite)
+          && range.lower < range.upper && range.lower <= range.mean && range.mean <= range.upper) {
+          const correlations = calibration.calibration?.correlations;
+          const validCorrelations = correlations && [correlations.pearson_r, correlations.spearman_rho, correlations.bicor]
+            .every(value => value === null || (Number.isFinite(value) && value >= -1 && value <= 1))
+            && (correlations.agreement_percent === null || (Number.isFinite(correlations.agreement_percent)
+              && correlations.agreement_percent >= 0 && correlations.agreement_percent <= 100));
+          updateLayerSync(layerId, { rerank_calibration: {
+            job_id: calibration.job_id, color_range: range, center_method: calibration.calibration?.center_method,
+            ...(validCorrelations ? { correlations } : {})
+          } });
+          const centreLabel = calibration.calibration?.center_method === "logit_zero" ? "zero-logit centre" : "endpoint centre";
+          const agreementLabel = validCorrelations && correlations?.agreement_percent !== null
+            ? ` Scoring agreement ${correlations!.agreement_percent!.toFixed(1)}%.` : "";
+          emitRemoteInfoLog(layerId, job.prompt, `Reranker colour range: ${range.lower.toFixed(2)} to ${range.upper.toFixed(2)} σ; ${centreLabel} ${range.mean.toFixed(2)} σ.${agreementLabel}`);
+          return range;
+        }
+        if (range) throw new Error("Reranker returned an invalid z-score colour range");
+        emitRemoteInfoLog(layerId, job.prompt, calibration.calibration?.reason || "No sampled reranker evidence is available; retaining the current colour range.");
+        return;
+      }
+      if (!calibration.job_id) throw new Error("Reranker did not return a calibration job ID");
+      await delay(1500);
+      const poll = await fetchRemoteWithTimeout(resolveRemoteUrl(config, `/api/scoring/calibration/jobs/${calibration.job_id}`), { headers: remoteAuthHeaders(config) });
+      if (!poll.ok) throw new Error(`Reranker polling failed (${poll.status})`);
+      calibration = await poll.json() as RerankCalibrationJob;
+    }
+    throw new Error("Reranker calibration timed out");
+  } catch (error) {
+    emitRemoteInfoLog(layerId, job.prompt, `${error instanceof Error ? error.message : "Reranker calibration failed"}; retaining the current colour range.`);
+  }
+}
+
 async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string, initialJob: ScoringJob, showOnMap = true) {
   if (ACTIVE_REMOTE_POLLS.has(layerId)) return;
   ACTIVE_REMOTE_POLLS.add(layerId);
@@ -1837,12 +1903,18 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
     for (let attempt = 0; attempt < 720; attempt += 1) {
       emitRemoteJobLog(layerId, job, { mapOverlay: showOnMap });
       if (job.status === "ready") {
+        const calibratedRange = await remoteRerankRange(config, layerId, job);
+        const currentLayer = loadStateSync().layers.find(layer => layer.id === layerId);
+        const calibratedStyle = calibratedRange && currentLayer ? {
+          ...currentLayer.style, score_min: calibratedRange.lower, score_max: calibratedRange.upper
+        } : undefined;
         const directSources = sourcePathsFromReadyJob(config, job);
         if (directSources) {
           updateLayerSync(layerId, {
             status: "ready",
             source_path: directSources.primarySourcePath,
             source_paths: directSources.sourcePaths,
+            ...(calibratedStyle ? { style: calibratedStyle } : {}),
             score_property: "zscore",
             query_type: job.query_type || "text",
             reference_pano: job.reference_pano || null
@@ -1864,6 +1936,7 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
           status: "ready",
           source_path: primarySourcePath,
           source_paths: sourcePaths,
+          ...(calibratedStyle ? { style: calibratedStyle } : {}),
           score_property: primaryManifest?.zscore_property || "zscore",
           query_type: primaryManifest?.query_type || job.query_type || "text",
           reference_pano: primaryManifest?.reference_pano || job.reference_pano || null
@@ -1903,12 +1976,14 @@ export async function resumeRemoteScoringJobs(): Promise<void> {
 
   const state = loadStateSync();
   for (const layer of state.layers) {
-    if (layer.status === "ready" || layer.status === "failed") continue;
+    if (layer.status === "failed") continue;
     if (isRemoteTileTemplate(layer.source_path)) continue;
 
     const existingJobId = parsePendingJobSource(layer.source_path);
+    if (layer.status === "ready" && !existingJobId && !isLegacyPendingSource(layer.source_path)) continue;
     if (existingJobId) {
       try {
+        updateLayerSync(layer.id, { status: "running" });
         const job = await getRemoteScoringJob(config, existingJobId);
         void pollRemoteScoringJob(config, layer.id, { ...job, layer_id: layer.id }, job.status !== "ready");
       } catch {
@@ -1929,7 +2004,7 @@ export async function resumeRemoteScoringJobs(): Promise<void> {
           cityConfigsForRemoteBackend(config).map((city) => [city.id, pending])
         ) as Partial<Record<CityId, string>>;
         updateLayerSync(layer.id, {
-          status: job.status === "ready" ? "ready" : "running",
+          status: "running",
           source_path: pending,
           source_paths: pendingSourcePaths
         });

@@ -1,6 +1,6 @@
 import { GlassSwitch } from "@form-glass/react";
 import { SemanticGlassProvider } from "./styles/SemanticGlassProvider";
-import { GlassButton, Glass } from "@form-glass/react";
+import { GlassButton, Glass, GlassDialog, GlassContentSwitch, GlassScrollArea } from "@form-glass/react";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
@@ -33,6 +33,7 @@ import type {
   MarkedPano,
   PanoMapPoint,
   PanoReference,
+  PointShape,
   RemoteBackendConfig,
   RemoteLogEntry,
   SemanticLayer,
@@ -769,11 +770,12 @@ export function App() {
     }
   }
 
-  async function handleApplyGradient(gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean) {
+  async function handleApplyGradient(gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean, pointShape: PointShape) {
     const style = {
       ...layerStyleFromGradient(gradient, layer.style),
       point_radius: pointRadius,
-      absolute_radius: absoluteRadius
+      absolute_radius: absoluteRadius,
+      point_shape: pointShape
     };
     updateState((state) => ({
       ...state,
@@ -787,7 +789,7 @@ export function App() {
     }
   }
 
-  async function handleSaveGradient(gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean) {
+  async function handleSaveGradient(gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean, pointShape: PointShape) {
     setError(null);
     try {
       const saved = await saveGradient(gradient);
@@ -795,7 +797,8 @@ export function App() {
         style: {
           ...layerStyleFromGradient(saved, layer.style),
           point_radius: pointRadius,
-          absolute_radius: absoluteRadius
+          absolute_radius: absoluteRadius,
+          point_shape: pointShape
         }
       });
       await refresh();
@@ -928,7 +931,7 @@ export function App() {
       <SplitPane
         className={darkMode ? "theme-dark" : ""}
         revealControls={showExhibitIntro}
-        footer={<div ref={setAttributionHost} className="map-attribution" aria-label="Map attribution" />}
+        footer={<div ref={setAttributionHost} className="map-attribution" data-glass-audit-ignore="vendor-attribution" aria-label="Map attribution" />}
         left={
           <MapView
             cities={mapCities}
@@ -959,20 +962,22 @@ export function App() {
       {idleResetCountdown !== null ? (
         <Glass className="idle-reset-warning" fade={[]}>Long inactivity detected. Resetting in {idleResetCountdown} seconds.</Glass>
       ) : null}
-      {showExhibitIntro ? <ExhibitIntroModal key={introVersion} onClose={handleCloseExhibitIntro} /> : null}
+      <ExhibitIntroModal open={showExhibitIntro} version={introVersion} onClose={handleCloseExhibitIntro} />
       {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
     </SemanticGlassProvider>
   );
 }
 
-function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
+function ExhibitIntroModal({ open, version, onClose }: { open: boolean; version: number; onClose: () => void }) {
   const [pageIndex, setPageIndex] = useState(0);
   const [highlightRect, setHighlightRect] = useState<TourHighlightRect | null>(null);
+  useEffect(() => { if (open) setPageIndex(0); }, [open, version]);
   const page = TUTORIAL_PAGES[pageIndex];
   const isFirst = pageIndex === 0;
-  const isLast = pageIndex === TUTORIAL_PAGES.length - 1;
+
 
   useEffect(() => {
+    if (!open) return;
     // The welcome page focuses on the introduction rather than a specific control.
     if (!page.target) {
       setHighlightRect(null);
@@ -1023,70 +1028,39 @@ function ExhibitIntroModal({ onClose }: { onClose: () => void }) {
       activeElement?.classList.remove("tour-target-active");
       setHighlightRect(null);
     };
-  }, [page.target]);
+  }, [page.target, open]);
 
   return (
-    <div className="exhibit-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="exhibit-intro-title">
-      {isFirst ? (
-        <Glass className="tutorial-focus-backdrop" fade={[]} shape="flush" material="tutorial-focus" aria-hidden="true">
-
-        </Glass>
-      ) : null}
-      {highlightRect ? (
-        <div
-          className="tour-highlight-frame"
-          style={{
-            left: highlightRect.left,
-            top: highlightRect.top,
-            width: highlightRect.width,
-            height: highlightRect.height
-          }}
-        />
-      ) : null}
-      <Glass className="exhibit-modal" fade={[]}>
-        <div className="exhibit-modal-content glass-scroll-content">
-          <div className="exhibit-modal-top">
-            <span className="exhibit-modal-eyebrow">UrbanFabric tutorial</span>
-            <button className="icon-button exhibit-modal-close" onClick={onClose} title="Skip tutorial">
-              <X size={16} />
-            </button>
-          </div>
-          <div className="intro-progress-row" aria-label={`Tutorial step ${pageIndex + 1} of ${TUTORIAL_PAGES.length}`}>
-            {TUTORIAL_PAGES.map((item, index) => (
-              <button
-                className={`intro-progress-dot${index === pageIndex ? " is-active" : ""}`}
-                key={item.eyebrow}
-                onClick={() => setPageIndex(index)}
-                title={item.title}
-              />
-            ))}
-          </div>
-          <span className="intro-page-eyebrow">{page.eyebrow}</span>
-          <h2 id="exhibit-intro-title">{page.title}</h2>
-          <p>{page.body}</p>
-          {page.items.length > 0 ? <ul className="intro-step-list">
-            {page.items.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul> : null}
-          <div className="intro-modal-footer">
-            <GlassButton className="secondary-button" onClick={onClose}>
-              Skip tutorial
-            </GlassButton>
-            <div className="intro-modal-actions">
-              <GlassButton className="secondary-button" onClick={() => setPageIndex((index) => Math.max(0, index - 1))} disabled={isFirst}>
-                <ChevronLeft size={16} />
-                Back
-              </GlassButton>
-              <GlassButton className="primary-text-button" onClick={() => (isLast ? onClose() : setPageIndex((index) => index + 1))}>
-                {isLast ? "Start exploring" : "Next"}
-                {!isLast ? <ChevronRight size={16} /> : null}
-              </GlassButton>
+    <>
+      {open && isFirst && <Glass className="tutorial-focus-backdrop" fade={[]} shape="flush" material="tutorial-focus" aria-hidden="true" />}
+      {open && !isFirst && highlightRect && <div className="tour-highlight-frame" style={highlightRect} />}
+      <GlassDialog open={open} onOpenChange={next => { if (!next) onClose(); }}
+        title="UrbanFabric tutorial" closeLabel="Close tutorial" className="exhibit-modal">
+        <GlassContentSwitch value={String(pageIndex)} render={key => {
+          const displayed = TUTORIAL_PAGES[Number(key)];
+          return <>
+            <div className="intro-progress-row" aria-label={`Tutorial step ${Number(key) + 1} of ${TUTORIAL_PAGES.length}`}>
+              {TUTORIAL_PAGES.map((item, index) => <GlassButton className={`intro-progress-dot${index === Number(key) ? " is-active" : ""}`}
+                key={item.eyebrow} onClick={() => setPageIndex(index)} title={item.title} aria-label={`Step ${index + 1}: ${item.title}`} />)}
             </div>
-          </div>
-        </div>
-      </Glass>
-    </div>
+            <GlassScrollArea maxHeight="48dvh" label="Tutorial content">
+              <span className="intro-page-eyebrow">{displayed.eyebrow}</span>
+              <h3>{displayed.title}</h3><p>{displayed.body}</p>
+              {displayed.items.length > 0 && <ul className="intro-step-list">{displayed.items.map(item => <li key={item}>{item}</li>)}</ul>}
+            </GlassScrollArea>
+            <div className="intro-modal-footer">
+              <GlassButton onClick={onClose}>Skip tutorial</GlassButton>
+              <div className="intro-modal-actions">
+                <GlassButton onClick={() => setPageIndex(index => Math.max(0, index - 1))} disabled={Number(key) === 0}><ChevronLeft size={16}/>Back</GlassButton>
+                <GlassButton onClick={() => Number(key) === TUTORIAL_PAGES.length - 1 ? onClose() : setPageIndex(index => index + 1)}>
+                  {Number(key) === TUTORIAL_PAGES.length - 1 ? "Start exploring" : "Next"}<ChevronRight size={16}/>
+                </GlassButton>
+              </div>
+            </div>
+          </>;
+        }}/>
+      </GlassDialog>
+    </>
   );
 }
 

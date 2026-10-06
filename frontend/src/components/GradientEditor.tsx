@@ -1,8 +1,8 @@
 import { GlassSwitch, DopplerRange } from "@form-glass/react";
-import { Glass, GlassButton, GlassField } from "@form-glass/react";
-import { Check, ChevronDown, Plus, Save, Trash2 } from "lucide-react";
+import { GlassButton, GlassField, GlassDisclosure, GlassSelect } from "@form-glass/react";
+import { Check, Plus, Save, Trash2 } from "lucide-react";
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from "react";
-import type { GradientPreset, GradientStop, SemanticLayer } from "../api/types";
+import type { GradientPreset, GradientStop, PointShape, SemanticLayer } from "../api/types";
 import {
   DEFAULT_POINT_RADIUS,
   clamp,
@@ -12,21 +12,24 @@ import {
   slugify
 } from "../state/color";
 
+import { normalizePointShape } from "../state/semanticLayerRenderer";
+
 type GradientEditorProps = {
   layer: SemanticLayer | null;
   gradient: GradientPreset | null;
   gradients: GradientPreset[];
-  onApply: (gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean) => Promise<void>;
-  onSavePreset: (gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean) => Promise<void>;
+  onApply: (gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean, pointShape: PointShape) => Promise<void>;
+  onSavePreset: (gradient: GradientPreset, layer: SemanticLayer, pointRadius: number, absoluteRadius: boolean, pointShape: PointShape) => Promise<void>;
   onDeletePreset: (gradient: GradientPreset, layer: SemanticLayer) => Promise<void>;
 };
 
 export function GradientEditor({ layer, gradient, gradients, onApply, onSavePreset, onDeletePreset }: GradientEditorProps) {
   const [draft, setDraft] = useState<GradientPreset | null>(gradient);
   const [selectedStop, setSelectedStop] = useState(0);
-  const [presetOpen, setPresetOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
   const [pointRadius, setPointRadius] = useState(DEFAULT_POINT_RADIUS);
   const [absoluteRadius, setAbsoluteRadius] = useState(false);
+  const [pointShape, setPointShape] = useState<PointShape>("circle");
   const [hexDraft, setHexDraft] = useState("");
   const stripRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ index: number; left: number; width: number } | null>(null);
@@ -36,6 +39,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
     setSelectedStop(0);
     setPointRadius(clamp(layer?.style.point_radius ?? DEFAULT_POINT_RADIUS, 1, 10));
     setAbsoluteRadius(layer?.style.absolute_radius ?? false);
+    setPointShape(normalizePointShape(layer?.style.point_shape));
   }, [gradient?.id, layer?.id]);
 
   const stops = useMemo(() => [...(draft?.stops ?? [])].sort((a, b) => a.value - b.value), [draft]);
@@ -135,7 +139,8 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       },
       currentLayer,
       pointRadius,
-      absoluteRadius
+      absoluteRadius,
+      pointShape
     );
   }
 
@@ -155,7 +160,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       is_default: false,
       updated_at: new Date().toISOString().replace(/\.\d{3}Z$/, "Z")
     };
-    await onSavePreset(normalized, currentLayer, pointRadius, absoluteRadius);
+    await onSavePreset(normalized, currentLayer, pointRadius, absoluteRadius, pointShape);
   }
 
   async function deletePreset() {
@@ -182,37 +187,12 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       </div>
 
       <div className="preset-picker">
-        <button className="preset-trigger" aria-label="Choose color ramp" aria-expanded={presetOpen} onClick={() => setPresetOpen((open) => !open)}>
-          <span className="preset-swatch">
-            <span style={{ background: gradientCss({ ...draft, stops }) }} />
-          </span>
-          <span>{draft.name}</span>
-          <ChevronDown size={16} />
-        </button>
-        {presetOpen ? (
-          <Glass className="preset-menu" fade={[]} material="control">
-            <div className="glass-scroll-content">
-            {gradients.map((preset) => (
-              <button
-                key={preset.id}
-                className="preset-option"
-                onClick={() => {
-                  const next = copyGradient(preset);
-                  setDraft(next);
-                  setSelectedStop(0);
-                  setPresetOpen(false);
-                }}
-              >
-                <span className="preset-swatch">
-                  <span style={{ background: gradientCss(preset) }} />
-                </span>
-                <span>{preset.name}</span>
-                <small>{preset.is_default ? "Preset" : "Saved"}</small>
-              </button>
-            ))}
-            </div>
-          </Glass>
-        ) : null}
+        <GlassSelect label="Color ramp" value={draft.id ?? ""}
+          options={gradients.map(preset => ({ value: preset.id, label: preset.name }))}
+          onChange={id => {
+            const preset = gradients.find(item => item.id === id);
+            if (preset) { setDraft(copyGradient(preset)); setSelectedStop(0); }
+          }} />
       </div>
 
       <div className="ramp-editor">
@@ -230,7 +210,7 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
         }}
       >
         {draft.stops.map((item, index) => (
-          <button
+          <GlassButton
             key={index}
             className={`gradient-stop${index === selectedStop ? " is-selected" : ""}`}
             style={{ left: `${item.value * 100}%`, "--stop-color": item.color } as CSSProperties}
@@ -267,13 +247,13 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
         <span>Selected stop <strong>{selectedStop + 1}</strong></span>
         <div className="gradient-tools">
           <GlassButton className="secondary-button" onClick={addStop} title="Add color stop"><Plus size={14} />Add stop</GlassButton>
-          <button className="danger-button compact-action" onClick={deleteStop} disabled={stops.length <= 2} title="Delete selected color stop"><Trash2 size={14} /></button>
+          <GlassButton className="danger-button compact-action" onClick={deleteStop} disabled={stops.length <= 2} title="Delete selected color stop"><Trash2 size={14} /></GlassButton>
         </div>
       </div>
       <div className="stop-editor-fields">
         <div className="stop-color-field"><span>Color</span>
           <div className="color-top-row">
-            <input aria-label="Stop color" className="native-color" type="color" value={stop.color} onChange={(event) => setHex(event.target.value)} />
+            <input data-glass-audit-ignore="native-color-picker" aria-label="Stop color" className="native-color" type="color" value={stop.color} onChange={(event) => setHex(event.target.value)} />
             <GlassField className="hex-glass-field"><input aria-label="Stop hex color" className="hex-input" value={hexDraft} maxLength={7}
               onChange={(event) => { setHexDraft(event.target.value); setHex(event.target.value); }}
               onBlur={() => setHexDraft(stop.color)} onKeyDown={(event) => { if (event.key === "Enter") { setHex(hexDraft); event.currentTarget.blur(); } }} /></GlassField>
@@ -297,6 +277,20 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
       </div>
 
       <div className="point-style-controls">
+        <div className="point-shape-row">
+          <span>Point shape</span>
+          <GlassSelect
+            label="Point shape"
+            value={pointShape}
+            onChange={(value) => setPointShape(normalizePointShape(value))}
+            options={[
+              { value: "circle", label: "Circle" },
+              { value: "square", label: "Square" },
+              { value: "diamond", label: "Diamond" },
+              { value: "triangle", label: "Triangle" }
+            ]}
+          />
+        </div>
         <Slider label="Point size" min={1} max={10} step={0.1} value={pointRadius} onChange={(value) => setPointRadius(clamp(value, 1, 10))} />
         <GlassSwitch className="point-scale-switch" label="Scale points with map zoom" checked={absoluteRadius} onChange={setAbsoluteRadius} />
       </div>
@@ -304,17 +298,16 @@ export function GradientEditor({ layer, gradient, gradients, onApply, onSavePres
         <GlassButton className="secondary-button style-apply" disabled={hasCollidingStops} onClick={() => void applyToLayer()} title="Apply to layer"><Check size={16} />Apply style</GlassButton>
         <span>To selected layer</span>
       </div>
-      <details className="preset-save">
-        <summary><Save size={14} />Save as preset<ChevronDown size={14} /></summary>
+      <GlassDisclosure className="preset-save" label="Save as preset" open={saveOpen} onOpenChange={setSaveOpen}>
         <div className="preset-save-fields">
           <label htmlFor="gradient-name">Preset name</label>
           <div className="preset-save-row">
             <GlassField><input id="gradient-name" className="text-input" value={draft.name} onChange={(event) => updateDraft((next) => { next.name = event.target.value; })} /></GlassField>
             <GlassButton className="secondary-button" disabled={hasCollidingStops} onClick={() => void savePreset()} title="Save preset"><Save size={15} />Save</GlassButton>
-            <button className="danger-button compact-action" onClick={() => void deletePreset()} disabled={!canDeletePreset} title="Delete saved colour scheme"><Trash2 size={15} /></button>
+            <GlassButton className="danger-button compact-action" onClick={() => void deletePreset()} disabled={!canDeletePreset} title="Delete saved colour scheme"><Trash2 size={15} /></GlassButton>
           </div>
         </div>
-      </details>
+      </GlassDisclosure>
     </section>
   );
 }

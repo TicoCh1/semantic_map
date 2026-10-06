@@ -158,6 +158,7 @@ export function layerStyleFromGradient(gradient: GradientPreset, previous?: Laye
     score_min: gradient.score_min,
     score_max: gradient.score_max,
     point_radius: previous?.point_radius ?? DEFAULT_POINT_RADIUS,
+    point_shape: previous?.point_shape ?? "circle",
     absolute_radius: previous?.absolute_radius ?? false
   };
 }

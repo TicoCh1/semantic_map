@@ -25,8 +25,8 @@ export function colorExpression(gradient: GradientPreset, layer: SemanticLayer):
   return expression as ExpressionSpecification;
 }
 
-export function circleRadiusExpression(layer: SemanticLayer): number | ExpressionSpecification {
-  const radius = clamp(layer.style.point_radius ?? DEFAULT_POINT_RADIUS, 0.25, 128);
+export function circleRadiusExpression(layer: SemanticLayer, unitScale = 1): number | ExpressionSpecification {
+  const radius = clamp(layer.style.point_radius ?? DEFAULT_POINT_RADIUS, 0.25, 128) * unitScale;
   if (layer.style.absolute_radius) {
     return [
       "interpolate",

@@ -8,7 +8,8 @@
    owns positioning and stacking for its overlays. */
 #root .map-toolbar { position: absolute; z-index: 8; }
 #root .sidebar-drawer { position: absolute; height: 100%; }
-/* FORM reveal owns motion; keep the shell mounted through the closing handoff. */
+/* FORM owns motion. Only prepare/commit may expose the expanded view; an open
+   flag alone would paint it before the outgoing-content phase starts. */
 #root .sidebar-drawer { transform: none; transform-origin: right center; transition: none; opacity: 1; visibility: hidden; }
 #root .sidebar-dock.is-present .sidebar-drawer { visibility: visible; }
 #root .sidebar-dock:not(.is-present) .sidebar-drawer { display: none; }
@@ -54,6 +55,7 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
 #root .controls-launcher > .glass-switch-label {
   writing-mode: horizontal-tb; letter-spacing: 0; text-transform: none;
 }
+
 @media (min-width: 1024px) {
   #root .city-map-pane .maplibregl-ctrl-top-right { top: max(var(--map-toolbar-clearance), 120px); }
 }
@@ -140,4 +142,93 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
   #root .basemap-source-select .glass-select { width: min(190px, 48vw); }
   #root .map-toolbar .glass-select-trigger { min-height: 36px; }
   #root .exhibit-modal { padding: 22px; }
+}
+
+/* 0.3 managed UI: layout only; FORM owns material and sequential motion. */
+#root .map-toolbar { top: calc(var(--form-glass-outset, 42px) + 2px); left: calc(var(--form-glass-outset, 42px) + 2px); max-width: calc(100% - 2 * (var(--form-glass-outset, 42px) + 2px)); padding: 28px 32px; gap: 12px 16px; }
+#root .sidebar-drawer { padding: 0; }
+#root .control-scroll-viewport { padding: 28px 24px 28px 36px; }
+#root .sidebar-top-bar { margin-bottom: 52px; }
+#root .backend-config-row > .form-glass-input, #root .prompt-input-row > .form-glass-input { flex: 1; min-width: 0; }
+#root .form-glass-input { font-size: 12px; color: var(--ui-text); }
+#root .prompt-input-row { align-items: end; }
+#root .preset-picker > .glass-select { width: 100%; }
+#root .preset-save, #root .runtime-disclosure { padding: 32px; margin-block: 22px; }
+#root .preset-save-row { flex-wrap: wrap; }
+#root .saved-search-field { padding: 0; background: transparent; border: 0; box-shadow: none; }
+#root .saved-search-field > .form-glass-input, #root .mobile-search-form > .form-glass-input { flex: 1; min-width: 0; }
+#root .saved-search-field > .form-glass-input > span, #root .mobile-search-form > .form-glass-input > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#root .saved-prompt-results { max-height: none; overflow: visible; }
+#root .exhibit-modal { width: 100%; max-height: none; padding: 32px; overflow: visible; }
+.form-glass-dialog { width: min(560px, calc(100vw - 2 * (var(--form-glass-outset, 42px) + 2px))); }
+#root .exhibit-modal .form-glass-dialog-heading h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; }
+#root .exhibit-modal h3 { margin: 16px 0; font-size: 24px; line-height: 1.25; }
+#root .exhibit-modal .intro-modal-footer { margin-top: 24px; flex-wrap: wrap; }
+#root .exhibit-modal .intro-progress-dot { min-width: 0; padding: 0; border-radius: 999px; height: 8px; min-height: 8px; }
+#root .tour-highlight-frame { z-index: 16; pointer-events: none; }
+@media (max-width: 1023px) {
+  #root .map-toolbar { padding: 24px 32px; gap: 10px; }
+  #root .control-scroll-viewport { padding: 28px 24px 28px 36px; }
+  #root .sidebar-top-bar { flex-wrap: wrap; }
+  #root .layer-row { grid-template-columns: 28px 16px minmax(0, 1fr) 32px 28px; }
+  #root .layer-row .icon-button { width: 28px; min-width: 28px; }
+  #root .layer-style-chip { width: 32px; }
+  #root .exhibit-modal h3 { font-size: 21px; }
+  #root .exhibit-modal .intro-modal-actions { flex-wrap: wrap; }
+}
+
+#root .sidebar-content :is(.icon-button, .refresh-icon-button, .layer-drag-handle) { padding: 0; display: inline-flex; justify-content: center; align-items: center; }
+#root .sidebar-content .layer-drag-handle { min-width: 16px; width: 16px; }
+#root .map-toolbar { pointer-events: auto; }
+#root .tutorial-focus-backdrop { z-index: 20; pointer-events: none; }
+@media (min-width: 1024px) {
+  #root .split-pane:has(.sidebar-dock.is-open) .map-toolbar { max-width: calc(100% - var(--right-width) - var(--form-glass-outset, 42px) - 12px); }
+}
+
+/* Managed field wrappers include their labels. Legacy native-field dimensions
+   must not constrain the wrapper or let its glass owner overlap the next row. */
+#root .sidebar-content .form-glass-input { display: flex; flex-direction: column; gap: 6px; height: auto; margin: 0; padding: 0; border: 0; background: transparent; }
+#root .backend-config-row { align-items: end; gap: 10px; margin-bottom: 16px; }
+#root .backend-config-row > .glass-state-switch { margin-bottom: 0; flex-shrink: 0; height: 36px; min-height: 36px; }
+#root .sidebar-content .form-glass-input > .glass-field { padding: 8px 12px; }
+#root .sidebar-content .form-glass-input > .glass-field > :is(input, textarea) { padding: 0; border-radius: 0; font-size: 12px; line-height: 1.5; }
+#root .split-pane .sidebar-content .backend-url-field .glass-field > input { height: 20px; min-height: 20px; }
+#root .prompt-input-row { grid-template-columns: minmax(0, 1fr); }
+#root .prompt-input-row.has-action { grid-template-columns: minmax(0, 1fr) 36px; }
+#root .prompt-input-row .primary-icon-button { width: 36px; min-width: 36px; height: 36px; min-height: 36px; padding: 0; margin-bottom: 0; }
+
+/* Keep data swatches separate from the text and the action hit targets. */
+#root .sidebar-content .layer-row { grid-template-columns: 30px 18px minmax(0, 1fr) 44px 30px; gap: 7px; padding: 10px; }
+#root .sidebar-content .layer-row .icon-button { width: 30px; min-width: 30px; height: 30px; min-height: 30px; padding: 0; }
+#root .sidebar-content .layer-row .layer-drag-handle { width: 18px; min-width: 18px; height: 30px; min-height: 30px; }
+#root .layer-row .layer-text { min-width: 0; }
+#root .layer-row :is(.layer-title, .layer-prompt) > glass-text { display: block; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+#root .layer-row .layer-style-chip { width: 44px; height: 14px; border: 0; border-radius: 5px; background: transparent; }
+#root .layer-row .layer-style-chip > span { inset: 0; border: 0; border-radius: inherit; }
+
+/* A stop is anchored to the data ramp, never an in-flow glass action. Leave
+   enough inset for the endpoint handles and their focus rings. */
+#root .ramp-editor { padding-inline: 12px; }
+#root .gradient-strip { margin-bottom: 22px; }
+#root .gradient-stop { position: absolute; bottom: -9px; width: 16px; min-width: 16px; height: 24px; min-height: 24px; max-height: 24px; padding: 0; transform: translateX(-50%); border-radius: 5px; }
+/* Colour-stop faces represent data; preserve their exact selected colour above
+   the decorative renderer, including unselected stops. */
+#root .gradient-stop::after { content: ""; position: absolute; inset: 2px; z-index: 2; border-radius: 3px; background: var(--stop-color); pointer-events: none; }
+
+/* Max detail is an explicit green enabled state; other neutral switches retain
+   their existing recipe. The light is still rendered by FORM. */
+.point-shape-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); gap: 10px; align-items: center; margin-bottom: 14px; }
+.point-shape-row > span { font-size: 11px; color: var(--ui-muted); }
+.point-shape-row > .glass-select { min-width: 0; }
+html #root .glass-state-switch.detail-state-switch > .glass-switch-light { --switch-source-color: #888; --switch-source-power: .25; }
+html #root .glass-state-switch.detail-state-switch[aria-checked=true] > .glass-switch-light { --switch-source-color: #20d99a; --switch-source-power: 1; }
+#root .detail-state-switch[aria-checked=true] .glass-switch-label::before { content: "✓"; }
+#root .map-toolbar .detail-state-switch { min-height: 32px; padding: 6px 12px; outline: none; }
+@media (max-width: 1023px) {
+  #root .backend-config-row > .glass-state-switch { height: 44px; min-height: 44px; }
+  #root .split-pane .sidebar-content .backend-url-field .glass-field > input { height: 28px; min-height: 28px; }
+  #root .sidebar-content .layer-row { grid-template-columns: 32px 18px minmax(0, 1fr) 36px 32px; gap: 6px; padding: 10px 8px; }
+  #root .sidebar-content .layer-row .icon-button { width: 32px; min-width: 32px; height: 36px; min-height: 36px; }
+  #root .layer-row .layer-style-chip { width: 36px; }
+  #root .map-toolbar .detail-state-switch { min-height: 36px; }
 }

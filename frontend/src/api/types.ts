@@ -20,6 +20,8 @@ export type GradientPreset = {
   is_default: boolean;
 };
 
+export type PointShape = "circle" | "square" | "diamond" | "triangle";
+
 export type LayerStyle = {
   gradient_id: string;
   gradient_name?: string | null;
@@ -28,6 +30,7 @@ export type LayerStyle = {
   score_min: number;
   score_max: number;
   point_radius: number;
+  point_shape?: PointShape;
   absolute_radius: boolean;
 };
 
@@ -46,6 +49,7 @@ export type SemanticLayer = {
   style: LayerStyle;
   status: "queued" | "running" | "ready" | "failed";
   created_at: string;
+  rerank_calibration?: RerankLayerCalibration | null;
 };
 
 export type CityId = string;
@@ -193,6 +197,42 @@ export type ScoringJobBatchItemResponse = {
   job?: ScoringJob | null;
   error_type?: string | null;
   error?: string | null;
+};
+
+export type RerankColorRange = {
+  mean: number;
+  lower: number;
+  upper: number;
+  field: "zscore";
+};
+
+export type RerankCorrelations = {
+  n: number;
+  pearson_r: number | null;
+  spearman_rho: number | null;
+  bicor: number | null;
+  bicor_c: number;
+  agreement_percent: number | null;
+  status: "defined" | "undefined";
+};
+
+export type RerankLayerCalibration = {
+  job_id?: string;
+  color_range: RerankColorRange;
+  center_method?: string | null;
+  correlations?: RerankCorrelations;
+};
+
+export type RerankCalibrationJob = {
+  job_id?: string;
+  status: "disabled" | "queued" | "running" | "ready" | "failed";
+  color_range?: RerankColorRange | null;
+  calibration?: { reason?: string; center_method?: string | null; correlations?: RerankCorrelations };
+  error?: string;
+  reason?: string;
+  stage?: string;
+  sample_count?: number;
+  images_prepared?: number;
 };
 
 export type ScoringJobBatchResponse = {

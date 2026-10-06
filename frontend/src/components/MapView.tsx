@@ -1,14 +1,14 @@
 import { ThemedSelect } from "./ThemedSelect";
-import { Glass, GlassButton } from "@form-glass/react";
+import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
-import { updateSemanticLayer } from "../state/semanticLayerRenderer";
+import { attachPointShapeImages, normalizePointShape, POINT_ICON_HALF_SIZE, updateSemanticLayer } from "../state/semanticLayerRenderer";
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
-import { Check, Copy, Link2, Scan, Search, SendHorizontal } from "lucide-react";
+import { Check, Copy, Link2, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
@@ -266,7 +266,7 @@ export const MapView = memo(function MapView({
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
-            <button
+            <GlassButton
               key={city.id}
               type="button"
               className={city.id === mobileCityId ? "is-active" : ""}
@@ -274,7 +274,7 @@ export const MapView = memo(function MapView({
               onClick={() => setMobileCityId(city.id)}
             >
               {city.name}
-            </button>
+            </GlassButton>
           ))}
         </div>
         {comparisonCities.length > 0 && <label className="basemap-select comparison-mode-select">
@@ -316,18 +316,11 @@ export const MapView = memo(function MapView({
             ))}
           </ThemedSelect>
         </label>
-        <GlassButton
-          type="button"
-          className={`map-detail-toggle${maxDetailAutoCancelled ? " is-auto-cancelled" : ""}`}
-          fade={[]} material="control"
-          aria-label="Max detail"
-          aria-pressed={forceMaxDetail}
-          title={`${forceMaxDetail ? "Disable" : "Enable"} max detail · High-resolution semantic tiles. On phones the scale is limited to 1 km.`}
-          onClick={() => handleForceMaxDetailChange(!forceMaxDetail)}
-        >
-          {forceMaxDetail ? <Check size={14} strokeWidth={1.75} aria-hidden="true" /> : <Scan size={14} strokeWidth={1.5} aria-hidden="true" />}
-          <span>Max detail</span>
-        </GlassButton>
+        <GlassSwitch
+          className={`map-detail-toggle detail-state-switch${maxDetailAutoCancelled ? " is-auto-cancelled" : ""}`}
+          label="Max detail" ariaLabel="Max detail"
+          checked={forceMaxDetail} onChange={handleForceMaxDetailChange}
+        />
         <div className="map-status" title={statusLabel} aria-label={statusLabel}><Link2 size={14} strokeWidth={1.5} aria-hidden="true" /></div>
       </Glass>
 
@@ -496,7 +489,7 @@ function MobileMapSearch({
     >
       <Search size={17} />
       {liveSearchAvailable ? (
-        <input
+        <GlassInput label="Search semantic prompt"
           value={prompt}
           placeholder={MOBILE_SEARCH_PLACEHOLDERS[placeholderIndex]}
           aria-label="Search semantic prompt"
@@ -508,7 +501,7 @@ function MobileMapSearch({
           <span>Search unavailable in this demo</span>
         </div>
       )}
-      {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <button
+      {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <GlassButton
         type={liveSearchAvailable ? "submit" : "button"}
         className={liveSearchAvailable ? "" : contactCopied ? "is-copied" : "is-contact-copy"}
         disabled={liveSearchAvailable ? disabled || submitting || !prompt.trim() || !onCreatePrompt : false}
@@ -517,7 +510,7 @@ function MobileMapSearch({
         onClick={liveSearchAvailable ? undefined : () => void copyContactEmail()}
       >
         {liveSearchAvailable ? <SendHorizontal size={17} /> : contactCopied ? <Check size={17} /> : <Copy size={17} />}
-      </button> : null}
+      </GlassButton> : null}
     </form></Glass>
   );
 }
@@ -662,6 +655,7 @@ export function CityMapPane({
     }
     map.addControl(new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" }), "bottom-right");
     const detachGlass = observeMapGlass(map.getContainer());
+    const detachPointImages = attachPointShapeImages(map);
     const detachDiagnostics = attachMapDiagnostics(map, {
       cityId: city.id,
       container: containerRef.current
@@ -693,6 +687,7 @@ export function CityMapPane({
       }
       detachDiagnostics();
       detachGlass();
+      detachPointImages();
       unregisterSceneCamera?.();
       unregisterLocalMap?.();
       map.remove();
@@ -1010,7 +1005,7 @@ export function CityMapPane({
               "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
               "circle-stroke-width": 0,
               "circle-stroke-opacity": 0
-          });
+          }, { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) });
 
           handlerCleanups.current.get(sourceId)?.forEach((cleanup) => cleanup());
 
@@ -1455,6 +1450,7 @@ function semanticLayerDrawKey(layers: SemanticLayer[], gradients: GradientPreset
         style.score_min,
         style.score_max,
         style.point_radius,
+        style.point_shape ?? "circle",
         style.absolute_radius ? 1 : 0,
         gradient?.updated_at ?? "",
         gradient?.opacity ?? "",

@@ -1,5 +1,5 @@
 import { GlassSwitch } from "@form-glass/react";
-import { GlassButton, GlassField } from "@form-glass/react";
+import { GlassButton, GlassInput, GlassTextarea } from "@form-glass/react";
 import { Check, Copy, SendHorizontal } from "lucide-react";
 import { useState, type DragEvent } from "react";
 import { SavedPromptSearch } from "./SavedPromptSearch";
@@ -86,21 +86,21 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
       onDragLeave={handleReferenceDragLeave}
       onDrop={(event) => void handleReferenceDrop(event)}
     >
-      <label htmlFor="prompt-input">Prompt</label>
+
       {backendConfig && !remoteConfigLocked ? (
         <div className="backend-config-row">
           <GlassSwitch label="RunPod" checked={backendConfig.enabled} onChange={enabled => void updateConfig({ enabled })} />
-          <GlassField><input
-            className="backend-url-input"
+          <GlassInput label="Backend URL"
+            className="backend-url-field"
             aria-label="Backend URL"
             value={backendConfig.baseUrl}
             spellCheck={false}
             onChange={(event) => void updateConfig({ baseUrl: event.target.value })}
-          /></GlassField>
+          />
         </div>
       ) : null}
-      {backendConfig?.enabled && backendConfig.mode === "cpu" ? <SavedPromptSearch config={backendConfig} disabled={disabled || !liveSearchAvailable} onCreate={onCreate} /> : <div className="prompt-input-row">
-        <GlassField><textarea
+      {backendConfig?.enabled && backendConfig.mode === "cpu" ? <SavedPromptSearch config={backendConfig} disabled={disabled || !liveSearchAvailable} onCreate={onCreate} /> : <div className={`prompt-input-row${liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? " has-action" : ""}`}>
+        <GlassTextarea label="Prompt"
           id="prompt-input"
           value={prompt}
           placeholder={liveSearchAvailable ? "The scene contains an animal" : STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}
@@ -109,7 +109,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
           onKeyDown={(event) => {
             if ((event.ctrlKey || event.metaKey) && event.key === "Enter") void submit();
           }}
-        /></GlassField>
+        />
         {liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? <GlassButton
           type="button"
           className={`primary-icon-button${liveSearchAvailable ? "" : " contact-copy-button"}${contactCopied ? " is-copied" : ""}`}

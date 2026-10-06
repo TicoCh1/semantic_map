@@ -103,7 +103,6 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
               <span>{selected.message || STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE}</span>
               {STATIC_DEPLOYMENT_CONTACT_EMAIL ? <GlassButton
                 className={`street-view-contact-button${contactCopied ? " is-copied" : ""}`}
-                fade={[]} material="control"
                 type="button"
                 onClick={() => void copyContactEmail()}
                 title="Copy support email"
@@ -132,7 +131,6 @@ export function StreetViewPanel({ panos, selectedPanoKey, scoreField, onSelectPa
               <GlassButton
                 key={key}
                 className={`street-view-chip${key === (selected ? panoKey(selected) : "") ? " is-selected" : ""}`}
-                fade={[]}
                 aria-pressed={key === (selected ? panoKey(selected) : "")}
                 draggable={pano.status === "ready"}
                 onDragStart={(event) => startPanoReferenceDrag(event, pano)}
@@ -206,9 +204,9 @@ function PanoLayerValues({
               <strong>{capturedAt ?? "Unknown"}</strong>
             </div>
           </div>
-          <button className="street-view-window-button" onClick={onToggleExpanded} title="Show pano scores" type="button">
+          <GlassButton className="street-view-window-button" onClick={onToggleExpanded} title="Show pano scores" type="button">
             <Maximize2 size={13} />
-          </button>
+          </GlassButton>
         </div>
       </Glass>
     );
@@ -220,9 +218,9 @@ function PanoLayerValues({
         <span>Pano {pano.pano_id}</span>
         <div className="street-view-window-actions">
           <strong>{scoreField}</strong>
-          <button className="street-view-window-button" onClick={onToggleExpanded} title="Hide pano scores" type="button">
+          <GlassButton className="street-view-window-button" onClick={onToggleExpanded} title="Hide pano scores" type="button">
             <Minimize2 size={13} />
-          </button>
+          </GlassButton>
         </div>
       </div>
       <div className="street-view-values-list">

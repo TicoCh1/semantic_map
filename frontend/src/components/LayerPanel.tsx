@@ -1,3 +1,4 @@
+import { GlassButton } from "@form-glass/react";
 import { Glass } from "@form-glass/react";
 import { useRef, useState } from "react";
 import { Eye, EyeOff, GripVertical, RefreshCw, Trash2 } from "lucide-react";
@@ -54,7 +55,7 @@ export function LayerPanel({
           <strong>Display Order</strong>
         </div>
         <div className="heading-actions">
-          <button
+          <GlassButton
             className={`refresh-icon-button layer-refresh-button${refreshingAll ? " is-spinning" : ""}`}
             disabled={disabled || refreshingAll}
             onClick={() => void onRefreshAll()}
@@ -62,7 +63,7 @@ export function LayerPanel({
             aria-label="Refresh all layers"
           >
             <RefreshCw size={16} />
-          </button>
+          </GlassButton>
         </div>
       </div>
 
@@ -90,7 +91,7 @@ export function LayerPanel({
               }}
             >
 
-              <button
+              <GlassButton
                 className="icon-button visibility-button"
                 title={layer.visible ? "Hide layer" : "Show layer"}
                 onClick={(event) => {
@@ -99,8 +100,8 @@ export function LayerPanel({
                 }}
               >
                 {layer.visible ? <Eye size={16} /> : <EyeOff size={16} />}
-              </button>
-              <button
+              </GlassButton>
+              <GlassButton
                 type="button"
                 className="layer-drag-handle"
                 aria-label={`Reorder ${layer.name}`}
@@ -136,15 +137,33 @@ export function LayerPanel({
                   if (drag) handleDrop(drag.id, drag.target, drag.after);
                 }}
                 onPointerCancel={() => { touchDrag.current = null; setDropTarget(null); }}
-              ><GripVertical className="drag-icon" size={18} /></button>
+              ><GripVertical className="drag-icon" size={18} /></GlassButton>
               <div className="layer-text">
                 <div className="layer-title">{layer.name}</div>
                 <div className="layer-prompt">{layer.status === "ready" ? layer.prompt : `${layer.prompt} - ${layer.status}`}</div>
+                {layer.rerank_calibration?.correlations && (
+                  <div className="layer-prompt" title={
+                    `Scoring agreement, not accuracy. Pearson r: ${layer.rerank_calibration.correlations.pearson_r?.toFixed(3) ?? "N/A"}; `
+                    + `Spearman rho: ${layer.rerank_calibration.correlations.spearman_rho?.toFixed(3) ?? "N/A"}; `
+                    + `bicor: ${layer.rerank_calibration.correlations.bicor?.toFixed(3) ?? "N/A"}. `
+                    + `Centre ${layer.rerank_calibration.color_range.mean.toFixed(2)}σ; range ${layer.rerank_calibration.color_range.lower.toFixed(2)} to ${layer.rerank_calibration.color_range.upper.toFixed(2)}σ. `
+                    + (layer.rerank_calibration.center_method?.includes("max_score")
+                      ? "No fitted zero crossing; centre at highest retrieval score."
+                      : layer.rerank_calibration.center_method?.includes("min_score")
+                        ? "No fitted zero crossing; centre at lowest retrieval score."
+                        : "Centre at fitted zero logit.")
+                  }>
+                    Scoring agreement {layer.rerank_calibration.correlations.agreement_percent === null
+                      ? "N/A" : `${Math.round(layer.rerank_calibration.correlations.agreement_percent)}%`}
+                    {layer.rerank_calibration.center_method && layer.rerank_calibration.center_method !== "logit_zero"
+                      ? " · Endpoint centre" : ""}
+                  </div>
+                )}
               </div>
               <div className="layer-style-chip">
                 <span style={{ background: gradient ? gradientCss(gradient) : "#d0d5dd" }} />
               </div>
-              <button
+              <GlassButton
                 className="icon-button delete-button"
                 title="Delete layer"
                 onClick={(event) => {
@@ -153,7 +172,7 @@ export function LayerPanel({
                 }}
               >
                 <Trash2 size={15} />
-              </button>
+              </GlassButton>
             </Glass>
           );
         })}

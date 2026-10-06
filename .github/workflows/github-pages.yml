@@ -38,6 +38,12 @@ jobs:
         working-directory: frontend
         run: npm run build:pages
 
+      - name: Verify calibration and map rendering
+        working-directory: frontend
+        run: |
+          npm run test:rerank
+          npm run test:map
+
       - name: Build human verification frontend
         working-directory: frontend
         run: npm exec vite -- build --config vite.verify.config.mjs --configLoader runner --outDir ../../docs/verify --emptyOutDir true
