@@ -92,7 +92,9 @@ export function LayerPanel({
             >
 
               <GlassButton
-                className="icon-button visibility-button"
+                className={`icon-button visibility-button${layer.visible ? " is-visible" : " is-hidden"}`}
+                aria-label={`${layer.visible ? "Hide" : "Show"} ${layer.name}`}
+                aria-pressed={layer.visible}
                 title={layer.visible ? "Hide layer" : "Show layer"}
                 onClick={(event) => {
                   event.stopPropagation();

@@ -8,16 +8,19 @@
    owns positioning and stacking for its overlays. */
 #root .map-toolbar { position: absolute; z-index: 8; }
 #root .sidebar-drawer { position: absolute; height: 100%; }
-/* FORM owns motion. Only prepare/commit may expose the expanded view; an open
-   flag alone would paint it before the outgoing-content phase starts. */
-#root .sidebar-drawer { transform: none; transform-origin: right center; transition: none; opacity: 1; visibility: hidden; }
-#root .sidebar-dock.is-present .sidebar-drawer { visibility: visible; }
-#root .sidebar-dock:not(.is-present) .sidebar-drawer { display: none; }
+/* Translate the full-size FORM surface: its left feather moves without scale. */
+#root .sidebar-drawer {
+  transform: translateX(calc(100% + var(--form-glass-outset, 42px)));
+  transition: transform 280ms cubic-bezier(.22, .8, .3, 1), visibility 0s 280ms;
+  opacity: 1; visibility: hidden;
+}
+#root .sidebar-dock.is-open .sidebar-drawer {
+  visibility: visible; transform: translateX(0); transition-delay: 0s;
+}
 #root .sidebar-dock:not(.is-open) .sidebar-drawer { pointer-events: none; }
 @media (min-width: 1024px) {
   #root .split-pane .split-main { inset: 0; }
-  #root .sidebar-dock { width: 0; pointer-events: none; }
-  #root .sidebar-dock.is-present { width: var(--right-width); }
+  #root .sidebar-dock { width: var(--right-width); pointer-events: none; }
   #root .sidebar-drawer { right: 0; }
   #root .sidebar-dock.is-open .sidebar-drawer { pointer-events: auto; }
 }
@@ -65,15 +68,23 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
 .semantic-glass-app .glass-select { min-width: 0; max-width: 100%; }
 #root .map-toolbar .glass-select-trigger { min-height: 30px; padding: 5px 9px; font-size: 12px; }
 #root .map-toolbar .glass-select span { font-size: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; }
-#root .map-toolbar .city-toggle .glass-select { min-width: 94px; }
-#root .basemap-source-select .glass-select { width: 190px; }
-#root .map-toolbar .basemap-source-select { width: 190px; flex: 0 0 190px; }
+#root .map-toolbar .city-toggle .glass-select { min-width: 80px; }
+#root .basemap-source-select .glass-select { width: 146px; }
+#root .map-toolbar .basemap-source-select { width: 146px; flex: 0 0 146px; }
 #root .map-toolbar .map-detail-toggle, #root .map-toolbar .map-status { align-self: end; margin-bottom: 1px; }
 #root .comparison-mode-select .glass-select { width: 185px; }
 #root .glass-select-trigger .select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #root .glass-select-popover { color: var(--ui-text); }
 #root .histogram-property-select .glass-select { flex: 0 0 90px; width: 90px; min-width: 0; }
-#root .map-toolbar .map-summary { max-width: 220px; }
+#root .map-toolbar .map-summary { width: 192px; max-width: 192px; flex: 0 1 192px; gap: 3px; }
+#root .map-toolbar .map-summary strong {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden; white-space: normal; overflow-wrap: anywhere;
+  margin: 0; line-height: 1.3; font-size: 12px; max-height: 2.6em;
+}
+#root .map-toolbar .map-summary .map-agreement {
+  font-size: 10px; letter-spacing: 0; text-transform: none; white-space: nowrap;
+}
 #root .map-toolbar > .glass-feather-defs { position: absolute; width: 0; height: 0; }
 .mobile-search-form { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 #root .mobile-map-search > .mobile-search-form { grid-column: 1 / -1; }
@@ -100,6 +111,12 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
 #root .gradient-stop { background: var(--stop-color); border: 1px solid var(--ui-text); padding: 0; }
 #root .layer-row > .glass-renderer { visibility: inherit; }
 #root .layer-row.is-selected { outline: 1px solid var(--ui-line); outline-offset: -1px; }
+#root .sidebar-content .visibility-button.is-visible svg { color: var(--ui-text); }
+#root .sidebar-content .visibility-button.is-hidden svg { color: #929292; }
+#root .theme-dark .sidebar-content .visibility-button.is-hidden svg { color: #8c8c8c; }
+#root .sidebar-content .layer-panel.is-all-hidden .visibility-button {
+  animation: none; background: transparent; border-color: transparent;
+}
 #root .point-scale-switch { margin-top: 12px; }
 #root .slider-row .doppler-range { min-width: 0; }
 
@@ -130,8 +147,9 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
 #root .controls-launcher:hover { background: transparent; }
 
 @media (max-width: 1023px) {
-  #root .sidebar-dock.is-present { height: min(80dvh, 680px); }
-  #root .sidebar-drawer { transform-origin: right bottom; }
+  #root .split-pane .sidebar-dock { height: min(80dvh, 680px); pointer-events: none; }
+  #root .split-pane .sidebar-dock.is-open { pointer-events: none; }
+  #root .split-pane .sidebar-dock.is-open .sidebar-drawer { pointer-events: auto; }
   #root .controls-launcher { position: fixed; top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); height: 44px; }
   #root .layer-row { grid-template-columns: 36px 18px minmax(0, 1fr) 36px 36px; gap: 4px; padding: 10px 8px; }
   #root .layer-row .icon-button { width: 36px; min-width: 36px; }
@@ -139,13 +157,13 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
   #root .log-header { grid-template-columns: minmax(0, 1fr) 44px; }
   #root .control-scroll-viewport { padding: 20px 18px 30px; }
   #root .sidebar-footer { padding: 10px 124px 10px 18px; }
-  #root .basemap-source-select .glass-select { width: min(190px, 48vw); }
+  #root .basemap-source-select .glass-select { width: min(146px, 48vw); }
   #root .map-toolbar .glass-select-trigger { min-height: 36px; }
   #root .exhibit-modal { padding: 22px; }
 }
 
 /* 0.3 managed UI: layout only; FORM owns material and sequential motion. */
-#root .map-toolbar { top: calc(var(--form-glass-outset, 42px) + 2px); left: calc(var(--form-glass-outset, 42px) + 2px); max-width: calc(100% - 2 * (var(--form-glass-outset, 42px) + 2px)); padding: 28px 32px; gap: 12px 16px; }
+#root .map-toolbar { top: calc(var(--form-glass-outset, 42px) + 2px); left: calc(var(--form-glass-outset, 42px) + 2px); max-width: calc(100% - 2 * (var(--form-glass-outset, 42px) + 2px)); padding: 18px 24px; gap: 8px 10px; }
 #root .sidebar-drawer { padding: 0; }
 #root .control-scroll-viewport { padding: 28px 24px 28px 36px; }
 #root .sidebar-top-bar { margin-bottom: 52px; }
@@ -231,4 +249,8 @@ html #root .glass-state-switch.detail-state-switch[aria-checked=true] > .glass-s
   #root .sidebar-content .layer-row .icon-button { width: 32px; min-width: 32px; height: 36px; min-height: 36px; }
   #root .layer-row .layer-style-chip { width: 36px; }
   #root .map-toolbar .detail-state-switch { min-height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #root .sidebar-drawer { transition: none; }
 }

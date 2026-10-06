@@ -9,7 +9,7 @@ import { isCompleteRemoteTile } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
-import { Check, Copy, Link2, Search, SendHorizontal } from "lucide-react";
+import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
@@ -151,8 +151,9 @@ export const MapView = memo(function MapView({
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
-  const title = layers.find((layer) => layer.id === selectedLayerId)?.name ?? "No layer selected";
-  const statusLabel = differenceEnabled ? "New − old" : comparisonEnabled ? "Views synced" : activeCities.length === 2 ? "Scale synced" : `${activeCities[0]?.name ?? "No city"} visible`;
+  const displayedLayer = comparisonEnabled ? selectedLayer : layers.find(layer => layer.visible);
+  const title = displayedLayer?.name ?? "No visible layers";
+  const agreement = displayedLayer?.rerank_calibration?.correlations?.agreement_percent;
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
@@ -261,9 +262,9 @@ export const MapView = memo(function MapView({
         {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
         <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></Glass> :
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
-        <div className="map-summary">
-          <span>Semantic Map</span>
+        <div className="map-summary" data-displayed-layer-id={displayedLayer?.id}>
           <strong title={title}>{title}</strong>
+          <span className="map-agreement">Scoring agreement {agreement == null ? "N/A" : `${Math.round(agreement)}%`}</span>
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
@@ -295,7 +296,7 @@ export const MapView = memo(function MapView({
           <div>
             {desktopCities.map((city, slot) => (
               <label className="city-toggle" key={`${slot}-${city.id}`}>
-                <span>{slot === 0 ? "Left" : "Right"}</span>
+                <span>{slot === 0 ? "L" : "R"}</span>
                 <ThemedSelect label={slot === 0 ? "Left city" : "Right city"} value={city.id} onValueChange={event => selectCitySlot(slot, event)}>
                   {cities.map((option) => (
                     <option key={option.id} value={option.id}>
@@ -322,7 +323,6 @@ export const MapView = memo(function MapView({
           label="Max detail" ariaLabel="Max detail"
           checked={forceMaxDetail} onChange={handleForceMaxDetailChange}
         />
-        <div className="map-status" title={statusLabel} aria-label={statusLabel}><Link2 size={14} strokeWidth={1.5} aria-hidden="true" /></div>
       </Glass>
 
       <div
