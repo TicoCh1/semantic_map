@@ -5,6 +5,7 @@ import { attachPointShapeImages, normalizePointShape, POINT_ICON_HALF_SIZE, upda
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
+import { isCompleteRemoteTile } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
@@ -1313,9 +1314,9 @@ async function loadLayerGeojsonForMap(
       const collections = await Promise.all(tiles.map(tile => resources.load(
         `tile:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`,
         () => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y),
-        { cacheable: data => data.features.length > 0 }
+        { cacheable: isCompleteRemoteTile }
       )));
-      complete = collections.every(data => data.features.length > 0);
+      complete = collections.every(isCompleteRemoteTile);
       return mergeFeatureCollections(collections);
     }, { scheduled: false, cacheable: () => complete });
   } catch {

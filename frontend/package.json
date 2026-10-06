@@ -11,7 +11,7 @@
     "build": "npm run check:glass && tsc -b && vite build",
     "build:pages": "npm run check:glass && node scripts/pages-output.mjs clean && tsc -b && vite build --outDir ../docs --emptyOutDir false && node scripts/pages-output.mjs finalize",
     "preview": "vite preview --host 127.0.0.1 --port 4173",
-    "test:map": "node --test scripts/semantic-layer-renderer.test.mjs scripts/map-resize.test.mjs"
+    "test:map": "node --test scripts/semantic-layer-renderer.test.mjs scripts/map-resize.test.mjs scripts/remote-tile-cache.test.mjs"
   },
   "dependencies": {
     "@form-glass/react": "file:vendor/form-glass-react-0.3.1.tgz",

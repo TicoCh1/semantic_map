@@ -1,4 +1,5 @@
 import { normalizePointShape } from "./semanticLayerRenderer";
+import { unavailableRemoteTile } from "./remoteTileData";
 import type {
   AppStateResponse,
   CityId,
@@ -2181,7 +2182,7 @@ export async function getRemoteTileGeojson(sourcePath: string, z: number, x: num
     });
     throw error;
   }
-  if (response.status === 202 || response.status === 404) return emptyFeatureCollection();
+  if (response.status === 202 || response.status === 404) return unavailableRemoteTile();
   if (!response.ok) {
     reportRemoteRequestFailure("remote_tile_failed", `Remote tile request failed (${response.status})`, {
       status: response.status,
