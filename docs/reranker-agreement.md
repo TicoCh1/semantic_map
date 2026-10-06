@@ -50,3 +50,12 @@ it must not replace it with an empty object. No authentication secret is stored
 in this configuration. A browser with a previously saved backend can select
 this backend through the existing `?backend=` URL parameter. Completed combined
 queries reuse the saved calibration, including bounds and scoring agreement.
+
+GPU text queries first try `/api/scoring/saved/jobs/batch`. Existing prompts
+use the aligned saved 8B score matrices and immutable `saved-*` revisions that
+produced the 348 combined-city calibrations. Their manifests and tiles use
+`/api/scoring/saved/results/...`; native scorer tiles remain separate.
+Unknown prompts fall through to the original GPU scoring endpoint. A saved
+service error is surfaced instead of silently triggering fresh inference.
+The same calibration endpoint returns the completed Uniform64 cache for these
+source identities. This avoids applying saved bounds to a different cohort.

@@ -1557,6 +1557,23 @@ async function submitRemoteScoringJob(config: RemoteBackendConfig, prompt: strin
           zooms: DEFAULT_REMOTE_ZOOMS,
           priority_tile: priorityTileList[0] ?? undefined
         };
+  // Saved prompts use the immutable cohort that produced their calibration.
+  // A miss or an older backend falls through to the existing GPU query service.
+  if (config.mode !== "cpu") {
+    const savedResponse = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/saved/jobs/batch"), {
+      method: "POST",
+      headers: remoteJsonHeaders(config),
+      body: JSON.stringify({ queries: [body] })
+    }, REMOTE_SUBMIT_TIMEOUT_MS);
+    if (savedResponse.ok) {
+      const savedBatch = (await savedResponse.json()) as ScoringJobBatchResponse;
+      if (savedBatch.queries.some((item) => item.status === "accepted" && item.job)) {
+        return { ...acceptedJobFromBatchResponse(savedBatch), layer_id: null };
+      }
+    } else if (savedResponse.status !== 404) {
+      throw new Error(`Saved retrieval request failed (${savedResponse.status})`);
+    }
+  }
   const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs/batch"), {
     method: "POST",
     headers: remoteJsonHeaders(config),
