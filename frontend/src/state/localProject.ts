@@ -1564,7 +1564,7 @@ async function submitRemoteScoringJob(config: RemoteBackendConfig, prompt: strin
       method: "POST",
       headers: remoteJsonHeaders(config),
       body: JSON.stringify({ queries: [body] })
-    }, REMOTE_SUBMIT_TIMEOUT_MS);
+    }, Math.max(REMOTE_SUBMIT_TIMEOUT_MS, 60_000));
     if (savedResponse.ok) {
       const savedBatch = (await savedResponse.json()) as ScoringJobBatchResponse;
       if (savedBatch.queries.some((item) => item.status === "accepted" && item.job)) {
