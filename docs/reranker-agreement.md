@@ -42,3 +42,11 @@ populations, fitted curve, coefficients, bounds and GPU batch timing.
 Validation: 34 backend reranker tests; 38 frontend calibration/map tests;
 production build; headless browser checks at 1440px and 390px, including reload
 persistence. Run the frontend calibration tests with `npm run test:rerank`.
+
+The published runtime configuration connects to
+`https://r2ixzxzpb54wkd-8000.proxy.runpod.net` and selects the four 8B/512 datasets.
+The Pages finalization step preserves the checked-in public configuration;
+it must not replace it with an empty object. No authentication secret is stored
+in this configuration. A browser with a previously saved backend can select
+this backend through the existing `?backend=` URL parameter. Completed combined
+queries reuse the saved calibration, including bounds and scoring agreement.

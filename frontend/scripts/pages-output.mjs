@@ -1,4 +1,4 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,11 +18,7 @@ async function clean() {
 
 async function finalize() {
   await mkdir(pagesDir, { recursive: true });
-  await writeFile(
-    resolve(pagesDir, "runtime-config.js"),
-    "window.__SEMANTIC_MAP_RUNTIME_CONFIG__ = window.__SEMANTIC_MAP_RUNTIME_CONFIG__ || {};\n",
-    "utf8"
-  );
+  await copyFile(resolve(scriptDir, "../public/runtime-config.js"), resolve(pagesDir, "runtime-config.js"));
   await writeFile(resolve(pagesDir, ".nojekyll"), "", "utf8");
 }
 
