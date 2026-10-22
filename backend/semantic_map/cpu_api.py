@@ -26,6 +26,7 @@ from .prompt_ids import normalize_prompt, utc_now
 from .remote_schemas import ScoringJobBatchCreate, ScoringJobCreate
 from .result_storage import ResultStorage
 from .scoring_models import PanoRecord
+from .saved_calibration import SavedCalibrationCatalog, source_file_stamp
 from .tile_index import load_or_build_tile_index
 from .tile_math import TileKey
 from .tile_writer import write_geojson_tile_from_arrays
@@ -42,6 +43,8 @@ class SavedScoreCatalog:
         for city in active_city_configs(settings):
             dataset = city['dataset_id']
             directory = experiment_root / f"{city['id']}_embedding_comparison_20260917"
+            source_paths = (directory / 'score_new4096.npy', directory / 'alignment.npz', directory / 'prompts.json')
+            calibration_sources = tuple((path, source_file_stamp(path)) for path in source_paths)
             status = json.loads((directory / 'status.json').read_text())
             if status.get('stage') != 'complete':
                 raise ValueError(f'Incomplete saved scores: {dataset}')
@@ -56,7 +59,7 @@ class SavedScoreCatalog:
             scores = np.load(path, mmap_mode='r', allow_pickle=False)
             if scores.shape != (len(records), len(prompts)) or not np.isfinite(scores).all():
                 raise ValueError(f'Invalid saved score matrix: {dataset}')
-            revision = f"cpu4096-v2-{path.stat().st_mtime_ns}-{(directory / 'alignment.npz').stat().st_mtime_ns}-{(directory / 'prompts.json').stat().st_mtime_ns}"
+            revision = 'cpu4096-v2-' + '-'.join(str(stamp[0]) for _, stamp in calibration_sources)
             index = load_or_build_tile_index(dataset, records, settings)
             lookup = {}
             for column, entry in enumerate(prompts):
@@ -68,7 +71,7 @@ class SavedScoreCatalog:
                 lookup[canonical] = column
                 self.prompts.setdefault(canonical, []).append(dataset)
             self.datasets[dataset] = dict(records=records, scores=scores, lookup=lookup,
-                                          index=index, revision=revision, variants={})
+                                          index=index, revision=revision, variants={}, calibration_sources=calibration_sources)
             old_path = directory / 'historical_score.npy'
             if old_path.is_file():
                 old_scores = np.load(old_path, mmap_mode='r', allow_pickle=False)
@@ -78,6 +81,7 @@ class SavedScoreCatalog:
                     scores=old_scores, revision=f'cpu-old-v1-{old_path.stat().st_mtime_ns}-{revision}')
         if not self.datasets:
             raise ValueError('CPU mode has no configured saved-score datasets')
+        self.calibrations = SavedCalibrationCatalog(settings.workspace_root / 'semantic_backend/rerank_calibration')
 
     def resolve(self, dataset, prompt_id, embedding='new'):
         data = self.datasets.get(dataset)
@@ -137,11 +141,15 @@ class SavedScoreCatalog:
             raise HTTPException(404, 'This prompt has no saved scores for one or more requested cities')
         results = [self.result_ref(d, self.datasets[d]['lookup'][canonical]) for d in datasets]
         stamp = utc_now()
-        return dict(job_id='cpu-'+uuid4().hex, prompt_id=results[0]['prompt_id'], dataset_id=datasets[0],
+        job = dict(job_id='cpu-'+uuid4().hex, prompt_id=results[0]['prompt_id'], dataset_id=datasets[0],
                     dataset_ids=datasets, dataset_group_id=query.dataset_group_id, prompt=canonical,
                     query_type='text', status='ready', progress=1, message='Loaded existing 4096-dimensional scores on CPU.',
                     created_at=stamp, updated_at=stamp, results=results, cache_status='cache_hit',
                     manifest_url=results[0]['manifest_url'], tile_url_template=results[0]['tile_url_template'])
+        calibration = self.calibrations.lookup(results, canonical, self.datasets)
+        if calibration is not None:
+            job['rerank_calibration'] = calibration
+        return job
 
 
 def create_app(settings=None, experiment_root=None):
