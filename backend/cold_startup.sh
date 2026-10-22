@@ -88,8 +88,8 @@ echo "Qwen runtime source sync complete."
 
 cd "${QWEN_RUNTIME_DIR}"
 
-python -m pip install --upgrade pip
-python -m pip install uv
+python -m pip install --upgrade "pip>=26.2"
+python -m pip install "uv>=0.13.4"
 
 bash scripts/setup_environment.sh
 

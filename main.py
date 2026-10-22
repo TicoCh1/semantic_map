@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from src.semantic_map.app import APP_CSS, build_demo
-
 
 def main() -> None:
-    demo = build_demo()
-    demo.queue()
-    demo.launch(server_name="127.0.0.1", server_port=7860, css=APP_CSS)
+    raise SystemExit(
+        "The legacy Gradio demo is retired: its Pillow<13 dependency blocks "
+        "critical image-decoder security fixes. Use start_demo.bat for the "
+        "current React demo, or run npm.cmd run dev in frontend/. "
+        "Install Python dependencies with Python 3.11+ and requirements.txt."
+    )
 
 
 if __name__ == "__main__":

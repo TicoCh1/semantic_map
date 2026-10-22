@@ -1,4 +1,8 @@
-fastapi>=0.115
+# Python 3.11+ is required by the patched Pillow release.
+-c constraints-security.txt
+fastapi>=0.136.1,<1
 uvicorn>=0.30
 numpy>=1.26
-Pillow>=10.0
+Pillow>=13.0.0,<14
+certifi>=2026.10.19
+fsspec>=2026.6.0

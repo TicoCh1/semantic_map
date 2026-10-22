@@ -112,8 +112,10 @@ export function updateSemanticLayer(
   }
   if (existing) {
     for (const [values, cache, apply] of [
-      [paint, submittedPaint, map.setPaintProperty.bind(map)],
-      [layout ?? {}, submittedLayout, map.setLayoutProperty.bind(map)]
+      [paint, submittedPaint, (layerId: string, property: string, value: unknown) =>
+        map.setPaintProperty(layerId, property as Parameters<SemanticMap["setPaintProperty"]>[1], value as Parameters<SemanticMap["setPaintProperty"]>[2])],
+      [layout ?? {}, submittedLayout, (layerId: string, property: string, value: unknown) =>
+        map.setLayoutProperty(layerId, property as Parameters<SemanticMap["setLayoutProperty"]>[1], value as Parameters<SemanticMap["setLayoutProperty"]>[2])]
     ] as const) {
       const previous = cache.get(existing) ?? new Map<string, string>();
       for (const [property, value] of Object.entries(values)) {

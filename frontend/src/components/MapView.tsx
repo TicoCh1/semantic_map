@@ -8,7 +8,8 @@ import { SceneResources } from "../state/sceneResources";
 import { isCompleteRemoteTile } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
-import maplibregl, { type Map as MapLibreMap, type MapLayerMouseEvent } from "maplibre-gl";
+import * as maplibregl from "maplibre-gl";
+import type { Map as MapLibreMap, MapLayerMouseEvent, MapEventType } from "maplibre-gl";
 import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
@@ -870,7 +871,7 @@ export function CityMapPane({
     // Rebind to every replacement map, not just changes to the callback.
     const map = mapRef.current;
     if (!map) return;
-    const onViewportSettled = (event: { sceneCameraSync?: boolean }) => {
+    const onViewportSettled = (event: MapEventType["moveend"] & { sceneCameraSync?: boolean }) => {
       // resize() emits moveend although the camera did not move.
       if (applyingResizeRef.current || resizingRef.current) return;
       if (event.sceneCameraSync) {
