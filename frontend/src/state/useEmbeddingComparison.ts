@@ -46,7 +46,11 @@ export function useEmbeddingComparison(
         gradient_name: "New − old", score_min: layer.score_property === "zscore" ? -3 : -0.2,
         score_max: layer.score_property === "zscore" ? 3 : 0.2,
         stops: [{value: 0, color: "#2166ac"}, {value: .5, color: "#f7f7f7"}, {value: 1, color: "#b2182b"}]
+      } : embedding === "old" && layer.rerank_calibration && layer.score_property === "zscore" ? {
+        ...layer.style, score_min: layer.rerank_uncalibrated_range?.lower ?? -2,
+        score_max: layer.rerank_uncalibrated_range?.upper ?? 2
       } : layer.style,
+      rerank_calibration: embedding === "new" ? layer.rerank_calibration : null,
       source_path: url, source_paths: { [city.id]: url }, status: "ready" as const }];
   }), [result, layer, city, config]);
   return { paneLayers, count: result?.matched_count,

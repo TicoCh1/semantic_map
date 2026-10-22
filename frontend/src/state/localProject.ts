@@ -16,6 +16,8 @@ import type {
   RemoteLogEntry,
   RemoteResultManifest,
   RerankCalibrationJob,
+  RerankLayerCalibration,
+  ScoringResultRef,
   RerankColorRange,
   ScoringJob,
   ScoringJobBatchResponse,
@@ -625,7 +627,16 @@ function loadRemoteBackendConfigSync(): RemoteBackendConfig {
     });
   }
 
-  const baseUrl = normalizeBackendBaseUrl(String(raw?.baseUrl ?? DEFAULT_REMOTE_BACKEND_URL));
+  const savedBaseUrl = normalizeBackendBaseUrl(String(raw?.baseUrl ?? DEFAULT_REMOTE_BACKEND_URL));
+  const retired = runtimeConfig.retiredBackendUrls.includes(savedBaseUrl);
+  if (retired && DEFAULT_REMOTE_BACKEND_URL && savedBaseUrl !== DEFAULT_REMOTE_BACKEND_URL) {
+    const migrated = { baseUrl: DEFAULT_REMOTE_BACKEND_URL, enabled: raw?.enabled ?? true,
+      token: "", datasetId: DEFAULT_REMOTE_DATASET_ID, datasetIds: DEFAULT_REMOTE_DATASET_IDS,
+      datasetGroupId: DEFAULT_REMOTE_DATASET_GROUP_ID, cities: [] };
+    writeJson(REMOTE_BACKEND_KEY, migrated);
+    return withCachedBackendCapabilities(migrated);
+  }
+  const baseUrl = savedBaseUrl;
   const datasetId = String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID);
   const datasetIds = normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS;
   return withCachedBackendCapabilities({
@@ -897,7 +908,11 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     style,
     status: raw.status || "ready",
     created_at: raw.created_at || utcNow(),
-    rerank_calibration: raw.rerank_calibration || null
+    rerank_calibration: raw.rerank_calibration || null,
+    rerank_calibration_status: raw.rerank_calibration_status,
+    rerank_calibration_retry_after: raw.rerank_calibration_retry_after,
+    rerank_uncalibrated_range: raw.rerank_uncalibrated_range,
+    remote_result_refs: raw.remote_result_refs
   };
 }
 
@@ -997,6 +1012,19 @@ function normalizeState(raw: Partial<LayerState> | null, gradients: GradientPres
 
   const layers = (raw.layers ?? [])
     .map((layer, index) => normalizeLayer(layer, index, gradients))
+    .map((layer) => {
+      if (!layer || layer.query_type === "pano_reference" || !runtimeConfig.retiredBackendUrls.length) return layer;
+      const config = loadRemoteBackendConfigSync();
+      if (!config.enabled || normalizeBackendBaseUrl(config.baseUrl) !== normalizeBackendBaseUrl(DEFAULT_REMOTE_BACKEND_URL)) return layer;
+      const retired = layerSourcePathCandidates(layer).some(source => runtimeConfig.retiredBackendUrls
+        .some(base => source.startsWith(`${base}/`)));
+      if (!retired) return layer;
+      const pending = `remote://pending/${layer.id}`;
+      return { ...layer, source_path: pending,
+        source_paths: Object.fromEntries(Object.keys(layer.source_paths ?? {}).map(city => [city, pending])),
+        status: "running" as const, rerank_calibration: null, rerank_calibration_status: "pending" as const,
+        rerank_calibration_retry_after: undefined, remote_result_refs: undefined };
+    })
     .filter((layer): layer is SemanticLayer => Boolean(layer));
   const ids = new Set(layers.map((layer) => layer.id));
   const selected = raw.selected_layer_id && ids.has(raw.selected_layer_id) ? raw.selected_layer_id : layers[0]?.id ?? null;
@@ -1094,7 +1122,10 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       style,
       status: reusableRemote ? previousLayer.status : fallbackSources.status,
       created_at: previousLayer?.created_at || utcNow(),
-      rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null
+      rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null,
+      rerank_calibration_status: reusableRemote ? previousLayer.rerank_calibration_status : undefined,
+      rerank_uncalibrated_range: reusableRemote ? previousLayer.rerank_uncalibrated_range : undefined,
+      remote_result_refs: reusableRemote ? previousLayer.remote_result_refs : undefined
     };
   });
 
@@ -1387,7 +1418,10 @@ async function submitRemoteScoringForLayer(
     status: "running",
     source_path: `remote://pending/${layer.id}`,
     source_paths: submittingSourcePaths,
-    rerank_calibration: null
+    rerank_calibration: null,
+    rerank_calibration_status: "pending",
+    rerank_calibration_retry_after: undefined,
+    remote_result_refs: undefined
   });
 
   try {
@@ -1858,15 +1892,27 @@ export async function loadPanoImage(
 }
 
 async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, job: ScoringJob): Promise<RerankColorRange | undefined> {
-  if (config.mode === "cpu" || job.query_type === "pano_reference" || !job.results?.length) return;
+  if (job.query_type === "pano_reference" || !job.results?.length) return;
   try {
+    if (job.rerank_calibration) return acceptRerankCalibration(layerId, job, job.rerank_calibration);
+    if (config.mode === "cpu") {
+      updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
+      return;
+    }
+    updateLayerSync(layerId, { rerank_calibration_status: "pending" });
     const capabilityResponse = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/calibration/capabilities"), {
       headers: remoteAuthHeaders(config)
     });
-    if (capabilityResponse.status === 404) return;
+    if (capabilityResponse.status === 404) {
+      updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
+      return;
+    }
     if (!capabilityResponse.ok) throw new Error(`Reranker availability check failed (${capabilityResponse.status})`);
     const capability = await capabilityResponse.json() as { enabled: boolean; reason?: string };
-    if (!capability.enabled) return;
+    if (!capability.enabled) {
+      updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
+      return;
+    }
     emitRemoteJobLog(layerId, { ...job, status: "scoring", current_stage: "reranking", message: "Calibrating colour range from batched street-view reranking…" });
     const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/calibration/jobs"), {
       method: "POST", headers: { ...remoteAuthHeaders(config), "Content-Type": "application/json" },
@@ -1875,28 +1921,17 @@ async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, j
     if (!response.ok) throw new Error(`Reranker calibration request failed (${response.status})`);
     let calibration = await response.json() as RerankCalibrationJob;
     for (let attempt = 0; attempt < 600; attempt += 1) {
-      if (calibration.status === "disabled") return;
+      if (calibration.status === "disabled") {
+        updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
+        return;
+      }
       if (calibration.status === "failed") throw new Error(calibration.error || "Reranker calibration failed");
       if (calibration.status === "ready") {
-        const range = calibration.color_range;
-        if (range && range.field === "zscore" && [range.mean, range.lower, range.upper].every(Number.isFinite)
-          && range.lower < range.upper && range.lower <= range.mean && range.mean <= range.upper) {
-          const correlations = calibration.calibration?.correlations;
-          const validCorrelations = correlations && [correlations.pearson_r, correlations.spearman_rho, correlations.bicor]
-            .every(value => value === null || (Number.isFinite(value) && value >= -1 && value <= 1))
-            && (correlations.agreement_percent === null || (Number.isFinite(correlations.agreement_percent)
-              && correlations.agreement_percent >= 0 && correlations.agreement_percent <= 100));
-          updateLayerSync(layerId, { rerank_calibration: {
-            job_id: calibration.job_id, color_range: range, center_method: calibration.calibration?.center_method,
-            ...(validCorrelations ? { correlations } : {})
-          } });
-          const centreLabel = calibration.calibration?.center_method === "logit_zero" ? "zero-logit centre" : "endpoint centre";
-          const agreementLabel = validCorrelations && correlations?.agreement_percent !== null
-            ? ` Scoring agreement ${correlations!.agreement_percent!.toFixed(1)}%.` : "";
-          emitRemoteInfoLog(layerId, job.prompt, `Reranker colour range: ${range.lower.toFixed(2)} to ${range.upper.toFixed(2)} σ; ${centreLabel} ${range.mean.toFixed(2)} σ.${agreementLabel}`);
-          return range;
-        }
-        if (range) throw new Error("Reranker returned an invalid z-score colour range");
+        if (calibration.color_range) return acceptRerankCalibration(layerId, job, {
+          job_id: calibration.job_id, color_range: calibration.color_range,
+          center_method: calibration.calibration?.center_method, correlations: calibration.calibration?.correlations
+        });
+        updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
         emitRemoteInfoLog(layerId, job.prompt, calibration.calibration?.reason || "No sampled reranker evidence is available; retaining the current colour range.");
         return;
       }
@@ -1908,8 +1943,44 @@ async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, j
     }
     throw new Error("Reranker calibration timed out");
   } catch (error) {
-    emitRemoteInfoLog(layerId, job.prompt, `${error instanceof Error ? error.message : "Reranker calibration failed"}; retaining the current colour range.`);
+    updateLayerSync(layerId, { rerank_calibration_status: "failed", rerank_calibration_retry_after: Date.now() + 30_000 });
+    emitRemoteInfoLog(layerId, job.prompt, `${error instanceof Error ? error.message : "Reranker calibration failed"}; retaining the current colour range and retrying calibration after reconnection.`);
   }
+}
+
+function acceptRerankCalibration(layerId: string, job: ScoringJob, calibration: RerankLayerCalibration): RerankColorRange {
+  const range = calibration.color_range;
+  if (!range || range.field !== "zscore" || ![range.mean, range.lower, range.upper].every(Number.isFinite)
+    || range.lower >= range.upper || range.mean < range.lower || range.mean > range.upper) {
+    throw new Error("Reranker returned an invalid z-score colour range");
+  }
+  const correlations = calibration.correlations;
+  const validCorrelations = correlations && [correlations.pearson_r, correlations.spearman_rho, correlations.bicor]
+    .every(value => value === null || (Number.isFinite(value) && value >= -1 && value <= 1))
+    && (correlations.agreement_percent === null || (Number.isFinite(correlations.agreement_percent)
+      && correlations.agreement_percent >= 0 && correlations.agreement_percent <= 100));
+  const current = loadStateSync().layers.find(layer => layer.id === layerId);
+  updateLayerSync(layerId, {
+    rerank_calibration: { job_id: calibration.job_id, color_range: range, center_method: calibration.center_method,
+      ...(validCorrelations ? { correlations } : {}) },
+    rerank_calibration_status: "ready", rerank_calibration_retry_after: undefined,
+    rerank_uncalibrated_range: current?.rerank_uncalibrated_range ?? (current ? {
+      lower: current.style.score_min, upper: current.style.score_max
+    } : undefined)
+  });
+  const centreLabel = calibration.center_method === "logit_zero" ? "zero-logit centre" : "endpoint centre";
+  const agreementLabel = validCorrelations && correlations?.agreement_percent !== null
+    ? ` Scoring agreement ${correlations!.agreement_percent!.toFixed(1)}%.` : "";
+  emitRemoteInfoLog(layerId, job.prompt, `Reranker colour range: ${range.lower.toFixed(2)} to ${range.upper.toFixed(2)} σ; ${centreLabel} ${range.mean.toFixed(2)} σ.${agreementLabel}`);
+  return range;
+}
+
+function manifestCalibration(manifests: RemoteResultManifest[]): RerankLayerCalibration | undefined {
+  const first = manifests[0]?.rerank_calibration;
+  if (!first || !first.job_id || manifests.some(manifest => !manifest.rerank_calibration
+    || manifest.rerank_calibration.job_id !== first.job_id
+    || JSON.stringify(manifest.rerank_calibration.color_range) !== JSON.stringify(first.color_range))) return;
+  return first;
 }
 
 async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string, initialJob: ScoringJob, showOnMap = true) {
@@ -1921,9 +1992,10 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
     for (let attempt = 0; attempt < 720; attempt += 1) {
       emitRemoteJobLog(layerId, job, { mapOverlay: showOnMap });
       if (job.status === "ready") {
-        const calibratedRange = await remoteRerankRange(config, layerId, job);
+        if (job.results?.length) updateLayerSync(layerId, { remote_result_refs: job.results });
+        let calibratedRange = await remoteRerankRange(config, layerId, job);
         const currentLayer = loadStateSync().layers.find(layer => layer.id === layerId);
-        const calibratedStyle = calibratedRange && currentLayer ? {
+        let calibratedStyle = calibratedRange && currentLayer ? {
           ...currentLayer.style, score_min: calibratedRange.lower, score_max: calibratedRange.upper
         } : undefined;
         const directSources = sourcePathsFromReadyJob(config, job);
@@ -1946,6 +2018,12 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
         }
 
         const manifests = await getRemoteResultManifests(config, job);
+        const cachedCalibration = manifestCalibration(manifests);
+        if (!calibratedRange && cachedCalibration) {
+          calibratedRange = acceptRerankCalibration(layerId, job, cachedCalibration);
+          const current = loadStateSync().layers.find(layer => layer.id === layerId);
+          if (current) calibratedStyle = { ...current.style, score_min: calibratedRange.lower, score_max: calibratedRange.upper };
+        }
         const sourcePaths = sourcePathsFromManifests(config, manifests);
         const primaryManifest = manifests[0];
         const primarySourcePath = Object.values(sourcePaths)[0] || (primaryManifest ? resolveRemoteUrl(config, primaryManifest.tile_url_template) : "");
@@ -1988,6 +2066,69 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
   updateLayerSync(layerId, { status: "failed" });
 }
 
+function immutableLayerResults(config: RemoteBackendConfig, layer: SemanticLayer): ScoringResultRef[] {
+  const origin = new URL(config.baseUrl).origin;
+  const candidates = [...new Set(Object.values(layer.source_paths ?? {}).length
+    ? Object.values(layer.source_paths ?? {}) : [layer.source_path])].filter((value): value is string => Boolean(value));
+  const derived: ScoringResultRef[] = [];
+  for (const value of candidates) {
+    const url = new URL(value, config.baseUrl);
+    if (url.origin !== origin || (url.searchParams.has("embedding") && url.searchParams.get("embedding") !== "new")) return [];
+    const pathname = url.pathname.replace(/%7B/gi, "{").replace(/%7D/gi, "}");
+    const match = pathname.match(/^\/api\/scoring\/(saved\/)?results\/([^/]+)\/([^/]+)\/revisions\/([^/]+)\/tiles\/\{z\}\/\{x\}\/\{y\}\.geojson$/);
+    if (!match) return [];
+    derived.push({ dataset_id: decodeURIComponent(match[2]), prompt_id: decodeURIComponent(match[3]),
+      result_revision: decodeURIComponent(match[4]), tile_url_template: value,
+      manifest_url: `${origin}/api/scoring/${match[1] ?? ""}results/${match[2]}/${match[3]}/revisions/${match[4]}/manifest` });
+  }
+  const recorded = layer.remote_result_refs;
+  if (!recorded?.length) return derived;
+  // Persisted references must still name the result displayed by each tile source.
+  const signature = (ref: ScoringResultRef) => JSON.stringify([ref.dataset_id, ref.prompt_id, ref.result_revision]);
+  if (derived.some(ref => !recorded.some(candidate => signature(candidate) === signature(ref)))) return [];
+  if (recorded.some(ref => !ref.result_revision || new URL(ref.tile_url_template, config.baseUrl).origin !== origin)) return [];
+  return recorded;
+}
+
+async function recoverRemoteTileCalibration(config: RemoteBackendConfig, layer: SemanticLayer): Promise<void> {
+  if (ACTIVE_REMOTE_POLLS.has(layer.id)) return;
+  ACTIVE_REMOTE_POLLS.add(layer.id);
+  try {
+    const results = immutableLayerResults(config, layer);
+    if (!results.length) return;
+    let job: ScoringJob = { job_id: `calibration-recovery-${layer.id}`, prompt: layer.prompt,
+      query_type: "text", results, status: "ready", progress: 1, layer_id: layer.id,
+      message: "Recovering saved colour calibration.", created_at: layer.created_at, updated_at: utcNow() };
+    if (config.mode === "cpu") {
+      // CPU submission is a saved-score read, never GPU retrieval or reranking.
+      const response = await fetchRemoteWithTimeout(resolveRemoteUrl(config, "/api/scoring/jobs/batch"), {
+        method: "POST", headers: remoteJsonHeaders(config),
+        body: JSON.stringify({ queries: [{ prompt: layer.prompt, dataset_ids: results.map(ref => ref.dataset_id),
+          dataset_group_id: config.datasetGroupId }] })
+      });
+      if (!response.ok) throw new Error(`Saved calibration recovery failed (${response.status})`);
+      const saved = acceptedJobFromBatchResponse(await response.json() as ScoringJobBatchResponse);
+      const identities = (refs: ScoringResultRef[]) => refs.map(ref => JSON.stringify([
+        ref.dataset_id, ref.prompt_id, ref.result_revision])).sort().join("|");
+      if (saved.status !== "ready" || identities(saved.results ?? []) !== identities(results)) {
+        updateLayerSync(layer.id, { rerank_calibration_status: "unavailable" });
+        emitRemoteInfoLog(layer.id, layer.prompt, "Saved score revisions changed; refresh retrieval before applying colour calibration.");
+        return;
+      }
+      job = saved;
+    }
+    const range = await remoteRerankRange(config, layer.id, job);
+    const current = loadStateSync().layers.find(candidate => candidate.id === layer.id);
+    if (range && current) updateLayerSync(layer.id, { remote_result_refs: results,
+      style: { ...current.style, score_min: range.lower, score_max: range.upper } });
+  } catch (error) {
+    updateLayerSync(layer.id, { rerank_calibration_status: "failed", rerank_calibration_retry_after: Date.now() + 30_000 });
+    emitRemoteInfoLog(layer.id, layer.prompt, error instanceof Error ? error.message : "Colour calibration recovery failed.");
+  } finally {
+    ACTIVE_REMOTE_POLLS.delete(layer.id);
+  }
+}
+
 export async function resumeRemoteScoringJobs(): Promise<void> {
   const config = loadRemoteBackendConfigSync();
   if (!config.enabled || !config.baseUrl) return;
@@ -1995,7 +2136,14 @@ export async function resumeRemoteScoringJobs(): Promise<void> {
   const state = loadStateSync();
   for (const layer of state.layers) {
     if (layer.status === "failed") continue;
-    if (isRemoteTileTemplate(layer.source_path)) continue;
+    if (isRemoteTileTemplate(layer.source_path)) {
+      if (layer.query_type !== "pano_reference" && !layer.rerank_calibration
+        && layer.rerank_calibration_status !== "unavailable"
+        && (!layer.rerank_calibration_retry_after || layer.rerank_calibration_retry_after <= Date.now())) {
+        void recoverRemoteTileCalibration(config, layer);
+      }
+      continue;
+    }
 
     const existingJobId = parsePendingJobSource(layer.source_path);
     if (layer.status === "ready" && !existingJobId && !isLegacyPendingSource(layer.source_path)) continue;

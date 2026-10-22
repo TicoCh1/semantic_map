@@ -217,6 +217,14 @@ export function App() {
   }, [priorityTiles]);
 
   useEffect(() => {
+    if (!backendConfig?.enabled || !backendConfig.baseUrl) return;
+    const recover = () => { void resumeRemoteScoringJobs(); };
+    const timer = window.setInterval(recover, 30_000);
+    window.addEventListener("online", recover);
+    return () => { window.clearInterval(timer); window.removeEventListener("online", recover); };
+  }, [backendConfig?.enabled, backendConfig?.baseUrl]);
+
+  useEffect(() => {
     startupRefreshAttemptedRef.current = false;
     setBackendConnectionFailed(false);
   }, [backendConfig?.enabled, backendConfig?.baseUrl]);

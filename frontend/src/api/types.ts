@@ -50,6 +50,10 @@ export type SemanticLayer = {
   status: "queued" | "running" | "ready" | "failed";
   created_at: string;
   rerank_calibration?: RerankLayerCalibration | null;
+  rerank_calibration_status?: "pending" | "ready" | "unavailable" | "failed";
+  rerank_calibration_retry_after?: number;
+  rerank_uncalibrated_range?: { lower: number; upper: number };
+  remote_result_refs?: ScoringResultRef[];
 };
 
 export type CityId = string;
@@ -189,6 +193,7 @@ export type ScoringJob = {
   manifest_url?: string | null;
   tile_url_template?: string | null;
   results?: ScoringResultRef[];
+  rerank_calibration?: RerankLayerCalibration | null;
 };
 
 export type ScoringJobBatchItemResponse = {
@@ -293,6 +298,7 @@ export type RemoteResultManifest = {
   density_rule?: string;
   density_base_zoom?: number | null;
   result_revision?: string | null;
+  rerank_calibration?: RerankLayerCalibration | null;
   stats: {
     count: number;
     score_min: number;

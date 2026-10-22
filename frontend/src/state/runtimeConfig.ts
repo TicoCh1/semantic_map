@@ -12,6 +12,7 @@ export type SemanticMapRuntimeConfig = {
   defaultDatasetGroupId: string;
   defaultRemoteBackendUrl: string;
   remoteBackendEnabled: boolean;
+  retiredBackendUrls: string[];
   staticFallbackDataBaseUrl: string;
   demoWatchdogUrl: string;
   supportEmail: string;
@@ -100,6 +101,7 @@ export const runtimeConfig: SemanticMapRuntimeConfig = {
   defaultDatasetGroupId: asString(rawRuntimeConfig.defaultDatasetGroupId, envString("VITE_DEFAULT_DATASET_GROUP_ID") || "london_shanghai"),
   defaultRemoteBackendUrl: normalizeRunpodProxyUrl(asString(rawRuntimeConfig.defaultRemoteBackendUrl, configuredRunpodUrl)),
   remoteBackendEnabled: asBoolean(rawRuntimeConfig.remoteBackendEnabled, true),
+  retiredBackendUrls: asStringList(rawRuntimeConfig.retiredBackendUrls, []).map(normalizeRunpodProxyUrl),
   staticFallbackDataBaseUrl: asString(
     rawRuntimeConfig.staticFallbackDataBaseUrl,
     envString("VITE_STATIC_FALLBACK_DATA_BASE_URL") || "https://ticoch1.github.io/semanticmapdemo/static-data"

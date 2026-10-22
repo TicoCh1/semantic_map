@@ -44,7 +44,7 @@ function fixture({ enabled = true, direct = true, mode = 'gpu', queued = false,
   });
   vm.runInContext(code, context);
   const job = { job_id: 'retrieval', prompt: 'trees', status: 'ready', query_type: 'text', results: [{ dataset_id: 'london', prompt_id: 'trees', result_revision: 'immutable' }] };
-  return { calls, layer, run: () => context.pollRemoteScoringJob({ mode }, 'layer', job) };
+  return { calls, layer, context, job, run: () => context.pollRemoteScoringJob({ mode }, 'layer', job) };
 }
 
 test('No GPU skips calibration submission and retains existing colour bounds', async () => {
@@ -213,3 +213,155 @@ for (const range of [
     assert.equal(f.layer.status, 'ready');
   });
 }
+
+test('CPU saved jobs apply an embedded zero-centre calibration without contacting the GPU API', async () => {
+  const f = fixture({mode:'cpu'});
+  f.job.rerank_calibration = {job_id:'cached',color_range:{mean:0,lower:-2,upper:2,field:'zscore'},center_method:'logit_zero'};
+  await f.run();
+  assert.equal(f.calls.length,0);
+  assert.equal(f.layer.style.score_min,-2);
+  assert.equal(f.layer.style.score_max,2);
+  assert.equal(f.layer.rerank_calibration.color_range.mean,0);
+  assert.equal(f.layer.rerank_calibration_status,'ready');
+});
+
+function recoveryFixture(mode='gpu') {
+  const f=fixture({mode});
+  const config={baseUrl:'https://pod.example',enabled:true,mode};
+  const refs=['london','shanghai','new_york','rome'].map(dataset=>({dataset_id:dataset,prompt_id:'trees',
+    result_revision:'saved-'+dataset,manifest_url:`/api/scoring/results/${dataset}/trees/revisions/saved-${dataset}/manifest`,
+    tile_url_template:`https://pod.example/api/scoring/results/${dataset}/trees/revisions/saved-${dataset}/tiles/{z}/{x}/{y}.geojson`}));
+  Object.assign(f.layer,{id:'layer',prompt:'trees',created_at:'2026-10-22T00:00:00Z',query_type:'text',status:'ready',
+    source_path:refs[0].tile_url_template,source_paths:Object.fromEntries(refs.map(r=>[r.dataset_id,r.tile_url_template])),
+    remote_result_refs:refs});
+  Object.assign(f.context,{URL,Date,loadRemoteBackendConfigSync:()=>config,
+    isRemoteTileTemplate:path=>path.startsWith('https://'),utcNow:()=>new Date().toISOString(),
+    remoteJsonHeaders:()=>({'Content-Type':'application/json'}),
+    acceptedJobFromBatchResponse:body=>body.queries[0].job});
+  const begin=source.indexOf('function immutableLayerResults(');
+  const finish=source.indexOf('function layerStatusFromRemoteJob',begin);
+  vm.runInContext(ts.transpileModule(source.slice(begin,finish).replace('export async','async'),
+    {compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText,f.context);
+  return {...f,refs,config};
+}
+
+async function finishRecovery(f) {
+  await f.context.resumeRemoteScoringJobs();
+  for(let i=0;i<30 && f.context.ACTIVE_REMOTE_POLLS.size;i++) await new Promise(setImmediate);
+  assert.equal(f.context.ACTIVE_REMOTE_POLLS.size,0,'recovery should finish');
+}
+
+test('a ready GPU tile layer recovers calibration against its original immutable result references',async()=>{
+  const f=recoveryFixture();
+  Object.assign(f.layer,{rerank_calibration_status:'failed',rerank_calibration_retry_after:0});
+  const sourceBefore=f.layer.source_path;
+  await finishRecovery(f);
+  assert.equal(f.layer.style.score_min,1.21);
+  assert.equal(f.layer.style.score_max,5.21);
+  assert.equal(f.layer.source_path,sourceBefore);
+  assert.equal(f.layer.status,'ready');
+  assert.equal(f.calls.length,2);
+  assert.deepEqual(JSON.parse(f.calls[1].options.body).results.map(r=>r.result_revision),f.refs.map(r=>r.result_revision));
+  assert.ok(f.calls.every(call=>!call.path.endsWith('/scoring/jobs/batch')));
+});
+
+test('transient calibration failure keeps retrieval ready and schedules a separate retry',async()=>{
+  const f=fixture();
+  f.context.fetchRemoteWithTimeout=async()=>({status:403,ok:false});
+  await f.run();
+  assert.equal(f.layer.status,'ready');
+  assert.equal(f.layer.rerank_calibration_status,'failed');
+  assert.ok(f.layer.rerank_calibration_retry_after>Date.now());
+  assert.equal(f.layer.style.score_min,-1);
+});
+
+test('CPU tile recovery accepts cached calibration only when all four source revisions match',async()=>{
+  const f=recoveryFixture('cpu');
+  const calls=[];
+  f.context.fetchRemoteWithTimeout=async(path,options)=>{
+    calls.push({path,body:JSON.parse(options.body)});
+    return {ok:true,status:200,json:async()=>({queries:[{status:'accepted',job:{...f.job,status:'ready',results:f.refs,
+      rerank_calibration:{job_id:'saved-fit',color_range:{mean:4,lower:2,upper:6,field:'zscore'},center_method:'logit_zero'}}}]})};
+  };
+  await finishRecovery(f);
+  assert.equal(calls.length,1);
+  assert.equal(calls[0].path,'/api/scoring/jobs/batch');
+  assert.deepEqual(calls[0].body.queries[0].dataset_ids,f.refs.map(r=>r.dataset_id));
+  assert.equal(f.layer.style.score_min,2);
+  assert.equal(f.layer.style.score_max,6);
+  assert.equal(f.layer.rerank_calibration_status,'ready');
+});
+
+test('CPU recovery refuses cached bounds for a changed source revision',async()=>{
+  const f=recoveryFixture('cpu');
+  f.context.fetchRemoteWithTimeout=async()=>({ok:true,status:200,json:async()=>({queries:[{job:{...f.job,status:'ready',
+    results:f.refs.map((ref,i)=>i===0?{...ref,result_revision:'new-source'}:ref),
+    rerank_calibration:{color_range:{mean:4,lower:2,upper:6,field:'zscore'}}}}]})});
+  await finishRecovery(f);
+  assert.equal(f.layer.style.score_min,-1);
+  assert.equal(f.layer.rerank_calibration_status,'unavailable');
+  assert.equal(f.layer.rerank_calibration,undefined);
+});
+
+test('old embedding tile URLs are never sent for new-embedding calibration recovery',async()=>{
+  const f=recoveryFixture('cpu');
+  f.layer.source_paths=Object.fromEntries(f.refs.map(ref=>[ref.dataset_id,ref.tile_url_template+'?embedding=old']));
+  await finishRecovery(f);
+  assert.equal(f.calls.length,0);
+  assert.equal(f.layer.style.score_min,-1);
+});
+
+test('retry backoff and already calibrated layers do not issue repeated calibration requests',async()=>{
+  const f=recoveryFixture();
+  f.layer.rerank_calibration_retry_after=Date.now()+60_000;
+  await finishRecovery(f);
+  assert.equal(f.calls.length,0);
+  f.layer.rerank_calibration_retry_after=0;
+  f.layer.rerank_calibration={color_range:{mean:3,lower:1,upper:5,field:'zscore'}};
+  await finishRecovery(f);
+  assert.equal(f.calls.length,0);
+});
+
+test('embedding comparison keeps the new calibration off old and difference panes',()=>{
+  const text=readFileSync(new URL('../src/state/useEmbeddingComparison.ts',import.meta.url),'utf8');
+  const snippet=ts.transpileModule(text.slice(text.indexOf('export function useEmbeddingComparison('))
+    .replace('export function','function'),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  const layer={id:'trees',prompt:'trees',name:'Trees',score_property:'zscore',style:{score_min:2,score_max:6},
+    rerank_calibration:{color_range:{mean:4,lower:2,upper:6,field:'zscore'}},rerank_uncalibrated_range:{lower:-1,upper:3}};
+  const config={baseUrl:'https://pod.example'},city={id:'london',datasetId:'london'};
+  const key=JSON.stringify([config.baseUrl,city.datasetId,layer.prompt]);
+  const context=vm.createContext({URL,useEffect(){},useMemo:callback=>callback(),
+    useState:()=>[{key,result:{matched_count:1,results:['old','new','difference'].map(embedding=>({embedding,
+      tile_url_template:`/tiles/{z}/{x}/{y}.geojson?embedding=${embedding}`}))}},()=>{}]});
+  vm.runInContext(snippet,context);
+  const [old,current,difference]=context.useEmbeddingComparison(true,config,city,layer).paneLayers.map(layers=>layers[0]);
+  assert.equal(old.style.score_min,-1);assert.equal(old.style.score_max,3);
+  assert.equal(old.rerank_calibration,null);
+  assert.equal(current.style.score_min,2);assert.equal(current.style.score_max,6);
+  assert.equal(current.rerank_calibration.color_range.mean,4);
+  assert.equal(difference.style.score_min,-3);assert.equal(difference.style.score_max,3);
+  assert.equal(difference.rerank_calibration,null);
+});
+
+test('only a listed retired default is migrated and its token is never forwarded',()=>{
+  const begin=source.indexOf('function loadRemoteBackendConfigSync(');
+  const end=source.indexOf('function saveRemoteBackendConfigSync(',begin);
+  const snippet=ts.transpileModule(source.slice(begin,end),{compilerOptions:{target:ts.ScriptTarget.ES2022}}).outputText;
+  let raw={baseUrl:'https://retired.example',token:'old-secret',enabled:true,datasetIds:['old']};
+  let override='';
+  const context=vm.createContext({REMOTE_BACKEND_KEY:'backend',readJson:()=>raw,writeJson:(_,next)=>{raw=next;},
+    urlBackendOverride:()=>override,withCachedBackendCapabilities:config=>config,
+    exhibitConfig:{lockRunpodUrl:false},normalizeBackendBaseUrl:url=>url.replace(/\/+$/,''),
+    normalizeDatasetIds:value=>value??[],normaliseCityConfigs:value=>value??[],
+    runtimeConfig:{retiredBackendUrls:['https://retired.example'],remoteBackendEnabled:true},
+    DEFAULT_REMOTE_BACKEND_URL:'https://current.example',DEFAULT_REMOTE_DATASET_ID:'new',
+    DEFAULT_REMOTE_DATASET_IDS:['new'],DEFAULT_REMOTE_DATASET_GROUP_ID:'four'});
+  vm.runInContext(snippet,context);
+  const migrated=context.loadRemoteBackendConfigSync();
+  assert.equal(migrated.baseUrl,'https://current.example');assert.equal(migrated.token,'');
+  raw={baseUrl:'https://custom.example',token:'custom-secret',enabled:true};
+  assert.equal(context.loadRemoteBackendConfigSync().baseUrl,'https://custom.example');
+  assert.equal(context.loadRemoteBackendConfigSync().token,'custom-secret');
+  override='https://retired.example';
+  assert.equal(context.loadRemoteBackendConfigSync().baseUrl,'https://retired.example');
+});
