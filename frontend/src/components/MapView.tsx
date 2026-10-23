@@ -9,7 +9,9 @@ import { isCompleteRemoteTile } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
+import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import type { Map as MapLibreMap, MapLayerMouseEvent, MapEventType } from "maplibre-gl";
+
 import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
@@ -33,6 +35,9 @@ import { panoDatasetIdForPoint, panoPointKey } from "../state/panoDatasets";
 import { useEmbeddingComparison } from "../state/useEmbeddingComparison";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
+
+// Bundle the v6 worker and its shared module into the deployed Vite assets.
+maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 type MapViewProps = {
   backendConfig?: RemoteBackendConfig | null;

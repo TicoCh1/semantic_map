@@ -1,4 +1,4 @@
-import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -18,6 +18,12 @@ async function clean() {
 
 async function finalize() {
   await mkdir(pagesDir, { recursive: true });
+  const assetsDir = resolve(pagesDir, "assets");
+  const workerAssets = (await readdir(assetsDir)).filter(name => /^maplibre-gl-worker-[\w-]+\.js$/.test(name));
+  if (!workerAssets.length || (await Promise.all(workerAssets.map(name => stat(resolve(assetsDir, name)))))
+    .some(asset => asset.size === 0)) {
+    throw new Error("MapLibre worker is missing from the Pages build; semantic and vector layers cannot render.");
+  }
   await copyFile(resolve(scriptDir, "../public/runtime-config.js"), resolve(pagesDir, "runtime-config.js"));
   await writeFile(resolve(pagesDir, ".nojekyll"), "", "utf8");
 }
