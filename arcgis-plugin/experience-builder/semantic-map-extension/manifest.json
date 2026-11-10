@@ -1,0 +1,7 @@
+{
+  "name": "semantic-map-extension",
+  "type": "exb-web-extension-repo",
+  "description": "UrbanFabric Semantic Map custom Experience Builder widgets.",
+  "copyright": "",
+  "license": "Apache-2.0"
+}

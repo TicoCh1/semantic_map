@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ArcGIS defaultAssembly="SemanticMapArcGISPro.dll"
+        defaultNamespace="SemanticMapArcGISPro"
+        xmlns="http://schemas.esri.com/DADF/Registry"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://schemas.esri.com/DADF/Registry file:///C:/Program%20Files/ArcGIS/Pro/bin/ArcGIS.Desktop.Framework.xsd">
+
+  <AddInInfo id="{9a05d984-e972-4d3e-9a3a-3a62c2a6ef55}" version="0.1.0" desktopVersion="3.6.0" product="ArcGISPro">
+    <Name>UrbanFabric Semantic Map</Name>
+    <Description>Prompt-based UrbanFabric datapoint import for ArcGIS Pro.</Description>
+    <Image>Images\AddInDesktop32.png</Image>
+    <Author>UrbanFabric</Author>
+    <Company>UrbanFabric</Company>
+    <Date>2026-05-10</Date>
+    <Subject>Map Authoring</Subject>
+  </AddInInfo>
+
+  <modules>
+    <insertModule id="SemanticMapArcGISPro_Module" className="Module1" autoLoad="false" caption="UrbanFabric Semantic Map">
+      <groups>
+        <group id="SemanticMapArcGISPro_SearchGroup" caption="UrbanFabric" appearsOnAddInTab="true">
+          <button refID="SemanticMapArcGISPro_ShowSearchPane" size="large" />
+        </group>
+      </groups>
+
+      <controls>
+        <button id="SemanticMapArcGISPro_ShowSearchPane"
+                caption="Semantic Search"
+                className="ShowSearchPaneButton"
+                loadOnClick="true"
+                smallImage="Images\SemanticSearch16.png"
+                largeImage="Images\SemanticSearch32.png">
+          <tooltip heading="Semantic Search">Search UrbanFabric datapoints by prompt and add the result to the active map.</tooltip>
+        </button>
+      </controls>
+
+      <dockPanes>
+        <dockPane id="SemanticMapArcGISPro_SearchDockPane"
+                  smallImage="Images\SemanticSearch16.png"
+                  caption="UrbanFabric Search"
+                  className="SearchDockPaneViewModel"
+                  dock="group"
+                  initiallyVisible="false"
+                  dockWith="esri_core_projectDockPane">
+          <content className="SearchDockPaneView" />
+        </dockPane>
+      </dockPanes>
+    </insertModule>
+  </modules>
+</ArcGIS>

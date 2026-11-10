@@ -1,0 +1,15 @@
+{
+  "name": "semantic-prompt-search",
+  "label": "Semantic Prompt Search",
+  "type": "widget",
+  "version": "0.1.0",
+  "exbVersion": "1.14.0",
+  "author": "UrbanFabric",
+  "description": "Submit UrbanFabric semantic prompts, fetch ArcGIS-ready point features, and add native FeatureLayers to the selected ArcGIS map.",
+  "dependency": ["jimu-arcgis"],
+  "properties": {
+    "hasConfig": true,
+    "supportInlineEditing": false
+  },
+  "translatedLocales": ["en"]
+}
