@@ -1,0 +1,52 @@
+{
+  "status": "deployed_smoke_verified",
+  "algorithm_version": "pca_region_blob_aligned_v1",
+  "note": "Illustrative Rome polygon only. Replace it with the actual selection. Submit model_request first, then replace model_id in run_request with its completed model ID. Selectively deployed and smoke tested on vgakgmrszzf1lr on 2026-10-01; the temporary API was stopped afterward. Coordinate future jobs with other backend calculations. City-scale performance and semantic quality have not been evaluated.",
+  "model_request": {
+    "source_dataset_id": "rome_512_8_45_8B",
+    "source_geometry": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [12.478, 41.891],
+          [12.49, 41.891],
+          [12.49, 41.901],
+          [12.478, 41.901],
+          [12.478, 41.891]
+        ]
+      ]
+    },
+    "source_date_range": null,
+    "representation": "pano_aligned_views_v1",
+    "selected_views": [0, 1, 2, 3, 4, 5, 6, 7],
+    "spatial_cell_m": 25,
+    "fit_components": "auto",
+    "compute_device": "auto",
+    "seed": 20261001
+  },
+  "run_request": {
+    "model_id": "REPLACE_WITH_COMPLETED_MODEL_ID",
+    "target_dataset_id": "london_512_8_45_8B",
+    "target_date_range": null,
+    "compute_device": "auto",
+    "selected_components": 3,
+    "axis_weights": [1.0, 1.0, 1.0],
+    "source_coverage": 0.9,
+    "residual_enabled": true,
+    "variance_floor_relative": 0.01,
+    "variance_floor_absolute": 1e-8,
+    "neighborhoods": {
+      "footprint": "equal_area_circle",
+      "center_step_m": 100,
+      "minimum_match_coverage": 0.5,
+      "minimum_cells_absolute": 20,
+      "minimum_cells_source_fraction": 0.5,
+      "refine_candidates": 200,
+      "distribution_random_directions": 16,
+      "distribution_quantiles": 64,
+      "source_half_splits": 20,
+      "maximum_overlap_iou": 0.5,
+      "top_k": 20
+    }
+  }
+}

@@ -1,0 +1,180 @@
+{
+  "version": 1,
+  "description": "Downloaded public street-view datasets on qdsb5civpx9a0e; label and mask files are excluded from embedding inputs.",
+  "sources": [
+    {
+      "dataset_id": "cityscapes",
+      "projection": "perspective",
+      "perspective_mode": "horizontal_halves_if_2_to_1",
+      "validation_kind": "pixel_mask_and_polygons",
+      "containers": [
+        "/workspace/datasets/cityscapes_20260920/files/leftImg8bit_trainvaltest.zip",
+        "/workspace/datasets/cityscapes_20260920/files/leftImg8bit_trainextra.zip"
+      ],
+      "member_globs": [
+        "leftImg8bit/**/*.png"
+      ],
+      "validation": {
+        "adapter": "cityscapes",
+        "archives": [
+          "/workspace/datasets/cityscapes_20260920/files/gtFine_trainvaltest.zip",
+          "/workspace/datasets/cityscapes_20260920/files/gtCoarse.zip",
+          "/workspace/datasets/cityscapes_20260920/files/gtFinePanopticParts_trainval.zip"
+        ]
+      }
+    },
+    {
+      "dataset_id": "mapillary_msls",
+      "projection": "perspective",
+      "validation_kind": "geolocation_and_image_tags",
+      "container": "/workspace/datasets/mapillary_vistas_2_0_20260920/files/*.zip",
+      "member_globs": [
+        "train_val/*/*/images/*.jpg",
+        "test/*/*/images/*.jpg"
+      ],
+      "duplicate_policy": "last",
+      "duplicate_policy_reason": "Sorted archive order: 09_An9DC repairs three images; 10_An-iew repeats Zurich. Last package wins by identical dataset member path.",
+      "validation": {
+        "adapter": "msls",
+        "archives": [
+          "/workspace/datasets/mapillary_vistas_2_0_20260920/files/08_An9zn*.zip",
+          "/workspace/datasets/mapillary_vistas_2_0_20260920/files/10_An-iew*.zip",
+          "/workspace/datasets/mapillary_vistas_2_0_20260920/files/11_An8LTu*.zip"
+        ],
+        "projection_policy": "metadata_with_catalog_test_fallback"
+      }
+    },
+    {
+      "dataset_id": "mapillary_mtsd",
+      "projection": "perspective",
+      "validation_kind": "bbox_json",
+      "container": "/workspace/datasets/mapillary_vistas_2_0_20260920/files/*.zip",
+      "member_globs": [
+        "images/*.jpg"
+      ],
+      "validation": {
+        "adapter": "mtsd",
+        "archives": [
+          "/workspace/datasets/mapillary_vistas_2_0_20260920/files/02_An90*.zip",
+          "/workspace/datasets/mapillary_vistas_2_0_20260920/files/09_An8d*.zip"
+        ],
+        "projection_policy": "metadata_with_catalog_test_fallback"
+      }
+    },
+    {
+      "dataset_id": "mapillary_vistas",
+      "projection": "perspective",
+      "validation_kind": "pixel_mask_panoptic_and_instance",
+      "container": "/workspace/datasets/mapillary_vistas_2_0_20260920/files/13_An-Zj*.zip",
+      "member_globs": [
+        "training/images/*.jpg",
+        "validation/images/*.jpg",
+        "testing/images/*.jpg"
+      ],
+      "validation": {
+        "adapter": "vistas",
+        "release": "2.0"
+      }
+    },
+    {
+      "dataset_id": "omnicity_satellite",
+      "projection": "perspective",
+      "input_modality": "satellite",
+      "include_in_embedding": false,
+      "exclusion_reason": "Satellite imagery is retained on disk but explicitly excluded from embedding.",
+      "validation_kind": "coco_polygons_and_height_raster",
+      "container": "/workspace/datasets/omnicity_20260920/OpenDataLab___OmniCity/raw/OmniCity.zip",
+      "nested_archive_globs": [
+        "**/image-satellite/*.zip"
+      ],
+      "member_globs": [
+        "*.jpg",
+        "**/*.jpg",
+        "*.png",
+        "**/*.png"
+      ]
+    },
+    {
+      "dataset_id": "omnicity_mono",
+      "projection": "perspective",
+      "validation_kind": "coco_polygons",
+      "container": "/workspace/datasets/omnicity_20260920/OpenDataLab___OmniCity/raw/OmniCity.zip",
+      "nested_archive_globs": [
+        "**/image-mono/*.zip"
+      ],
+      "member_globs": [
+        "*.jpg",
+        "**/*.jpg",
+        "*.png",
+        "**/*.png"
+      ],
+      "validation": {
+        "adapter": "omni_coco"
+      }
+    },
+    {
+      "dataset_id": "omnicity_panorama",
+      "projection": "equirectangular",
+      "validation_kind": "coco_equirectangular_polygons",
+      "container": "/workspace/datasets/omnicity_20260920/OpenDataLab___OmniCity/raw/OmniCity.zip",
+      "nested_archive_globs": [
+        "**/image-panorama/*.zip"
+      ],
+      "member_globs": [
+        "*.jpg",
+        "**/*.jpg",
+        "*.png",
+        "**/*.png"
+      ],
+      "validation": {
+        "adapter": "omni_coco"
+      }
+    },
+    {
+      "dataset_id": "omnicity_v2_svi",
+      "projection": "equirectangular",
+      "input_modality": "street_view",
+      "validation_kind": "cross_view_satellite_targets_not_pixel_aligned",
+      "container": "/workspace/datasets/omnicity_20260920/OpenDataLab___OmniCity/raw/omnicity-v2.0-crossview-segmentation.zip",
+      "member_globs": [
+        "**/images/svi/*.jpg"
+      ],
+      "validation": {
+        "adapter": "omni_crossview"
+      }
+    },
+    {
+      "dataset_id": "bdd100k_100k",
+      "projection": "perspective",
+      "validation_kind": "boxes_lanes_drivable_and_source_tags",
+      "container": "/workspace/datasets/bdd100k_20260920/files/bdd100k_images_100k.zip",
+      "member_globs": [
+        "**/*.jpg",
+        "*.jpg"
+      ],
+      "validation": {
+        "adapter": "bdd",
+        "archives": [
+          "/workspace/datasets/bdd100k_20260920/files/bdd100k_labels.zip",
+          "/workspace/datasets/bdd100k_20260920/files/bdd100k_drivable_maps.zip"
+        ]
+      }
+    },
+    {
+      "dataset_id": "bdd100k_10k",
+      "projection": "perspective",
+      "validation_kind": "semantic_mask",
+      "container": "/workspace/datasets/bdd100k_20260920/files/bdd100k_images_10k.zip",
+      "member_globs": [
+        "**/*.jpg",
+        "*.jpg"
+      ],
+      "validation": {
+        "adapter": "bdd",
+        "archives": [
+          "/workspace/datasets/bdd100k_20260920/files/bdd100k_seg_maps.zip"
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,2 @@
+-r requirements-region-matching.txt
+httpx>=0.27,<1

@@ -556,12 +556,24 @@ class TextCorTScoringEngine(SemanticScoringEngine):
 
     def _get_embedder(self):
         if self._embedder is not None:
+            import torch
+            if torch.cuda.is_available():
+                self._embedder.model.to('cuda')
             return self._embedder
 
         from src.models.qwen3_vl_embedding import Qwen3VLEmbedder
 
-        self._embedder = Qwen3VLEmbedder(model_name_or_path=str(self.settings.model_dir))
+        import torch
+        self._embedder = Qwen3VLEmbedder(model_name_or_path=str(self.settings.model_dir), torch_dtype=torch.bfloat16)
         return self._embedder
+
+    def offload_for_reranking(self):
+        """Called under the shared GPU lock before visual reranking on small GPUs."""
+        import torch
+        self._embedding_tensors.clear()
+        if self._embedder is not None:
+            self._embedder.model.to('cpu')
+        torch.cuda.empty_cache()
 
     def _embed_texts(self, texts: Sequence[str]):
         import torch

@@ -1,5 +1,6 @@
 import json
 import os
+import sqlite3
 import tempfile
 import unittest
 from dataclasses import replace
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from semantic_map.backend_config import get_backend_settings
 from semantic_map.cpu_api import create_app
+from semantic_map.human_verification_storage import HumanVerificationStorage
 from semantic_map.tile_math import latlon_to_tile
 
 
@@ -22,6 +24,7 @@ class CpuMapTests(unittest.TestCase):
         self.env.start()
         get_backend_settings.cache_clear()
         self.settings = replace(get_backend_settings(), workspace_root=root, default_dataset_id='london_224_8_45',
+                                result_root=root/'durable_results',
                                 default_dataset_ids=('london_224_8_45',), active_city_ids=('london',), tile_zooms=(10,11,12,13))
         exp = root/'experiments/london_embedding_comparison_20260917'
         exp.mkdir(parents=True)
@@ -120,6 +123,55 @@ class CpuMapTests(unittest.TestCase):
                                 ({'prompt':'unknown','dataset_id':'london_224_8_45'},403),
                                 ({'prompt':'a brick facade','dataset_ids':['london_224_8_45','unknown']},400)):
             self.assertEqual(self.client.post('/api/scoring/comparison',json=payload).status_code,status)
+
+    def test_verification_uses_new_aligned_scores_and_durable_store(self):
+        response = self.client.post('/api/verification/sample', json={'seed':42, 'samples_per_bucket_per_dataset':1})
+        self.assertEqual(response.status_code, 200, response.text)
+        study = response.json()
+        source = self.client.get('/api/verification').json()
+        self.assertEqual(source['embedding_dimensions'], 4096)
+        tasks = {t['pano_id']: t for t in study['tasks']}
+        self.assertEqual(set(tasks), {'10', '11'})
+        for pano, score, zscore, date in [('10', .2, -1., 202001), ('11', .8, 1., 202002)]:
+            self.assertAlmostEqual(tasks[pano]['score'], score)
+            self.assertAlmostEqual(tasks[pano]['zscore'], zscore)
+            self.assertEqual(tasks[pano]['date'], date)
+            self.assertEqual(tasks[pano]['result_revision'], source['result_revisions']['london_224_8_45'])
+        task = tasks['10']
+        result = self.client.post('/api/verification/ratings', json={'ratings':[dict(
+            study_id=study['study_id'], task_id=task['task_id'], rater_id='unit-test-human',
+            human_rating=3, rated_at='2026-09-17T00:00:00Z')]})
+        self.assertEqual(result.status_code, 200, result.text)
+        self.assertEqual(self.client.get('/api/verification/stats').json()['total_ratings'], 1)
+        store = HumanVerificationStorage(self.settings.result_root/'human_verification/ratings.sqlite3')
+        self.assertEqual(store.prompt_completion_counts(source['result_revisions']), {'a brick facade':1})
+        self.assertEqual(store.prompt_completion_counts({'london_224_8_45':'historical'}), {})
+        self.assertFalse((Path(os.environ['CPU_CACHE_ROOT'])/'results/human_verification/ratings.sqlite3').exists())
+        self.assertIn('cpu4096-v2-', self.client.get('/api/verification/ratings.csv').text)
+        self.assertEqual(self.client.post('/api/verification/sample', json={'dataset_ids':['retired_dataset']}).status_code,400)
+
+    def test_ai_verification_defaults_to_catalog_and_remains_blind(self):
+        response = self.client.post('/api/ai-verification/runs', json={
+            'request_id':'unit-test-new-scores', 'evaluator_id':'unit-test', 'model':'unit-test', 'new_run':True})
+        self.assertEqual(response.status_code, 200, response.text)
+        run = response.json()
+        self.assertEqual(run['dataset_ids'], ['london_224_8_45'])
+        response = self.client.post(run['next_url'], json={'count':1})
+        self.assertEqual(response.status_code, 200, response.text)
+        task = response.json()['tasks'][0]
+        self.assertNotIn('score', task)
+        self.assertNotIn('zscore', task)
+        with sqlite3.connect(self.settings.result_root/'ai_verification/ratings.sqlite3') as con:
+            payload = json.loads(con.execute('SELECT q.payload FROM ai_questions q JOIN ai_presentations p USING(question_id) WHERE p.task_id=?',
+                                            (task['task_id'],)).fetchone()[0])
+            self.assertTrue(payload['result_revision'].startswith('cpu4096-v2-'))
+            self.assertAlmostEqual(payload['score'], {'10':.2,'11':.8}[payload['pano_id']])
+            config = json.loads(con.execute('SELECT config FROM ai_runs WHERE run_id=?',(run['run_id'],)).fetchone()[0])
+            config['dataset_ids'] = ['retired_dataset']
+            con.execute('UPDATE ai_runs SET config=? WHERE run_id=?',(json.dumps(config),run['run_id']))
+        self.assertEqual(self.client.post(run['next_url'], json={'count':1}).status_code, 409)
+        self.assertEqual(self.client.get('/api/ai-verification/runs/'+run['run_id']+'/ratings.csv').status_code, 200)
+        self.assertEqual(self.client.get('/api/verification/stats').json()['total_ratings'], 0)
 
 
 if __name__ == '__main__':

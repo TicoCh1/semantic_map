@@ -1,0 +1,9 @@
+# Install in a separate venv with the server's CUDA Torch exposed through
+# --system-site-packages. Do not install into the serving backend environment.
+-c ../backend/constraints-security.txt
+transformers==4.57.6
+huggingface-hub==0.36.2
+accelerate==1.10.1
+qwen-vl-utils==0.0.14
+tokenizers==0.22.2
+safetensors==0.8.0

@@ -5,6 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .remote_api import router as remote_router
 from .remote_api import start_prompt_batch_service, stop_prompt_batch_service
+from .backend_config import get_backend_settings
+from .saved_score_router import create_saved_score_router
 
 
 app = FastAPI(title="Semantic Tile Service", version="0.1.0")
@@ -18,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(remote_router)
+app.include_router(create_saved_score_router(get_backend_settings()))
 
 
 @app.on_event("startup")

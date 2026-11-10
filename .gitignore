@@ -38,6 +38,7 @@ logs/
 oom.txt
 semantic_backend/
 frontend/public/screensaver-panos/
+frontend/public/region-data/
 downloads/
 outputs/
 tmp/

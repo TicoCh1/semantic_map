@@ -46,6 +46,7 @@ from .scoring_engine import TemporarySemanticScoringEngine
 from .text_cor_t_engine import TextCorTScoringEngine
 from .tile_math import TileKey
 from .tile_writer import write_geojson_tile_from_arrays
+from .rerank_calibration import RerankCalibrationService, calibration_router
 
 
 settings = get_backend_settings()
@@ -65,6 +66,35 @@ active_failed_job_ids: set[str] = set()
 active_pano_warmup_stale = False
 
 router = APIRouter()
+
+@lru_cache(maxsize=1)
+def saved_rerank_sources():
+    from .rerank_saved_sources import SavedRerankSources
+    return SavedRerankSources(settings, settings.workspace_root / 'semantic_backend' / 'experiments')
+
+def resolve_calibration_result(ref):
+    dataset, prompt_id, revision = (str(ref.get(k, '')) for k in ('dataset_id', 'prompt_id', 'result_revision'))
+    if not revision:
+        raise HTTPException(400, 'Calibration requires an immutable result revision.')
+    if prompt_id.startswith('saved-'):
+        return saved_rerank_sources().resolve(ref)
+    manifest = load_immutable_revision_manifest(dataset, prompt_id, revision)
+    if manifest.query_type != 'text':
+        raise HTTPException(400, 'Calibration currently supports text queries only.')
+    arrays = storage.read_score_arrays(dataset, prompt_id, revision=revision)
+    if arrays is None:
+        raise HTTPException(409, 'Result score arrays are not ready.')
+    records = engine.get_dataset_records(dataset)
+    if len(arrays[0]) != len(records) or len(arrays[1]) != len(records):
+        raise HTTPException(409, 'Result identities do not match the score arrays.')
+    return dict(identity=dict(dataset_id=dataset, prompt_id=prompt_id, result_revision=revision),
+                prompt=manifest.prompt, scores=arrays[0], zscores=arrays[1], records=records)
+
+calibration_service = RerankCalibrationService(settings, pano_registry, resolve_calibration_result,
+    gpu_lock=getattr(engine, '_gpu_lock', None), before_inference=getattr(engine, 'offload_for_reranking', None))
+from .gpu_residency import coordinate_reranker_residency
+coordinate_reranker_residency(engine, calibration_service)
+router.include_router(calibration_router(calibration_service))
 
 IMMUTABLE_RESULT_HEADERS = {
     "Cache-Control": "private, max-age=31536000, immutable",
@@ -163,6 +193,7 @@ async def stop_prompt_batch_service() -> None:
     if history_backfill_task is not None and not history_backfill_task.done():
         history_backfill_task.cancel()
     await prompt_batch_service.stop()
+    await asyncio.to_thread(calibration_service.close)
 
 
 def historical_query_key(manifest: dict) -> tuple[str, ...] | None:
@@ -573,6 +604,7 @@ def capabilities() -> dict:
 
     return {
         "dataset_id": settings.default_dataset_id,
+        "reranker": calibration_service.capabilities(),
         "dataset_ids": list(settings.default_dataset_ids),
         "dataset_group_id": settings.default_dataset_group_id,
         "cities": active_city_configs(settings),
