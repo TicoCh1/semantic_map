@@ -6,6 +6,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export default {
   base: "./",
   publicDir: "public_pointcloud",
+  // Worker-only dependencies must be optimized at startup, before a worker
+  // requests them; late discovery can otherwise serve stale dependency URLs.
+  optimizeDeps: { include: ["polygon-clipping", "polylabel", "proj4"] },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "index.html"),
+        potato: resolve(__dirname, "potato.html"),
+        potatoLayouts: resolve(__dirname, "potato-layouts.html")
+      }
+    }
+  },
   resolve: {
     alias: [
       {
@@ -14,7 +26,7 @@ export default {
       },
       {
         find: /^maplibre-gl$/,
-        replacement: resolve(__dirname, "../frontend/node_modules/maplibre-gl/dist/maplibre-gl.js")
+        replacement: resolve(__dirname, "../frontend/node_modules/maplibre-gl/dist/maplibre-gl.mjs")
       }
     ]
   },

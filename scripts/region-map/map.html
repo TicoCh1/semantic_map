@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>@@SOURCE_NAME@@ → @@TARGET_CITY@@ · PCA Intensity Map</title>
+<style>@@LIBRARY_CSS@@</style><style>@@CSS@@</style></head>
+<body>
+<aside id="panel">
+  <div class="eyebrow">REGION MATCHING / EXPERIMENT</div>
+  <h1>@@SOURCE_NAME@@ <span>→</span> @@TARGET_CITY@@</h1>
+  <p class="subtitle">@@SOURCE_CITY@@ source · @@SOURCE_RADIUS@@ m radius<br>Eight-axis PCA intensity map</p>
+  <div class="stats"><div><strong id="total">—</strong><span>@@TARGET_CITY@@ samples</span></div><div><strong>@@RETAINED_VARIANCE@@%</strong><span>source variance retained</span></div></div>
+  <section aria-labelledby="axes-heading">
+    <div class="section-head"><h2 id="axes-heading">PCA axes</h2><button id="all">Select all 8</button></div>
+    <p class="hint">Toggle axes to combine them. Use “Only” to inspect one axis.</p>
+    <div id="axes"></div>
+    <p id="selection" class="selection" aria-live="polite">Loading saved scores…</p>
+    <p id="response-note" class="hint"></p>
+  </section>
+  <section aria-labelledby="range-heading">
+    <h2 id="range-heading">Visible intensity range</h2>
+    <div class="range-label"><label for="minimum">Minimum intensity</label><output id="minimum-value">0.50</output></div>
+    <input id="minimum" type="range" min="0" max="255" step="1" value="128">
+    <div class="presets"><button data-cut="128">@@HALF_LABEL@@</button><button data-cut="205">0.80+</button><button data-cut="231">0.90+</button></div>
+    <div class="range-label compact"><label for="colour-scale">Colour scale</label><select id="colour-scale"><option value="percentile">Percentile (balanced)</option><option value="visible">Visible range (min–max)</option><option value="fixed">Fixed 0–1</option></select></div>
+    <div class="ramp" aria-hidden="true"></div><div class="ramp-label"><span id="colour-low">0 · weaker fit</span><span id="colour-high">1 · stronger fit</span></div>
+    <p id="colour-note" class="hint"></p>
+    <div class="range-label compact"><label for="opacity">Layer opacity</label><output id="opacity-value">85%</output></div>
+    <input id="opacity" type="range" min="10" max="100" value="85">
+    <div class="range-label compact"><label for="footprint">Sample footprint</label><output id="footprint-value">50 m</output></div>
+    <input id="footprint" type="range" min="15" max="150" step="5" value="50">
+    <label class="check"><input id="context" type="checkbox" checked> Show all samples as faint context</label>
+  </section>
+  <div class="visible-stat"><strong id="visible">—</strong><span id="visible-detail">samples in selected range</span></div>
+  <section class="map-actions"><label for="basemap">Basemap</label><select id="basemap"><option value="light">Light</option><option value="dark">Dark</option><option value="none">Coordinates only (offline)</option></select><button id="fit">Fit @@TARGET_CITY@@ samples</button></section>
+  <section id="candidate-section"><label for="candidate"><h2>Ranked 500 m candidates</h2></label><select id="candidate" aria-label="Ranked candidate area"><option value="">All samples (overview)</option></select><p id="candidate-note" class="hint">Original all-eight-axis ranking · approximate shortlist</p></section>
+  <details><summary>How to read this map</summary><p>Intensity is compatibility with the @@SOURCE_NAME@@ source area, not a probability or a signed PCA response. It peaks at the source mean response on each axis.</p><p>@@AGGREGATION_EXPLANATION@@</p><p>Percentile colours distribute the ramp by visible-sample rank, with tied stored scores sharing a colour. Min–max colours linearly stretch the lowest and highest visible scores. Both use all target samples passing the current raw threshold, independent of zoom. Axis and threshold changes can change the mapping; use Fixed 0–1 to compare raw strength by colour across selections. Filtering, popup intensities and candidate rankings always use the original scores.</p><p>Scores for all 255 nonempty axis selections were computed on RunPod. PCA axes represent variation, not clusters.</p><p>@@RETAINED_VARIANCE@@% of source variance is represented. Eight-axis intensity ≥ 0.50 includes @@MATCHED_PERCENT@@% of @@TARGET_CITY@@ samples. This tests centrality in the retained coordinates, not equality of whole distributions.</p><p>Colour shows per-sample intensity, not sample density. Footprints are display markers, not interpolated area boundaries. Unsampled locations carry no inference. Stored intensity resolution is 1/256.</p></details>
+  <footer>@@SOURCE_POINTS@@ source panoramas · fixed PCA basis · no residual term<br>Analysis artifact · @@CREATED_DATE@@</footer>
+</aside>
+<main id="map-area">
+  <div id="map" aria-label="Interactive map of @@TARGET_CITY@@ PCA compatibility"></div>
+  <div id="map-title"><strong id="map-selection">PCA 1–8 / joint intensity</strong><span>Drag to pan · scroll to zoom · click a sample to inspect</span></div>
+  <div id="status" role="status">Unpacking the saved intensity atlas…</div>
+  <div id="offline" hidden>Basemap unavailable. Saved intensities and coordinates remain usable.</div>
+</main>
+<script id="metadata" type="application/json">@@METADATA@@</script>
+<script id="payload" type="application/octet-stream">@@PAYLOAD@@</script>
+<script>@@LIBRARY_JS@@</script><script>@@JS@@</script>
+</body></html>

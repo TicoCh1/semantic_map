@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>UrbanFabric — Geographic Potato Regions</title></head>
+<body>
+<main id="app">
+  <section id="map" aria-label="London geographic potato region map"></section>
+  <aside class="scale-panel potato-panel" aria-label="Geographic region controls">
+    <div class="scale-heading"><span>URBANFABRIC</span><strong>Potato regions / GIS</strong></div>
+    <p class="potato-intro">Click a bubble to read its semantic description on the right.</p>
+    <label class="scale-slider-label" for="bandwidth"><span>Smoothing</span><output id="bandwidth-output" for="bandwidth">500 m</output></label>
+    <input id="bandwidth" class="scale-slider" aria-label="Smoothing" type="range" min="100" max="500" value="500" step="10" disabled>
+    <label class="dataset-label" for="density-mass"><span>Density coverage</span><select id="density-mass" class="dataset-select" disabled><option value="0.9">90% · density mass</option><option value="1" selected>100% · all positive density</option></select></label>
+    <label class="dataset-label" for="bubble-gap"><span>Bubble separation</span><select id="bubble-gap" class="dataset-select" disabled><option value="40">40 m · narrow</option><option value="80" selected>80 m · balanced</option><option value="120">120 m · wider</option></select></label>
+    <label class="dataset-label" for="gis-barriers"><span>GIS barriers</span><select id="gis-barriers" class="dataset-select" disabled><option value="water">Thames gap only</option><option value="parks" selected>Thames gap + parks</option></select></label>
+    <label class="dataset-label" for="min-green-area"><span>Min green area</span><select id="min-green-area" class="dataset-select" disabled><option value="5000">0.5 ha · 5,000 m²</option><option value="10000">1 ha · 10,000 m²</option><option value="30000" selected>3 ha · 30,000 m²</option></select></label>
+    <label class="scale-slider-label" for="region-opacity"><span>Region opacity</span><output id="opacity-output">55%</output></label>
+    <input id="region-opacity" class="scale-slider" aria-label="Region opacity" type="range" min="0" max=".9" value=".55" step=".01">
+    <label class="atlas-grid-toggle"><input type="checkbox" id="show-points"><span>Show panorama points</span></label>
+    <label class="dataset-label" for="point-colors"><span>Point colors</span><select id="point-colors" class="dataset-select"><option value="groups">Semantic groups</option><option value="native">Original PaCMAP colors</option></select></label>
+    <label class="atlas-grid-toggle"><input type="checkbox" id="show-extent"><span>Show test extent</span></label>
+    <div class="potato-actions"><button id="fit-extent" type="button">Fit test area</button><a id="geojson-download" href="#" download>GeoJSON</a><a href="./?atlas=1&scale=16&colors=boost">Scale viewer</a></div>
+    <button id="sae-explore" class="sae-explore" type="button" disabled>Show interpreted bubbles</button>
+    <div id="gis-status" class="data-status" role="status" aria-live="polite">Loading geographic regions…</div>
+    <p class="potato-note">British National Grid · 50 × 50 m cells. Semantic islands below 5 ha merge into adjacent groups by Gaussian density before boundary separation. The Thames stays uncovered to reveal the basemap; retained park blobs have wider clearance. Panorama positions stay fixed.</p>
+  </aside>
+</main>
+<script type="module" src="./src/potato-gis.js"></script>
+</body></html>

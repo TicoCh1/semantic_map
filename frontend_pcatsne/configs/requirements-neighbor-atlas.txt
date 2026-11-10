@@ -1,0 +1,8 @@
+# Install on the selected computation machine; not installed by the pipeline.
+numpy>=1.26,<3
+pacmap==0.9.1
+faiss-cpu>=1.8
+# Python 3.11+ for the patched image decoder.
+Pillow>=13.0.0,<14
+# Optional global PCA CUDA acceleration: select a CuPy wheel matching CUDA.
+# Example for CUDA 12: cupy-cuda12x>=13

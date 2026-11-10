@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>UrbanFabric — Semantic Potato Layouts</title><link rel="stylesheet" href="./src/potato.css"></head>
+<body>
+<main>
+  <header><div><span class="eyebrow">URBANFABRIC / LONDON</span><h1>Semantic space, geographic structure</h1><p id="scope">Loading the central London experiment…</p></div><a href="./?atlas=1&scale=16&colors=boost">Return to scale viewer</a></header>
+  <div class="controls">
+    <label>Linear geography weight <span id="alpha-value">75%</span><input id="alpha" aria-label="Linear geography weight" type="range" min="0" max="4" value="3" step="1"><small>0% pure semantics · 100% geographic XY</small></label>
+    <label>Joint geographic loss <select id="lambda" aria-label="Joint geographic loss"><option value="0.25">λ 0.25 · semantic emphasis</option><option value="1">λ 1 · reference weight</option><option value="4" selected>λ 4 · geographic emphasis</option></select><small>Geographic edge displacement + weak position tether</small></label>
+    <label>Gaussian bandwidth <select id="bandwidth" aria-label="Gaussian bandwidth"><option value="0.15">150 m equivalent</option><option value="0.3" selected>300 m equivalent</option><option value="0.6">600 m equivalent</option></select><small>Independent smoothing of 18 semantic groups</small></label>
+    <label>Point colors <select id="colors" aria-label="Point colors"><option value="native" selected>Existing 3D PaCMAP colors</option><option value="clusters">Semantic groups</option></select><small>One fixed color per point across every layout</small></label>
+    <label>Existing atlas projection <select id="projection" aria-label="Existing atlas projection"><option value="previous3d_projected" selected>PaCMAP 3D → PCA 2D</option><option value="geography">Current map XY</option></select><small>Both reuse existing results, without fitting</small></label>
+  </div>
+  <div id="status" aria-live="polite">Loading results</div>
+  <section class="panels" aria-label="Layout comparison">
+    <article><h2>01 / Linear blend after 2D PaCMAP</h2><p>One rotation and uniform scale, then interpolate with XY.</p><canvas id="points-linear" aria-label="Linear blend point distribution"></canvas><div class="metrics" id="metrics-linear"></div><h3>Gaussian semantic envelopes</h3><svg id="regions-linear" role="img" aria-label="Linear blend Gaussian regions"></svg></article>
+    <article><h2>02 / Joint semantic + geographic loss</h2><p>Optimize both objectives on the same semantic pair graph.</p><canvas id="points-joint" aria-label="Joint optimized point distribution"></canvas><div class="metrics" id="metrics-joint"></div><h3>Gaussian semantic envelopes</h3><svg id="regions-joint" role="img" aria-label="Joint optimized Gaussian regions"></svg></article>
+    <article><h2>03 / Existing atlas → Gaussian regions</h2><p id="projection-caption">Project the current whole-city 3D embedding with PCA.</p><canvas id="points-previous" aria-label="Existing projected point distribution"></canvas><div class="metrics" id="metrics-previous"></div><h3>Gaussian semantic envelopes</h3><svg id="regions-previous" role="img" aria-label="Existing projected Gaussian regions"></svg></article>
+  </section>
+  <footer><p>Axes: layout x/y in RMS-scaled km-equivalent. North/east orientation is aligned for comparison; displaced positions are not geographic coordinates. Point colors retain the saved 3D palette. Envelope colors identify fixed semantic groups, not known or named neighborhoods.</p><p>Gaussian regions use competitive group density and 90% density-mass support; disconnected components remain separate. Density is affected by street-view sampling. <a href="./data/london_potato_20261002/comparison.png">Full comparison figure</a> · <a href="./data/london_potato_20261002/comparison.pdf">PDF</a> · <a href="./data/london_potato_20261002/manifest.json">Methods and measurements</a></p></footer>
+</main><script type="module" src="./src/potato.js"></script>
+</body></html>

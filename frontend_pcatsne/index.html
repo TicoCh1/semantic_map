@@ -20,6 +20,25 @@
             <option value="webmercator-grid">WebMercator: grouped patches</option>
           </select>
         </label>
+        <label class="dataset-label" for="atlas-scale-select" hidden>
+          <span>Scale</span>
+          <select id="atlas-scale-select" class="dataset-select">
+            <option value="auto">Auto (zoom)</option>
+          </select>
+        </label>
+        <label class="dataset-label color-alignment-label" for="color-mode" hidden>
+          <span>Colors</span>
+          <select id="color-mode" class="dataset-select" disabled>
+            <option value="original">Original</option>
+            <option value="regularized">Regularized affine</option>
+            <option value="affine">Affine</option>
+          </select>
+        </label>
+        <div id="color-status" class="color-status" hidden></div>
+        <label class="atlas-grid-toggle" hidden>
+          <input id="atlas-grid-toggle" type="checkbox" />
+          <span>Show patch boundaries</span>
+        </label>
         <label class="scale-slider-label" for="scale-slider">
           <span>Scale</span>
           <output id="scale-output" for="scale-slider">2 km</output>
@@ -48,6 +67,7 @@
           <input id="grid-width-slider" class="scale-slider grid-slider" type="range" min="1" max="6" value="1.5" step="0.25" />
         </div>
         <div id="data-status" class="data-status">Loading point clouds</div>
+        <a id="potato-gis-link" class="potato-gis-link" href="./potato.html" hidden>Potato regions on the GIS map</a>
       </aside>
       <section id="loading-overlay" class="loading-overlay" aria-live="polite" aria-label="Point cloud loading progress">
         <div class="loading-panel">
