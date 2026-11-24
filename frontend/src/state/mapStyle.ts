@@ -31,6 +31,22 @@ export function smartRangeForLayer(layer: SemanticLayer, datasetId: string) {
   return undefined;
 }
 
+export function smartRangeOverridesForLayer(layer: SemanticLayer, datasetId: string) {
+  const refs = layer.remote_result_refs ?? [];
+  const shared = layer.rerank_calibration?.scope === "cross_city"
+    || refs.some(ref => ref.color_range_scope === "cross_city");
+  const targets = shared ? new Set([datasetId, ...refs.map(ref => ref.dataset_id)]) : [datasetId];
+  const overrides = { ...layer.color_range_overrides_by_dataset };
+  const range = smartRangeForLayer(layer, datasetId);
+  for (const target of targets) {
+    const existing = overrides[target];
+    if (target !== datasetId && existing?.field === layer.score_property && existing.source !== "smart") continue;
+    if (range) overrides[target] = range;
+    else delete overrides[target];
+  }
+  return overrides;
+}
+
 export function colorExpression(gradient: GradientPreset, layer: SemanticLayer, datasetId?: string): ExpressionSpecification {
   const stops = [...gradient.stops].sort((a, b) => a.value - b.value);
   const { lower: scoreMin, upper: scoreMax } = colorRangeForLayer(layer, gradient, datasetId);

@@ -229,6 +229,7 @@ export type RerankCorrelations = {
 };
 
 export type RerankLayerCalibration = {
+  scope?: "cross_city";
   job_id?: string;
   color_range: RerankColorRange;
   center_method?: string | null;
@@ -255,6 +256,7 @@ export type ScoringJobBatchResponse = {
 
 export type ScoringResultRef = {
   dataset_id: string;
+  color_range_scope?: "cross_city";
   prompt_id: string;
   manifest_url: string;
   tile_url_template: string;

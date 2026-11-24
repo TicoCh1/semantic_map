@@ -50,7 +50,7 @@ import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
 import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
-import { colorRangeForLayer, smartRangeForLayer } from "./state/mapStyle";
+import { colorRangeForLayer, smartRangeOverridesForLayer } from "./state/mapStyle";
 import { cityConfigsForRemoteBackend } from "./state/cities";
 import { panoDatasetIdForPoint, panoPointKey } from "./state/panoDatasets";
 import { exhibitConfig } from "./state/exhibitConfig";
@@ -875,10 +875,7 @@ export function App() {
 
   async function handleSmartHistogramRange(layer: SemanticLayer) {
     if (!rangeCity) return selectedRange;
-    const range = smartRangeForLayer(layer, rangeCity.datasetId);
-    const overrides = { ...layer.color_range_overrides_by_dataset };
-    if (range) overrides[rangeCity.datasetId] = range;
-    else delete overrides[rangeCity.datasetId];
+    const overrides = smartRangeOverridesForLayer(layer, rangeCity.datasetId);
     await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
     await refresh();
     return colorRangeForLayer({ ...layer, color_range_overrides_by_dataset: overrides }, selectedGradient, rangeCity.datasetId);

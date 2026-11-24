@@ -1909,7 +1909,7 @@ async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, j
       return;
     }
     if (config.mode === "cpu") {
-      updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
+      updateLayerSync(layerId, { rerank_calibration: null, rerank_calibration_status: "unavailable" });
       return;
     }
     updateLayerSync(layerId, { rerank_calibration_status: "pending" });
@@ -1975,6 +1975,7 @@ function acceptRerankCalibration(layerId: string, job: ScoringJob, calibration: 
   const current = loadStateSync().layers.find(layer => layer.id === layerId);
   updateLayerSync(layerId, {
     rerank_calibration: { job_id: calibration.job_id, color_range: range, center_method: calibration.center_method,
+      ...(calibration.scope === "cross_city" ? { scope: calibration.scope } : {}),
       ...(validCorrelations ? { correlations } : {}) },
     rerank_calibration_status: "ready", rerank_calibration_retry_after: undefined,
     rerank_uncalibrated_range: current?.rerank_uncalibrated_range ?? (current ? {

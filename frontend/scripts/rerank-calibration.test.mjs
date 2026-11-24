@@ -160,6 +160,27 @@ test('Smart and manual colour ranges are fixed choices for one city', () => {
   assert.deepEqual(stops(london), fallback);
 });
 
+test('Shared Smart range applies across cities and preserves another city’s manual range', () => {
+  const context = vm.createContext({});
+  vm.runInContext(paintCode, context);
+  const manual = {lower: -2, upper: 2, field: 'zscore'};
+  const layer = {
+    score_property: 'zscore',
+    remote_result_refs: ['london','new_york','rome','shanghai'].map(dataset_id =>
+      ({dataset_id, color_range_scope: 'cross_city'})),
+    rerank_calibration: {scope: 'cross_city', color_range: {lower: -.5, upper: 3.5, field: 'zscore'}},
+    color_range_overrides_by_dataset: {rome: manual},
+  };
+  const overrides = context.smartRangeOverridesForLayer(layer, 'london');
+  assert.equal(overrides.rome, manual);
+  assert.equal(overrides.new_york, overrides.london);
+  assert.equal(overrides.shanghai, overrides.london);
+  assert.equal(overrides.london.lower, -.5);
+  const noFit = context.smartRangeOverridesForLayer({...layer, rerank_calibration: null,
+    color_range_overrides_by_dataset: overrides}, 'london');
+  assert.deepEqual(Object.keys(noFit), ['rome']);
+});
+
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {
   const submitStart = source.indexOf('async function submitRemoteScoringForLayer(');
   const submitEnd = source.indexOf('export async function ensureExhibitDefaultRemoteLayers', submitStart);
