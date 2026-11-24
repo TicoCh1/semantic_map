@@ -1024,10 +1024,18 @@ button:disabled {
 
 .histogram-range-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 34px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: end;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.histogram-range-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .histogram-range-row label {

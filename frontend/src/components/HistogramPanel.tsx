@@ -13,8 +13,9 @@ type HistogramPanelProps = {
   city?: CityConfig;
   cities?: CityConfig[];
   onCityChange?: (cityId: CityId) => void;
-  rangeMode?: string;
+  rangeMode?: "default" | "manual" | "smart";
   onResetRange?: (layer: SemanticLayer) => Promise<void>;
+  onSmartRange?: (layer: SemanticLayer) => Promise<{ lower: number; upper: number }>;
   onRangeChange?: (layer: SemanticLayer, scoreMin: number, scoreMax: number) => Promise<void>;
   onPropertyChange?: (layer: SemanticLayer, property: string) => Promise<void>;
 };
@@ -27,7 +28,7 @@ type HistogramBin = {
 const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 
-export function HistogramPanel({ layer, gradient, data, city, cities, onCityChange, rangeMode, onResetRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, cities, onCityChange, rangeMode, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +86,8 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
     setDraftMin(formatInputValue(scoreMin));
     setDraftMax(formatInputValue(scoreMax));
     setRangeError(null);
-  }, [gradient?.score_min, gradient?.score_max, layer?.id, layer?.style.score_min, layer?.style.score_max]);
+  }, [city?.id, gradient?.score_min, gradient?.score_max, layer?.id, layer?.score_property,
+    layer?.style.score_min, layer?.style.score_max, rangeMode]);
 
   const histogram = useMemo(() => {
     if (!layer || !gradient || !values.length) return null;
@@ -148,24 +150,32 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
 
   async function applyRange() {
     const currentLayer = layer;
-    if (!currentLayer || !onRangeChange) return;
+    if (!currentLayer || !onRangeChange || !canApplyRange) return;
 
     const scoreMin = Number(draftMin);
     const scoreMax = Number(draftMax);
-    if (!Number.isFinite(scoreMin) || !Number.isFinite(scoreMax) || scoreMin >= scoreMax) {
-      setRangeError("Min must be lower than max");
-      return;
-    }
+    await saveRange(() => onRangeChange(currentLayer, scoreMin, scoreMax));
+  }
 
+  async function saveRange(apply: () => Promise<void>) {
     setRangeSaving(true);
     setRangeError(null);
     try {
-      await onRangeChange(currentLayer, scoreMin, scoreMax);
+      await apply();
     } catch (err) {
       setRangeError(err instanceof Error ? err.message : "Range update failed");
     } finally {
       setRangeSaving(false);
     }
+  }
+
+  async function applySmartRange(currentLayer: SemanticLayer) {
+    if (!onSmartRange) return;
+    await saveRange(async () => {
+      const range = await onSmartRange(currentLayer);
+      setDraftMin(formatInputValue(range.lower));
+      setDraftMax(formatInputValue(range.upper));
+    });
   }
 
   function handleRangeKeyDown(event: KeyboardEvent<HTMLInputElement>) {
@@ -201,7 +211,7 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
             </ThemedSelect>
           </label>
         ) : <span>{city.name}</span>}
-        <span>{rangeMode === "calibrated" ? "Calibrated range" : rangeMode === "manual" ? "Manual range" : "Default range"}</span>
+        <span>{rangeMode === "smart" ? "Smart range" : rangeMode === "manual" ? "Manual range" : "Default range"}</span>
       </div> : null}
 
       {!layer ? (
@@ -277,15 +287,19 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
                 onKeyDown={handleRangeKeyDown}
               /></GlassField>
             </label>
-            <GlassButton className="secondary-button range-apply" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
-
-              <Check size={15} />
-              {rangeSaving ? "Applying…" : "Set range"}
-            </GlassButton>
+            <div className="histogram-range-actions">
+              <GlassButton className="secondary-button range-apply" onClick={() => void applyRange()} disabled={!canApplyRange} title="Apply score range">
+                <Check size={15} />
+                Set range
+              </GlassButton>
+              {onSmartRange ? <GlassButton className="secondary-button range-apply" onClick={() => void applySmartRange(layer)}
+                disabled={rangeSaving} title="Use the reranker range, or −1 to 3 when unavailable">
+                Smart range
+              </GlassButton> : null}
+            </div>
           </div>
-          {onResetRange ? <GlassButton className="secondary-button" onClick={() => {
-            void onResetRange(layer).catch(err => setRangeError(err instanceof Error ? err.message : "Unable to reset range"));
-          }}>Reset range</GlassButton> : null}
+          {onResetRange ? <GlassButton className="secondary-button" disabled={rangeSaving}
+            onClick={() => void saveRange(() => onResetRange(layer))}>Reset range</GlassButton> : null}
           {rangeError ? <div className="histogram-range-error">{rangeError}</div> : null}
         </>
       )}

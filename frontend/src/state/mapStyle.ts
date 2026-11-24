@@ -10,18 +10,25 @@ export function colorRangeForLayer(layer: SemanticLayer | null, gradient: Gradie
   const override = datasetId ? layer?.color_range_overrides_by_dataset?.[datasetId] : undefined;
   if (override && override.field === layer?.score_property
     && Number.isFinite(override.lower) && Number.isFinite(override.upper) && override.lower < override.upper) {
-    return { lower: override.lower, upper: override.upper, mode: "manual", calibration };
-  }
-  const range = layer?.score_property === "zscore" ? cityCalibration?.color_range : undefined;
-  if (range?.field === "zscore" && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper) {
-    return { lower: range.lower, upper: range.upper, mode: "calibrated", calibration };
+    const mode: "smart" | "manual" = override.source === "smart" ? "smart" : "manual";
+    return { lower: override.lower, upper: override.upper, mode, calibration };
   }
   return {
-    lower: layer?.style.score_min ?? gradient?.score_min ?? 0,
-    upper: layer?.style.score_max ?? gradient?.score_max ?? 1,
-    mode: "default",
+    lower: datasetId ? layer?.color_range_default?.lower ?? -1 : layer?.style.score_min ?? gradient?.score_min ?? 0,
+    upper: datasetId ? layer?.color_range_default?.upper ?? 3 : layer?.style.score_max ?? gradient?.score_max ?? 1,
+    mode: "default" as const,
     calibration
   };
+}
+
+export function smartRangeForLayer(layer: SemanticLayer, datasetId: string) {
+  const { calibration } = colorRangeForLayer(layer, null, datasetId);
+  const range = calibration?.color_range;
+  if (range?.field === layer.score_property
+    && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper) {
+    return { lower: range.lower, upper: range.upper, field: layer.score_property, source: "smart" as const };
+  }
+  return undefined;
 }
 
 export function colorExpression(gradient: GradientPreset, layer: SemanticLayer, datasetId?: string): ExpressionSpecification {

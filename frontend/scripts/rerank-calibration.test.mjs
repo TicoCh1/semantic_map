@@ -128,27 +128,36 @@ test('Returned GPU bounds become the actual map paint endpoints and midpoint', a
     ['interpolate', ['linear'], ['get','zscore'], 1.21,'blue',3.21,'yellow',5.21,'red']);
 });
 
-test('A saved city colour range affects only that city', () => {
+test('Smart and manual colour ranges are fixed choices for one city', () => {
   const context = vm.createContext({ clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   vm.runInContext(paintCode, context);
   const gradient = { score_min: -1, score_max: 3, stops: [
     { value: 0, color: 'blue' }, { value: .5, color: 'yellow' }, { value: 1, color: 'red' }
   ] };
-  const layer = { score_property: 'zscore', style: {},
+  const layer = { score_property: 'zscore', style: { score_min: -6, score_max: 6 },
     rerank_calibration_by_dataset: { london_512_8_45_8B: {
       color_range: { mean: 2.5, lower: .5, upper: 4.5, field: 'zscore' }
     } }
   };
+  const london = 'london_512_8_45_8B';
+  const rome = 'rome_512_8_45_8B';
+  const fallback = [-1, 'blue', 1, 'yellow', 3, 'red'];
   const stops = (dataset) => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer, dataset))).slice(3);
-  assert.deepEqual(stops('london_512_8_45_8B'), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
-  assert.deepEqual(stops('rome_512_8_45_8B'), [-1, 'blue', 1, 'yellow', 3, 'red']);
-  layer.color_range_overrides_by_dataset = {
-    london_512_8_45_8B: { lower: -.5, upper: 3.5, field: 'zscore' }
-  };
-  assert.deepEqual(stops('london_512_8_45_8B'), [-.5, 'blue', 1.5, 'yellow', 3.5, 'red']);
-  assert.deepEqual(stops('rome_512_8_45_8B'), [-1, 'blue', 1, 'yellow', 3, 'red']);
-  delete layer.color_range_overrides_by_dataset.london_512_8_45_8B;
-  assert.deepEqual(stops('london_512_8_45_8B'), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
+  assert.deepEqual(stops(london), fallback);
+  assert.deepEqual(stops(rome), fallback);
+  assert.equal(context.smartRangeForLayer(layer, rome), undefined);
+
+  layer.color_range_overrides_by_dataset = { [london]: context.smartRangeForLayer(layer, london) };
+  assert.equal(context.colorRangeForLayer(layer, gradient, london).mode, 'smart');
+  layer.rerank_calibration_by_dataset[london].color_range = { mean: 4, lower: 2, upper: 6, field: 'zscore' };
+  assert.deepEqual(stops(london), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
+
+  layer.color_range_overrides_by_dataset[london] = { lower: -.5, upper: 3.5, field: 'zscore' };
+  assert.equal(context.colorRangeForLayer(layer, gradient, london).mode, 'manual');
+  assert.deepEqual(stops(london), [-.5, 'blue', 1.5, 'yellow', 3.5, 'red']);
+  assert.deepEqual(stops(rome), fallback);
+  delete layer.color_range_overrides_by_dataset[london];
+  assert.deepEqual(stops(london), fallback);
 });
 
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {
