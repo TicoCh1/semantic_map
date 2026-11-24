@@ -2,15 +2,31 @@ import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 import type { GradientPreset, SemanticLayer } from "../api/types";
 import { DEFAULT_POINT_RADIUS, clamp } from "./color";
 
+export function colorRangeForLayer(layer: SemanticLayer | null, gradient: GradientPreset | null, datasetId?: string) {
+  const cityCalibration = datasetId ? layer?.rerank_calibration_by_dataset?.[datasetId] : undefined;
+  const calibration = layer?.score_property === "zscore"
+    ? cityCalibration ?? (!datasetId || !layer.rerank_calibration_by_dataset ? layer.rerank_calibration : undefined)
+    : undefined;
+  const override = datasetId ? layer?.color_range_overrides_by_dataset?.[datasetId] : undefined;
+  if (override && override.field === layer?.score_property
+    && Number.isFinite(override.lower) && Number.isFinite(override.upper) && override.lower < override.upper) {
+    return { lower: override.lower, upper: override.upper, mode: "manual", calibration };
+  }
+  const range = layer?.score_property === "zscore" ? cityCalibration?.color_range : undefined;
+  if (range?.field === "zscore" && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper) {
+    return { lower: range.lower, upper: range.upper, mode: "calibrated", calibration };
+  }
+  return {
+    lower: layer?.style.score_min ?? gradient?.score_min ?? 0,
+    upper: layer?.style.score_max ?? gradient?.score_max ?? 1,
+    mode: "default",
+    calibration
+  };
+}
+
 export function colorExpression(gradient: GradientPreset, layer: SemanticLayer, datasetId?: string): ExpressionSpecification {
   const stops = [...gradient.stops].sort((a, b) => a.value - b.value);
-  const range = datasetId && layer.score_property === "zscore"
-    ? layer.rerank_calibration_by_dataset?.[datasetId]?.color_range
-    : undefined;
-  const calibrated = range?.field === "zscore"
-    && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper;
-  const scoreMin = (calibrated ? range.lower : layer.style.score_min) ?? gradient.score_min ?? 0;
-  const scoreMax = (calibrated ? range.upper : layer.style.score_max) ?? gradient.score_max ?? 1;
+  const { lower: scoreMin, upper: scoreMax } = colorRangeForLayer(layer, gradient, datasetId);
   const expression: unknown[] = ["interpolate", ["linear"], ["get", layer.score_property || "score"]];
   const expressionStops = [...stops];
 

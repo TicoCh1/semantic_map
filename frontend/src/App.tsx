@@ -26,6 +26,7 @@ import {
 } from "./api/client";
 import type {
   AppStateResponse,
+  CityConfig,
   CityId,
   CityPriorityTiles,
   GradientPreset,
@@ -49,6 +50,7 @@ import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
 import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
+import { colorRangeForLayer } from "./state/mapStyle";
 import { cityConfigsForRemoteBackend } from "./state/cities";
 import { panoDatasetIdForPoint, panoPointKey } from "./state/panoDatasets";
 import { exhibitConfig } from "./state/exhibitConfig";
@@ -143,6 +145,8 @@ export function App() {
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
   const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
   const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
+  const [visibleMapCities, setVisibleMapCities] = useState<CityConfig[]>([]);
+  const [colorRangeCityId, setColorRangeCityId] = useState<CityId>();
   const [remoteLogs, setRemoteLogs] = useState<RemoteLogEntry[]>([]);
   const [mapProgressEntries, setMapProgressEntries] = useState<RemoteLogEntry[]>([]);
   const [refreshingLayers, setRefreshingLayers] = useState(false);
@@ -501,6 +505,14 @@ export function App() {
     return layerGradient(selectedLayer, data.gradients);
   }, [data, selectedLayer]);
 
+  const rangeCity = visibleMapCities.find(city => city.id === colorRangeCityId) ?? visibleMapCities[0];
+  const selectedRange = colorRangeForLayer(selectedLayer, selectedGradient, rangeCity?.datasetId);
+  const histogramLayer = selectedLayer && {
+    ...selectedLayer,
+    rerank_calibration: selectedRange.calibration ?? null,
+    style: { ...selectedLayer.style, score_min: selectedRange.lower, score_max: selectedRange.upper }
+  };
+
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
   const backendCanAttemptSearch = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
   const liveSearchAvailable = backendCanAttemptSearch && !backendConnectionFailed;
@@ -826,6 +838,15 @@ export function App() {
   }
 
   async function handleHistogramRangeChange(layer: SemanticLayer, scoreMin: number, scoreMax: number) {
+    if (rangeCity) {
+      const overrides = {
+        ...layer.color_range_overrides_by_dataset,
+        [rangeCity.datasetId]: { lower: scoreMin, upper: scoreMax, field: layer.score_property }
+      };
+      await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
+      await refresh();
+      return;
+    }
     const style = {
       ...layer.style,
       score_min: scoreMin,
@@ -842,6 +863,14 @@ export function App() {
       setError(err instanceof Error ? err.message : "Failed to update histogram range");
       throw err;
     }
+  }
+
+  async function handleResetHistogramRange(layer: SemanticLayer) {
+    if (!rangeCity) return;
+    const overrides = { ...layer.color_range_overrides_by_dataset };
+    delete overrides[rangeCity.datasetId];
+    await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
+    await refresh();
   }
 
   async function handleHistogramPropertyChange(layer: SemanticLayer, scoreProperty: string) {
@@ -911,8 +940,13 @@ export function App() {
         highlightHiddenEyes={data.state.layers.length > 0 && data.state.layers.every((layer) => !layer.visible)}
       />
       <HistogramPanel
-        layer={selectedLayer}
+        layer={histogramLayer}
         gradient={selectedGradient}
+        city={rangeCity}
+        cities={visibleMapCities}
+        onCityChange={setColorRangeCityId}
+        rangeMode={selectedRange.mode}
+        onResetRange={selectedRange.mode === "manual" ? handleResetHistogramRange : undefined}
         onRangeChange={handleHistogramRangeChange}
         onPropertyChange={handleHistogramPropertyChange}
       />
@@ -951,6 +985,8 @@ export function App() {
             onBasemapChange={handleBasemapChange}
             onSelectLayer={handleMapSelectLayer}
             onPriorityTileChange={handlePriorityTileChange}
+            onVisibleCitiesChange={setVisibleMapCities}
+            colorRangeCityId={rangeCity?.id}
             markedPanos={markedPanos}
             selectedPanoKey={selectedPanoKey}
             onMarkPano={handleMarkPano}

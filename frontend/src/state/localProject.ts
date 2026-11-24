@@ -910,6 +910,7 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     created_at: raw.created_at || utcNow(),
     rerank_calibration: raw.rerank_calibration || null,
     rerank_calibration_by_dataset: raw.rerank_calibration_by_dataset,
+    color_range_overrides_by_dataset: raw.color_range_overrides_by_dataset,
     rerank_calibration_status: raw.rerank_calibration_status,
     rerank_calibration_retry_after: raw.rerank_calibration_retry_after,
     rerank_uncalibrated_range: raw.rerank_uncalibrated_range,
@@ -1023,7 +1024,8 @@ function normalizeState(raw: Partial<LayerState> | null, gradients: GradientPres
       const pending = `remote://pending/${layer.id}`;
       return { ...layer, source_path: pending,
         source_paths: Object.fromEntries(Object.keys(layer.source_paths ?? {}).map(city => [city, pending])),
-        status: "running" as const, rerank_calibration: null, rerank_calibration_status: "pending" as const,
+        status: "running" as const, rerank_calibration: null, rerank_calibration_by_dataset: undefined,
+        rerank_calibration_status: "pending" as const,
         rerank_calibration_retry_after: undefined, remote_result_refs: undefined };
     })
     .filter((layer): layer is SemanticLayer => Boolean(layer));
@@ -1125,6 +1127,7 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       created_at: previousLayer?.created_at || utcNow(),
       rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null,
       rerank_calibration_by_dataset: reusableRemote ? previousLayer.rerank_calibration_by_dataset : undefined,
+      color_range_overrides_by_dataset: previousLayer?.color_range_overrides_by_dataset,
       rerank_calibration_status: reusableRemote ? previousLayer.rerank_calibration_status : undefined,
       rerank_uncalibrated_range: reusableRemote ? previousLayer.rerank_uncalibrated_range : undefined,
       remote_result_refs: reusableRemote ? previousLayer.remote_result_refs : undefined
@@ -1199,6 +1202,9 @@ export async function patchLayer(layerId: string, payload: LayerPatch): Promise<
   if (payload.visible !== undefined) layer.visible = payload.visible;
   if (payload.score_property !== undefined) layer.score_property = payload.score_property;
   if (payload.style !== undefined) layer.style = payload.style;
+  if (payload.color_range_overrides_by_dataset !== undefined) {
+    layer.color_range_overrides_by_dataset = payload.color_range_overrides_by_dataset;
+  }
   if (payload.selected) state.selected_layer_id = layer.id;
 
   saveStateSync(state, gradients);

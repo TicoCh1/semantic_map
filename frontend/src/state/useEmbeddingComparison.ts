@@ -52,6 +52,7 @@ export function useEmbeddingComparison(
       } : layer.style,
       rerank_calibration: embedding === "new" ? layer.rerank_calibration : null,
       rerank_calibration_by_dataset: embedding === "new" ? layer.rerank_calibration_by_dataset : undefined,
+      color_range_overrides_by_dataset: embedding === "new" ? layer.color_range_overrides_by_dataset : undefined,
       source_path: url, source_paths: { [city.id]: url }, status: "ready" as const }];
   }), [result, layer, city, config]);
   return { paneLayers, count: result?.matched_count,

@@ -3,13 +3,18 @@ import { GlassButton, GlassField } from "@form-glass/react";
 import { Check } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { getLayerGeojson } from "../api/client";
-import type { FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
+import type { CityConfig, CityId, FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
 import { gradientColorForScore, gradientCss } from "../state/color";
 
 type HistogramPanelProps = {
   layer: SemanticLayer | null;
   gradient: GradientPreset | null;
   data?: FeatureCollection;
+  city?: CityConfig;
+  cities?: CityConfig[];
+  onCityChange?: (cityId: CityId) => void;
+  rangeMode?: string;
+  onResetRange?: (layer: SemanticLayer) => Promise<void>;
   onRangeChange?: (layer: SemanticLayer, scoreMin: number, scoreMax: number) => Promise<void>;
   onPropertyChange?: (layer: SemanticLayer, property: string) => Promise<void>;
 };
@@ -22,7 +27,7 @@ type HistogramBin = {
 const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 
-export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, cities, onCityChange, rangeMode, onResetRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +58,7 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
 
     setLoading(true);
     setError(null);
-    void (data ? Promise.resolve(data) : getLayerGeojson(layer.id))
+    void (data ? Promise.resolve(data) : getLayerGeojson(layer.id, city?.id))
       .then((geojson) => {
         if (cancelled) return;
         const property = layer.score_property || "score";
@@ -72,7 +77,7 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
     return () => {
       cancelled = true;
     };
-  }, [data, layer?.id, layer?.source_path, layer?.score_property]);
+  }, [data, city?.id, layer?.id, city ? layer?.source_paths?.[city.id] : layer?.source_path, layer?.score_property]);
 
   useEffect(() => {
     const scoreMin = layer?.style.score_min ?? gradient?.score_min ?? 0;
@@ -94,13 +99,17 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
     const binCount = Math.max(1, Math.ceil(span / safeBucketWidth));
     const counts = Array.from({ length: binCount }, () => 0);
     let visibleCount = 0;
+    let below = 0;
+    let above = 0;
 
     for (const value of values) {
-      if (value < rangeMin || value > rangeMax) continue;
+      if (value < rangeMin) below += 1;
+      else if (value > rangeMax) above += 1;
+      else visibleCount += 1;
+      if (!city && (value < rangeMin || value > rangeMax)) continue;
       const rawIndex = Math.floor((value - rangeMin) / safeBucketWidth);
       const index = Math.min(Math.max(rawIndex, 0), binCount - 1);
       counts[index] += 1;
-      visibleCount += 1;
     }
 
     const bins: HistogramBin[] = counts.map((count, index) => {
@@ -109,7 +118,8 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
       const center = (bucketStart + bucketEnd) / 2;
       return {
         count,
-        color: gradientColorForScore(gradient, center, rangeMin, rangeMax)
+        color: gradientColorForScore(gradient, city && index === binCount - 1 && above ? rangeMax
+          : city && index === 0 && below ? rangeMin : center, rangeMin, rangeMax)
       };
     });
 
@@ -122,9 +132,11 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
       dataMin: values.reduce((minimum, value) => Math.min(minimum, value), Infinity),
       dataMax: values.reduce((maximum, value) => Math.max(maximum, value), -Infinity),
       visibleCount,
+      below,
+      above,
       bucketWidth: safeBucketWidth
     };
-  }, [bucketWidth, gradient, layer, values]);
+  }, [bucketWidth, city, gradient, layer, values]);
 
   const canApplyRange =
     Boolean(layer && onRangeChange) &&
@@ -180,6 +192,17 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
         <span>Data</span>
         <strong>Histogram</strong>
       </div>
+      {city && layer ? <div className="histogram-meta">
+        {cities && cities.length > 1 && onCityChange ? (
+          <label className="histogram-property-select">
+            <span>City</span>
+            <ThemedSelect label="Histogram city" value={city.id} onValueChange={onCityChange}>
+              {cities.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </ThemedSelect>
+          </label>
+        ) : <span>{city.name}</span>}
+        <span>{rangeMode === "calibrated" ? "Calibrated range" : rangeMode === "manual" ? "Manual range" : "Default range"}</span>
+      </div> : null}
 
       {!layer ? (
         <div className="histogram-empty">No layer selected</div>
@@ -211,10 +234,10 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
             </label>
           </div>
           <div className="histogram-stats">
-            <span><strong>{histogram.visibleCount.toLocaleString()}</strong> / {values.length.toLocaleString()} points</span>
+            <span><strong>{histogram.visibleCount.toLocaleString()}</strong> / {values.length.toLocaleString()} {city ? "sampled points in range" : "points"}</span>
             <span title="Full data range">{formatValue(histogram.dataMin)} to {formatValue(histogram.dataMax)}</span>
           </div>
-          <div className="histogram-chart" role="img" aria-label={`${layer.name} score histogram. ${histogram.visibleCount} of ${values.length} points in range ${formatValue(histogram.rangeMin)} to ${formatValue(histogram.rangeMax)}.`}>
+          <div className="histogram-chart" role="img" aria-label={`${layer.name} score histogram. ${histogram.visibleCount} of ${values.length} points in range ${formatValue(histogram.rangeMin)} to ${formatValue(histogram.rangeMax)}. ${histogram.below} below range. ${histogram.above} above range.`}>
             {histogram.bins.map((bin, index) => {
               const height = bin.count ? Math.max(4, (bin.count / histogram.maxCount) * 100) : 0;
               const start = histogram.rangeMin + index * histogram.bucketWidth;
@@ -229,6 +252,10 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
             <span>{formatValue(histogram.midpoint)}</span>
             <span>{formatValue(histogram.rangeMax)}</span>
           </div>
+          {city && (histogram.below || histogram.above) ? <div className="histogram-stats">
+            <span>{histogram.below ? `${histogram.below.toLocaleString()} below range` : ""}</span>
+            <span>{histogram.above ? `${histogram.above.toLocaleString()} above range` : ""}</span>
+          </div> : null}
           <div className="histogram-range-row">
             <label>
               <span>Min</span>
@@ -256,6 +283,9 @@ export function HistogramPanel({ layer, gradient, data, onRangeChange, onPropert
               {rangeSaving ? "Applying…" : "Set range"}
             </GlassButton>
           </div>
+          {onResetRange ? <GlassButton className="secondary-button" onClick={() => {
+            void onResetRange(layer).catch(err => setRangeError(err instanceof Error ? err.message : "Unable to reset range"));
+          }}>Reset range</GlassButton> : null}
           {rangeError ? <div className="histogram-range-error">{rangeError}</div> : null}
         </>
       )}

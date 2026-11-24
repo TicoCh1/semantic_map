@@ -12,8 +12,8 @@ const code = ts.transpileModule(source.slice(start, end), {
   compilerOptions: { target: ts.ScriptTarget.ES2022 }
 }).outputText;
 const paintSource = readFileSync(new URL('../src/state/mapStyle.ts', import.meta.url), 'utf8');
-const paintCode = ts.transpileModule(paintSource.slice(paintSource.indexOf('export function colorExpression'),
-  paintSource.indexOf('export function circleRadiusExpression')).replace('export function', 'function'), {
+const paintCode = ts.transpileModule(paintSource.slice(paintSource.indexOf('export function colorRangeForLayer'),
+  paintSource.indexOf('export function circleRadiusExpression')).replaceAll('export function', 'function'), {
   compilerOptions: { target: ts.ScriptTarget.ES2022 }
 }).outputText;
 
@@ -142,6 +142,13 @@ test('A saved city colour range affects only that city', () => {
   const stops = (dataset) => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer, dataset))).slice(3);
   assert.deepEqual(stops('london_512_8_45_8B'), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
   assert.deepEqual(stops('rome_512_8_45_8B'), [-1, 'blue', 1, 'yellow', 3, 'red']);
+  layer.color_range_overrides_by_dataset = {
+    london_512_8_45_8B: { lower: -.5, upper: 3.5, field: 'zscore' }
+  };
+  assert.deepEqual(stops('london_512_8_45_8B'), [-.5, 'blue', 1.5, 'yellow', 3.5, 'red']);
+  assert.deepEqual(stops('rome_512_8_45_8B'), [-1, 'blue', 1, 'yellow', 3, 'red']);
+  delete layer.color_range_overrides_by_dataset.london_512_8_45_8B;
+  assert.deepEqual(stops('london_512_8_45_8B'), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
 });
 
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {

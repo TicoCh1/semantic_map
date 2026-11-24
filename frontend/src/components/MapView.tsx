@@ -30,7 +30,7 @@ import type { RemoteBackendConfig } from "../api/types";
 import { BASEMAPS, type BasemapId, basemapById, basemapStyle } from "../state/basemaps";
 import { DEFAULT_POINT_RADIUS, layerGradient } from "../state/color";
 import { DEFAULT_CITY_CONFIGS } from "../state/cities";
-import { circleRadiusExpression, colorExpression } from "../state/mapStyle";
+import { circleRadiusExpression, colorExpression, colorRangeForLayer } from "../state/mapStyle";
 import { panoDatasetIdForPoint, panoPointKey } from "../state/panoDatasets";
 import { useEmbeddingComparison } from "../state/useEmbeddingComparison";
 import { attachMapDiagnostics } from "../state/mobileDiagnostics";
@@ -50,6 +50,8 @@ type MapViewProps = {
   onBasemapChange: (basemapId: BasemapId) => void;
   onSelectLayer: (layerId: string) => void;
   onPriorityTileChange?: (cityId: CityId, tile: TileCoord | null) => void;
+  onVisibleCitiesChange?: (cities: CityConfig[]) => void;
+  colorRangeCityId?: CityId;
   markedPanos: MarkedPano[];
   selectedPanoKey: string | null;
   onMarkPano: (pano: PanoMapPoint) => void;
@@ -98,6 +100,8 @@ export const MapView = memo(function MapView({
   onBasemapChange,
   onSelectLayer,
   onPriorityTileChange,
+  onVisibleCitiesChange,
+  colorRangeCityId,
   markedPanos,
   selectedPanoKey,
   onMarkPano,
@@ -151,15 +155,23 @@ export const MapView = memo(function MapView({
     () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
     [cities, citySelection]
   );
-  const activeCities = comparisonEnabled && comparisonCity ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
-    : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities;
+  const activeCities = useMemo(() => comparisonEnabled && comparisonCity
+    ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
+    : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
+  [cities, compactViewport, comparisonCity, comparisonEnabled, desktopCities, differenceEnabled, mobileCityId]);
   const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
   const displayedLayer = comparisonEnabled ? selectedLayer : layers.find(layer => layer.visible);
   const title = displayedLayer?.name ?? "No visible layers";
-  const agreement = displayedLayer?.rerank_calibration?.correlations?.agreement_percent;
+  const agreementCity = activeCities.find(city => city.id === colorRangeCityId) ?? activeCities[0];
+  const agreement = colorRangeForLayer(displayedLayer ?? null, null, agreementCity?.datasetId)
+    .calibration?.correlations?.agreement_percent;
+
+  useEffect(() => {
+    onVisibleCitiesChange?.(comparisonEnabled ? activeCities.slice(0, 1) : activeCities);
+  }, [activeCities, comparisonEnabled, onVisibleCitiesChange]);
 
   useEffect(() => {
     const media = window.matchMedia("(max-width: 700px)");
@@ -270,7 +282,7 @@ export const MapView = memo(function MapView({
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
         <div className="map-summary" data-displayed-layer-id={displayedLayer?.id}>
           <strong title={title}>{title}</strong>
-          <span className="map-agreement">Scoring agreement {agreement == null ? "N/A" : `${Math.round(agreement)}%`}</span>
+          <span className="map-agreement">Scoring agreement {agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}</span>
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
@@ -587,7 +599,7 @@ export function CityMapPane({
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
   const [status, setStatus] = useState("Loading map");
   const [showMaxDetailWarning, setShowMaxDetailWarning] = useState(false);
-  const semanticDrawKey = useMemo(() => semanticLayerDrawKey(layers, gradients, city.id), [city.id, gradients, layers]);
+  const semanticDrawKey = useMemo(() => semanticLayerDrawKey(layers, gradients, city), [city, gradients, layers]);
   layersRef.current = layers;
   gradientsRef.current = gradients;
 
@@ -1442,20 +1454,21 @@ function renderableSemanticLayers(topToBottom: SemanticLayer[]): SemanticLayer[]
   return renderable;
 }
 
-function semanticLayerDrawKey(layers: SemanticLayer[], gradients: GradientPreset[], cityId: CityId): string {
+function semanticLayerDrawKey(layers: SemanticLayer[], gradients: GradientPreset[], city: CityConfig): string {
   return renderableSemanticLayers(layers.filter((layer) => layer.visible))
     .map((layer) => {
       const style = layer.style;
       const gradient = layerGradient(layer, gradients);
+      const range = colorRangeForLayer(layer, gradient, city.datasetId);
       return [
         layer.id,
         layer.status,
-        getLayerSourcePath(layer, cityId),
+        getLayerSourcePath(layer, city.id),
         layer.score_property,
         style.gradient_id,
         style.opacity,
-        style.score_min,
-        style.score_max,
+        range.lower,
+        range.upper,
         style.point_radius,
         style.point_shape ?? "circle",
         style.absolute_radius ? 1 : 0,
