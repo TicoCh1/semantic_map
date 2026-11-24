@@ -50,6 +50,7 @@ export type SemanticLayer = {
   status: "queued" | "running" | "ready" | "failed";
   created_at: string;
   rerank_calibration?: RerankLayerCalibration | null;
+  rerank_calibration_by_dataset?: Record<string, RerankLayerCalibration>;
   rerank_calibration_status?: "pending" | "ready" | "unavailable" | "failed";
   rerank_calibration_retry_after?: number;
   rerank_uncalibrated_range?: { lower: number; upper: number };
@@ -194,6 +195,7 @@ export type ScoringJob = {
   tile_url_template?: string | null;
   results?: ScoringResultRef[];
   rerank_calibration?: RerankLayerCalibration | null;
+  rerank_calibration_by_dataset?: Record<string, RerankLayerCalibration>;
 };
 
 export type ScoringJobBatchItemResponse = {

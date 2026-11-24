@@ -909,6 +909,7 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     status: raw.status || "ready",
     created_at: raw.created_at || utcNow(),
     rerank_calibration: raw.rerank_calibration || null,
+    rerank_calibration_by_dataset: raw.rerank_calibration_by_dataset,
     rerank_calibration_status: raw.rerank_calibration_status,
     rerank_calibration_retry_after: raw.rerank_calibration_retry_after,
     rerank_uncalibrated_range: raw.rerank_uncalibrated_range,
@@ -1123,6 +1124,7 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       status: reusableRemote ? previousLayer.status : fallbackSources.status,
       created_at: previousLayer?.created_at || utcNow(),
       rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null,
+      rerank_calibration_by_dataset: reusableRemote ? previousLayer.rerank_calibration_by_dataset : undefined,
       rerank_calibration_status: reusableRemote ? previousLayer.rerank_calibration_status : undefined,
       rerank_uncalibrated_range: reusableRemote ? previousLayer.rerank_uncalibrated_range : undefined,
       remote_result_refs: reusableRemote ? previousLayer.remote_result_refs : undefined
@@ -1419,6 +1421,7 @@ async function submitRemoteScoringForLayer(
     source_path: `remote://pending/${layer.id}`,
     source_paths: submittingSourcePaths,
     rerank_calibration: null,
+    rerank_calibration_by_dataset: undefined,
     rerank_calibration_status: "pending",
     rerank_calibration_retry_after: undefined,
     remote_result_refs: undefined
@@ -1895,6 +1898,10 @@ async function remoteRerankRange(config: RemoteBackendConfig, layerId: string, j
   if (job.query_type === "pano_reference" || !job.results?.length) return;
   try {
     if (job.rerank_calibration) return acceptRerankCalibration(layerId, job, job.rerank_calibration);
+    if (Object.keys(job.rerank_calibration_by_dataset ?? {}).length) {
+      updateLayerSync(layerId, { rerank_calibration_status: "ready" });
+      return;
+    }
     if (config.mode === "cpu") {
       updateLayerSync(layerId, { rerank_calibration_status: "unavailable" });
       return;
@@ -2004,6 +2011,7 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
             status: "ready",
             source_path: directSources.primarySourcePath,
             source_paths: directSources.sourcePaths,
+            rerank_calibration_by_dataset: job.rerank_calibration_by_dataset,
             ...(calibratedStyle ? { style: calibratedStyle } : {}),
             score_property: "zscore",
             query_type: job.query_type || "text",
@@ -2032,6 +2040,10 @@ async function pollRemoteScoringJob(config: RemoteBackendConfig, layerId: string
           status: "ready",
           source_path: primarySourcePath,
           source_paths: sourcePaths,
+          rerank_calibration_by_dataset: job.rerank_calibration_by_dataset ?? Object.fromEntries(
+            manifests.filter(manifest => !!manifest.rerank_calibration)
+              .map(manifest => [manifest.dataset_id, manifest.rerank_calibration!])
+          ),
           ...(calibratedStyle ? { style: calibratedStyle } : {}),
           score_property: primaryManifest?.zscore_property || "zscore",
           query_type: primaryManifest?.query_type || job.query_type || "text",
@@ -2111,11 +2123,19 @@ async function recoverRemoteTileCalibration(config: RemoteBackendConfig, layer: 
       const identities = (refs: ScoringResultRef[]) => refs.map(ref => JSON.stringify([
         ref.dataset_id, ref.prompt_id, ref.result_revision])).sort().join("|");
       if (saved.status !== "ready" || identities(saved.results ?? []) !== identities(results)) {
-        updateLayerSync(layer.id, { rerank_calibration_status: "unavailable" });
+        updateLayerSync(layer.id, { rerank_calibration_status: "unavailable",
+          rerank_calibration_retry_after: Date.now() + 60_000 });
         emitRemoteInfoLog(layer.id, layer.prompt, "Saved score revisions changed; refresh retrieval before applying colour calibration.");
         return;
       }
       job = saved;
+      if (saved.rerank_calibration_by_dataset) {
+        updateLayerSync(layer.id, { rerank_calibration_by_dataset: saved.rerank_calibration_by_dataset });
+      }
+      if (results.some(ref => ref.result_revision?.startsWith("saber128b0-")
+        && !saved.rerank_calibration_by_dataset?.[ref.dataset_id])) {
+        updateLayerSync(layer.id, { rerank_calibration_retry_after: Date.now() + 60_000 });
+      }
     }
     const range = await remoteRerankRange(config, layer.id, job);
     const current = loadStateSync().layers.find(candidate => candidate.id === layer.id);
@@ -2137,8 +2157,10 @@ export async function resumeRemoteScoringJobs(): Promise<void> {
   for (const layer of state.layers) {
     if (layer.status === "failed") continue;
     if (isRemoteTileTemplate(layer.source_path)) {
-      if (layer.query_type !== "pano_reference" && !layer.rerank_calibration
-        && layer.rerank_calibration_status !== "unavailable"
+      const pendingCityCalibration = config.mode === "cpu" && layer.remote_result_refs?.some(ref =>
+        ref.result_revision?.startsWith("saber128b0-") && !layer.rerank_calibration_by_dataset?.[ref.dataset_id]);
+      if (layer.query_type !== "pano_reference"
+        && (pendingCityCalibration || (!layer.rerank_calibration && layer.rerank_calibration_status !== "unavailable"))
         && (!layer.rerank_calibration_retry_after || layer.rerank_calibration_retry_after <= Date.now())) {
         void recoverRemoteTileCalibration(config, layer);
       }

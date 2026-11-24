@@ -1007,7 +1007,7 @@ export function CityMapPane({
           const gradient = layerGradient(layer, currentGradients);
           updateSemanticLayer(currentMap, sourceId, geojson, {
               "circle-radius": circleRadiusExpression(layer),
-              "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
+              "circle-color": gradient ? colorExpression(gradient, layer, city.datasetId) : "#2f80ed",
               "circle-opacity": layer.style.opacity,
               "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
               "circle-stroke-width": 0,

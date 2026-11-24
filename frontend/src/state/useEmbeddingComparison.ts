@@ -51,6 +51,7 @@ export function useEmbeddingComparison(
         score_max: layer.rerank_uncalibrated_range?.upper ?? 2
       } : layer.style,
       rerank_calibration: embedding === "new" ? layer.rerank_calibration : null,
+      rerank_calibration_by_dataset: embedding === "new" ? layer.rerank_calibration_by_dataset : undefined,
       source_path: url, source_paths: { [city.id]: url }, status: "ready" as const }];
   }), [result, layer, city, config]);
   return { paneLayers, count: result?.matched_count,

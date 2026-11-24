@@ -2,10 +2,15 @@ import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
 import type { GradientPreset, SemanticLayer } from "../api/types";
 import { DEFAULT_POINT_RADIUS, clamp } from "./color";
 
-export function colorExpression(gradient: GradientPreset, layer: SemanticLayer): ExpressionSpecification {
+export function colorExpression(gradient: GradientPreset, layer: SemanticLayer, datasetId?: string): ExpressionSpecification {
   const stops = [...gradient.stops].sort((a, b) => a.value - b.value);
-  const scoreMin = layer.style.score_min ?? gradient.score_min ?? 0;
-  const scoreMax = layer.style.score_max ?? gradient.score_max ?? 1;
+  const range = datasetId && layer.score_property === "zscore"
+    ? layer.rerank_calibration_by_dataset?.[datasetId]?.color_range
+    : undefined;
+  const calibrated = range?.field === "zscore"
+    && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper;
+  const scoreMin = (calibrated ? range.lower : layer.style.score_min) ?? gradient.score_min ?? 0;
+  const scoreMax = (calibrated ? range.upper : layer.style.score_max) ?? gradient.score_max ?? 1;
   const expression: unknown[] = ["interpolate", ["linear"], ["get", layer.score_property || "score"]];
   const expressionStops = [...stops];
 

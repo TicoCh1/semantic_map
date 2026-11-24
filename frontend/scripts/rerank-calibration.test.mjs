@@ -128,6 +128,22 @@ test('Returned GPU bounds become the actual map paint endpoints and midpoint', a
     ['interpolate', ['linear'], ['get','zscore'], 1.21,'blue',3.21,'yellow',5.21,'red']);
 });
 
+test('A saved city colour range affects only that city', () => {
+  const context = vm.createContext({ clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
+  vm.runInContext(paintCode, context);
+  const gradient = { score_min: -1, score_max: 3, stops: [
+    { value: 0, color: 'blue' }, { value: .5, color: 'yellow' }, { value: 1, color: 'red' }
+  ] };
+  const layer = { score_property: 'zscore', style: {},
+    rerank_calibration_by_dataset: { london_512_8_45_8B: {
+      color_range: { mean: 2.5, lower: .5, upper: 4.5, field: 'zscore' }
+    } }
+  };
+  const stops = (dataset) => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer, dataset))).slice(3);
+  assert.deepEqual(stops('london_512_8_45_8B'), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
+  assert.deepEqual(stops('rome_512_8_45_8B'), [-1, 'blue', 1, 'yellow', 3, 'red']);
+});
+
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {
   const submitStart = source.indexOf('async function submitRemoteScoringForLayer(');
   const submitEnd = source.indexOf('export async function ensureExhibitDefaultRemoteLayers', submitStart);
