@@ -1,8 +1,18 @@
+type ResourceOptions<T> = {
+  scheduled?: boolean;
+  cacheable?: (value: T) => boolean;
+  fresh?: (value: T) => boolean;
+  needed?: () => boolean;
+};
+
+type PendingResource<T> = { result: Promise<T>; consumers: Set<() => boolean> };
+const alwaysNeeded = () => true;
+
 /** Viewer-scoped shared content/request cache. Viewport tile selection stays
  * local to each pane; identical resources have one loader and one object. */
 export class SceneResources<T> {
   private values = new Map<string, { value: T; weight: number }>();
-  private pending = new Map<string, Promise<T>>();
+  private pending = new Map<string, PendingResource<T>>();
   private queue: Array<() => void> = [];
   private active = 0;
   private weight = 0;
@@ -16,7 +26,7 @@ export class SceneResources<T> {
     this.concurrency = concurrency; this.weigh = weigh;
   }
 
-  load(key: string, loader: () => Promise<T>, options: { scheduled?: boolean; cacheable?: (value: T) => boolean; fresh?: (value: T) => boolean } = {}): Promise<T> {
+  load(key: string, loader: (needed: () => boolean) => Promise<T>, options: ResourceOptions<T> = {}): Promise<T> {
     const cached = this.values.get(key);
     if (cached && (options.fresh?.(cached.value) ?? true)) {
       this.values.delete(key); this.values.set(key, cached);
@@ -24,9 +34,28 @@ export class SceneResources<T> {
     }
     if (cached) { this.weight -= cached.weight; this.values.delete(key); }
     const pending = this.pending.get(key);
-    if (pending) return pending;
+    const consumer = options.needed ?? alwaysNeeded;
+    if (pending) {
+      pending.consumers.add(consumer);
+      return pending.result;
+    }
+    const consumers = new Set([consumer]);
+    const needed = () => {
+      for (const subscriber of consumers) if (subscriber()) return true;
+      return false;
+    };
+    const clearPending = () => {
+      if (this.pending.get(key) === request) this.pending.delete(key);
+    };
+    const startIfNeeded = () => {
+      if (!needed()) {
+        clearPending();
+        throw new DOMException("Viewport is no longer current", "AbortError");
+      }
+      return loader(needed);
+    };
     // Defer the loader so pending is installed before nested requests start.
-    const result = Promise.resolve().then(() => options.scheduled === false ? loader() : this.schedule(loader)).then(value => {
+    const result = Promise.resolve().then(() => options.scheduled === false ? startIfNeeded() : this.schedule(startIfNeeded)).then(value => {
       if ((options.cacheable?.(value) ?? true)) {
         const weight = Math.max(1, this.weigh(value));
         if (weight <= this.maxWeight) {
@@ -38,8 +67,9 @@ export class SceneResources<T> {
         }
       }
       return value;
-    }).finally(() => { this.pending.delete(key); });
-    this.pending.set(key, result);
+    }).finally(clearPending);
+    const request: PendingResource<T> = { result, consumers };
+    this.pending.set(key, request);
     return result;
   }
 

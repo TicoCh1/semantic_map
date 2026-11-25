@@ -73,7 +73,8 @@ export function loadRemoteViewport(
   template: string,
   tiles: Tile[],
   loadTile: (tile: Tile) => Promise<FeatureCollection>,
-  displayed?: FeatureCollection
+  displayed?: FeatureCollection,
+  needed?: () => boolean
 ): Promise<FeatureCollection> {
   if (!tiles.length) return Promise.resolve(emptyViewport);
   const zoom = tiles[0].z;
@@ -89,11 +90,15 @@ export function loadRemoteViewport(
   const nearby = nearbyTiles(tiles, tileKeys, retained);
   const sourceKeys = [...tileKeys, ...nearby.keys()].sort();
   let complete = false;
-  return resources.load(`view:${template}:${sourceKeys.join('|')}`, async () => {
+  return resources.load(`view:${template}:${sourceKeys.join('|')}`, async (viewportNeeded) => {
     const collections = await Promise.all(tiles.map((tile, index) => {
       const key = tileKeys[index];
-      return retained?.get(key) ?? resources.load(`tile:${template}:${key}`, () => loadTile(tile), { cacheable: isCompleteRemoteTile });
+      return retained?.get(key) ?? resources.load(`tile:${template}:${key}`, () => loadTile(tile), {
+        cacheable: isCompleteRemoteTile,
+        needed: viewportNeeded
+      });
     }));
+    if (!viewportNeeded()) throw new DOMException('Viewport is no longer current', 'AbortError');
     const byTile = new Map(tileKeys.flatMap((key, index) => {
       const tile = collections[index];
       return isCompleteRemoteTile(tile) ? [[key, tile] as const] : [];
@@ -111,7 +116,7 @@ export function loadRemoteViewport(
     return data;
     // Keep the tile cache for reuse across panes. An expanded source already
     // lives with its pane and can be large enough to evict its own raw tiles.
-  }, { scheduled: false, cacheable: () => complete && nearby.size === 0 });
+  }, { scheduled: false, cacheable: () => complete && nearby.size === 0, needed });
 }
 
 export function remoteViewportDiff(previous: FeatureCollection, next: FeatureCollection): GeoJSONSourceDiff | undefined {

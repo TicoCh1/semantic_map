@@ -79,6 +79,32 @@ test('an incomplete viewport retries and cannot supply coverage for a later zoom
   assert.equal(calls, 2);
 });
 
+test('an abandoned viewport skips its queued tiles and keeps overlapping requests for the latest view', {timeout: 2000}, async () => {
+  const cache = new SceneResources(20, 20, 1);
+  const started = [];
+  let releaseFirst;
+  let firstStarted;
+  const first = new Promise(resolve => { firstStarted = resolve; });
+  const load = async ({x}) => {
+    started.push(x);
+    if (x === 1) await new Promise(resolve => { releaseFirst = resolve; firstStarted(); });
+    return points(1);
+  };
+  let oldViewportNeeded = true;
+  const obsolete = loadRemoteViewport(cache, 'revision', [tile(1), tile(2), tile(3)], load, undefined, () => oldViewportNeeded);
+  const cancelled = assert.rejects(obsolete, {name: 'AbortError'});
+  await first;
+  oldViewportNeeded = false;
+  const latest = loadRemoteViewport(cache, 'revision', [tile(2), tile(4)], load);
+  releaseFirst();
+  await cancelled;
+  assert.deepEqual((await latest).features.map(feature => feature.id), ['13/2/0:0', '13/4/0:0']);
+  assert.deepEqual(started, [1, 2, 4]);
+
+  await loadRemoteViewport(cache, 'revision', [tile(1), tile(3)], load);
+  assert.deepEqual(started, [1, 2, 4, 3], 'a started tile is cached, while a skipped tile remains retryable');
+});
+
 test('a pending worker diff coalesces later viewport submissions and serializes a full replacement', async () => {
   const cache = new SceneResources();
   const load = async ({x}) => points(x === 2 ? 10 : 1);

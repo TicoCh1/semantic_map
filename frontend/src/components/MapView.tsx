@@ -1039,6 +1039,8 @@ export function CityMapPane({
     async function draw(attempt = 0) {
       if (cancelled || generation !== styleGenerationRef.current) return;
       const viewportGeneration = viewportGenerationRef.current;
+      const viewportNeeded = () => !cancelled && generation === styleGenerationRef.current
+        && viewportGeneration === viewportGenerationRef.current;
 
       try {
         const currentLayers = layersRef.current;
@@ -1055,7 +1057,7 @@ export function CityMapPane({
         if (forceMaxDetailRef.current && maxDetailWarningTimer === undefined) {
           setShowMaxDetailWarning(false);
           maxDetailWarningTimer = window.setTimeout(() => {
-            if (!cancelled && generation === styleGenerationRef.current && forceMaxDetailRef.current) {
+            if (viewportNeeded() && forceMaxDetailRef.current) {
               setShowMaxDetailWarning(true);
             }
           }, 1200);
@@ -1091,12 +1093,13 @@ export function CityMapPane({
             resources,
             sharedRemoteTileZoomRef.current,
             city.id,
-            dataProviderRef.current
+            dataProviderRef.current,
+            viewportNeeded
           );
           if (cancelled || generation !== styleGenerationRef.current) return;
           // Slow tile requests can finish during the next gesture. The settled
           // camera will schedule its own draw with the current tile coverage.
-          if (viewportGeneration !== viewportGenerationRef.current && isRemoteTileTemplate(getLayerSourcePath(layer, city.id))) return;
+          if (!viewportNeeded() && isRemoteTileTemplate(getLayerSourcePath(layer, city.id))) return;
 
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
           // A new scoring job can temporarily have no published tiles. Keep
@@ -1140,6 +1143,7 @@ export function CityMapPane({
         }
       } catch (error) {
         if (cancelled || generation !== styleGenerationRef.current) return;
+        if (error instanceof DOMException && error.name === "AbortError" && !viewportNeeded()) return;
         if (attempt < 80) {
           if (attempt === 0) setStatus(`Restoring semantic layers`);
           retryTimer = window.setTimeout(() => {
@@ -1342,7 +1346,8 @@ async function loadLayerGeojsonForMap(
   resources: SceneResources<FeatureCollection>,
   remoteTileZoom: number,
   cityId: CityId,
-  dataProvider?: LayerDataProvider
+  dataProvider?: LayerDataProvider,
+  viewportNeeded?: () => boolean
 ): Promise<FeatureCollection> {
   if (dataProvider) return dataProvider(layer, cityId);
   const sourcePath = getLayerSourcePath(layer, cityId);
@@ -1356,8 +1361,9 @@ async function loadLayerGeojsonForMap(
   const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom), usesStaticFallback);
   const displayed = getRequestedSemanticSourceData(map, sourceIdForCityLayer(cityId, layer.id));
   try {
-    return await loadRemoteViewport(resources, sourcePath, tiles, tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), displayed);
-  } catch {
+    return await loadRemoteViewport(resources, sourcePath, tiles, tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), displayed, viewportNeeded);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
     return getLayerFallbackGeojson(layer.id, cityId);
   }
 }
