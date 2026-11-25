@@ -17,7 +17,7 @@ function VendorGlassSurfaces() {
   ))}</>;
 }
 export function SemanticGlassProvider({ dark, children }: { dark: boolean; children: ReactNode }) {
-  return <GlassProvider theme={dark ? "dark" : "light"} values={values} fadeContents diagnostics={import.meta.env.DEV}
+  return <GlassProvider theme={dark ? "dark" : "light"} values={values} fadeContents={false} diagnostics={import.meta.env.DEV}
     refractionEnabled={false} className="semantic-glass-app">
     {children}
     <VendorGlassSurfaces />

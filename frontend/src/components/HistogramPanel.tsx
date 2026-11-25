@@ -2,7 +2,7 @@ import { ThemedSelect } from "./ThemedSelect";
 import { GlassButton, GlassField } from "@form-glass/react";
 import { Check } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
-import { getLayerGeojson } from "../api/client";
+import { getLayerGeojson, getLayerSourcePath, isStaticFallbackTileTemplate } from "../api/client";
 import type { CityConfig, FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
 import { gradientColorForScore, gradientCss } from "../state/color";
 
@@ -11,6 +11,7 @@ type HistogramPanelProps = {
   gradient: GradientPreset | null;
   data?: FeatureCollection;
   city?: CityConfig;
+  allowStaticTiles?: boolean;
   range?: { lower: number; upper: number; mode: "default" | "manual" | "smart" };
   onResetRange?: (layer: SemanticLayer) => Promise<void>;
   onSmartRange?: (layer: SemanticLayer) => Promise<{ lower: number; upper: number }>;
@@ -27,7 +28,7 @@ const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 const MAX_HISTOGRAM_BINS = 512;
 
-export function HistogramPanel({ layer, gradient, data, city, range, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, allowStaticTiles = true, range, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,6 +42,8 @@ export function HistogramPanel({ layer, gradient, data, city, range, onResetRang
   const scoreMin = range?.lower ?? layer?.style.score_min ?? gradient?.score_min ?? 0;
   const scoreMax = range?.upper ?? layer?.style.score_max ?? gradient?.score_max ?? 1;
   const includeOutliers = Boolean(city);
+  const sourcePath = layer ? getLayerSourcePath(layer, city?.id ?? "london") : "";
+  const canLoad = Boolean(data) || allowStaticTiles || !isStaticFallbackTileTemplate(sourcePath);
 
   useEffect(() => {
     window.localStorage.setItem(BUCKET_WIDTH_STORAGE_KEY, String(bucketWidth));
@@ -54,9 +57,10 @@ export function HistogramPanel({ layer, gradient, data, city, range, onResetRang
 
   useEffect(() => {
     let cancelled = false;
-    if (!layer) {
+    if (!layer || !canLoad) {
       setValues([]);
       setError(null);
+      setLoading(false);
       return;
     }
 
@@ -81,7 +85,7 @@ export function HistogramPanel({ layer, gradient, data, city, range, onResetRang
     return () => {
       cancelled = true;
     };
-  }, [data, city?.id, layer?.id, city ? layer?.source_paths?.[city.id] : layer?.source_path, layer?.score_property]);
+  }, [canLoad, data, city?.id, layer?.id, sourcePath, layer?.score_property]);
 
   useEffect(() => {
     setDraftMin(formatInputValue(scoreMin));

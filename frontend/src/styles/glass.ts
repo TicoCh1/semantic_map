@@ -12,7 +12,7 @@ export const subscribeVendorGlass = (listener: () => void) => { listeners.add(li
 export const getVendorGlass = () => snapshot;
 
 export function applyGlassSurface(host: Element | null, geometry: GlassGeometry = {}) {
-  if (!host || surfaces.has(host)) return;
+  if (!host || surfaces.has(host)) return () => {};
   const mount = document.createElement("span");
   mount.className = "vendor-glass-mount";
   mount.setAttribute("aria-hidden", "true");
@@ -21,6 +21,7 @@ export function applyGlassSurface(host: Element | null, geometry: GlassGeometry 
   host.prepend(mount);
   surfaces.set(host, { id: ++nextId, host, mount, geometry: { ...geometry, fade: [] } });
   publish();
+  return () => { forgetSurface(host); publish(); };
 }
 function forgetSurface(host: Element) {
   const surface = surfaces.get(host);
@@ -51,7 +52,8 @@ function observeVendorGlass(container: HTMLElement, selector: string, geometry: 
   };
 }
 export function observeMapGlass(container: HTMLElement) {
-  return observeVendorGlass(container, ".maplibregl-ctrl-group", () => ({ material: "control" }));
+  // The navigation control is installed before this call and stays mounted.
+  return applyGlassSurface(container.querySelector(".maplibregl-ctrl-group"), { material: "control" });
 }
 export function observePanoramaGlass(container: HTMLElement) {
   return observeVendorGlass(container, ".psv-navbar, .psv-panel, .psv-tooltip, .psv-notification-content", element => ({

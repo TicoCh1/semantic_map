@@ -115,9 +115,13 @@ test('render tiles preserve every point once and reuse unchanged spatial sources
   assert.deepEqual(sources.map(source => [source.key, source.data.features.length]), [
     ['13/0/0', 10_000], ['13/1/0', 10_000], ['12/1/0', 5]
   ]);
-  const ids = sources.flatMap(source => source.data.features.map(feature => feature.id));
-  assert.equal(ids.length, counts.reduce((sum, count) => sum + count, 0));
-  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(sources[0].data, viewport.tiles.get('13/0/0'));
+  assert.equal(sources[1].data, viewport.tiles.get('13/1/0'));
+  const rendered = sources.flatMap(source => source.data.features);
+  assert.equal(rendered.length, counts.reduce((sum, count) => sum + count, 0));
+  assert.equal(new Set(rendered).size, rendered.length);
+  assert.equal(sources[2].data.features[0], viewport.tiles.get('13/2/0').features[0]);
+  assert.equal(sources[2].data.features[2], viewport.tiles.get('13/3/0').features[0]);
   const zoomed = await loadRemoteTileViewport(cache, 'revision', requested.slice(1, 4), load, viewport);
   assert.equal(zoomed, viewport);
   const reuse = remoteRenderTiles(zoomed, sources);

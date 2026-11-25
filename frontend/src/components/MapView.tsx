@@ -5,7 +5,7 @@ import { attachPointShapeImages, getRequestedSemanticSourceData, normalizePointS
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
-import { loadRemoteTileViewport, loadRemoteViewport, remoteRenderTiles, remoteViewportDiff, REMOTE_MAX_DETAIL_ZOOM, settledRemoteTileZoom, type RemoteRenderTile, type RemoteTileViewport } from "../state/remoteTileData";
+import { isCompleteRemoteTile, loadRemoteTileViewport, remoteRenderTiles, REMOTE_MAX_DETAIL_ZOOM, settledRemoteTileZoom, type RemoteRenderTile, type RemoteTileViewport } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
@@ -61,6 +61,7 @@ type MapViewProps = {
   onCreatePrompt?: (prompt: string) => Promise<void>;
   promptDisabled?: boolean;
   liveSearchAvailable?: boolean;
+  allowStaticTiles?: boolean;
 };
 
 const CITY_SELECTION_KEY = "semantic-map-selected-cities-v2";
@@ -84,6 +85,7 @@ const STATIC_FALLBACK_TILE_RANGES: Partial<Record<CityId, { z: number; minX: num
 };
 
 let nextSemanticTileFrame = Promise.resolve();
+const movingMaps = new Set<MapLibreMap>();
 
 /** Share upload slots between panes so preparing two dense maps cannot run
  * all of MapLibre's worker serialization in one browser task. */
@@ -120,7 +122,8 @@ export const MapView = memo(function MapView({
   onCreatePrompt,
   backendConfig,
   promptDisabled = false,
-  liveSearchAvailable = true
+  liveSearchAvailable = true,
+  allowStaticTiles = true
 }: MapViewProps) {
   const [citySelection, setCitySelection] = useState<CityId[]>(loadCitySelection);
   const [comparisonMode, setComparisonMode] = useState<"cities" | "embeddings" | "difference">("cities");
@@ -157,7 +160,6 @@ export const MapView = memo(function MapView({
   );
   const sceneCamera = useMemo(() => new MapSceneCamera(sharedGroundScale), [sharedGroundScale]);
   const sceneResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
-  const [cityRemoteTileZooms, setCityRemoteTileZooms] = useState<Record<CityId, number>>({});
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
   const desktopCities = useMemo(
     () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
@@ -167,7 +169,6 @@ export const MapView = memo(function MapView({
     ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
     : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
   [cities, compactViewport, comparisonCity, comparisonEnabled, desktopCities, differenceEnabled, mobileCityId]);
-  const sharedRemoteTileZoom = Math.max(...activeCities.map((city) => cityRemoteTileZooms[city.id] ?? 10), 10);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
@@ -255,12 +256,9 @@ export const MapView = memo(function MapView({
     window.addEventListener("pointercancel", onUp);
   }, [compactViewport]);
 
-  const handleCityRemoteTileZoomChange = useCallback((cityId: CityId, zoom: number) => {
-    setCityRemoteTileZooms((current) => {
-      const nextZoom = clampInteger(zoom, 10, REMOTE_MAX_DETAIL_ZOOM);
-      return current[cityId] === nextZoom ? current : { ...current, [cityId]: nextZoom };
-    });
-  }, []);
+  const handleComparisonLayerSelect = useCallback(() => {
+    if (selectedLayerId) onSelectLayer(selectedLayerId);
+  }, [selectedLayerId, onSelectLayer]);
 
   const handleSemanticLayerLoadingChange = useCallback((cityId: CityId, loading: boolean) => {
     setSemanticLayerLoadingByCity((current) => (current[cityId] === loading ? current : { ...current, [cityId]: loading }));
@@ -362,14 +360,13 @@ export const MapView = memo(function MapView({
             gradients={gradients}
             basemapId={basemapId}
             attributionHost={attributionHost}
-            selectedLayerId={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index][0]?.id ?? null : selectedLayerId}
-            onSelectLayer={comparisonEnabled ? () => { if (selectedLayerId) onSelectLayer(selectedLayerId); } : onSelectLayer}
+            onSelectLayer={comparisonEnabled ? handleComparisonLayerSelect : onSelectLayer}
             sceneCamera={sceneCamera}
             cameraMode={comparisonEnabled ? "camera" : "resolution"}
             sceneResources={sceneResources}
             embeddingLabel={differenceEnabled ? `Difference · New − old ${scoreField}` : comparisonEnabled ? (index === 0 ? "Old embedding · 2B" : "New embedding · 8B / 4096") : undefined}
             loadingKey={comparisonEnabled ? `${city.id}:${index}` : city.id}
-            onPriorityTileChange={!comparisonEnabled && onPriorityTileChange ? (tile) => onPriorityTileChange(city.id, tile) : undefined}
+            onPriorityTileChange={comparisonEnabled ? undefined : onPriorityTileChange}
             markedPanos={markedPanos}
             selectedPanoKey={selectedPanoKey}
             onMarkPano={onMarkPano}
@@ -377,8 +374,7 @@ export const MapView = memo(function MapView({
             forceMaxDetail={forceMaxDetail}
             onForceMaxDetailChange={handleForceMaxDetailChange}
             sharedGroundScale={sharedGroundScale}
-            sharedRemoteTileZoom={sharedRemoteTileZoom}
-            onRemoteTileZoomChange={(zoom) => handleCityRemoteTileZoomChange(city.id, zoom)}
+            allowStaticTiles={allowStaticTiles}
             onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
             splitIndex={index}
             compactControls={compactViewport}
@@ -446,9 +442,8 @@ type CityMapPaneProps = {
   layers: SemanticLayer[];
   gradients: GradientPreset[];
   basemapId: BasemapId;
-  selectedLayerId: string | null;
   onSelectLayer: (layerId: string) => void;
-  onPriorityTileChange?: (tile: TileCoord | null) => void;
+  onPriorityTileChange?: MapViewProps["onPriorityTileChange"];
   markedPanos: MarkedPano[];
   selectedPanoKey: string | null;
   onMarkPano: (pano: PanoMapPoint) => void;
@@ -457,8 +452,7 @@ type CityMapPaneProps = {
   onForceMaxDetailChange: (enabled: boolean, reason?: "user" | "scale_limit") => void;
   sharedGroundScale: number;
   onSharedGroundScaleChange?: (scale: number) => void;
-  sharedRemoteTileZoom: number;
-  onRemoteTileZoomChange: (zoom: number) => void;
+  allowStaticTiles?: boolean;
   onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
   splitIndex: number;
   compactControls: boolean;
@@ -541,7 +535,7 @@ function MobileMapSearch({
   );
 }
 
-export function CityMapPane({
+export const CityMapPane = memo(function CityMapPane({
   dataProvider,
   selectionArea,
   onMapReady,
@@ -556,7 +550,6 @@ export function CityMapPane({
   layers,
   gradients,
   basemapId,
-  selectedLayerId,
   onSelectLayer,
   onPriorityTileChange,
   markedPanos,
@@ -567,8 +560,7 @@ export function CityMapPane({
   onForceMaxDetailChange,
   sharedGroundScale,
   onSharedGroundScaleChange,
-  sharedRemoteTileZoom,
-  onRemoteTileZoomChange,
+  allowStaticTiles = true,
   onSemanticLayerLoadingChange,
   splitIndex,
   compactControls,
@@ -583,10 +575,9 @@ export function CityMapPane({
   const forceMaxDetailRef = useRef(forceMaxDetail);
   const forceMaxDetailChangeRef = useRef(onForceMaxDetailChange);
   const sharedGroundScaleRef = useRef(sharedGroundScale);
-  const sharedRemoteTileZoomRef = useRef(sharedRemoteTileZoom);
+  const remoteTileZoomRef = useRef(REMOTE_MAX_DETAIL_ZOOM);
   const autoTileZoomRef = useRef<number>();
   const priorityTileChangeRef = useRef(onPriorityTileChange);
-  const remoteTileZoomChangeRef = useRef(onRemoteTileZoomChange);
   const selectLayerRef = useRef(onSelectLayer);
   const markPanoRef = useRef(onMarkPano);
   const selectPanoRef = useRef(onSelectPano);
@@ -602,9 +593,11 @@ export function CityMapPane({
   const dataProviderRef = useRef(dataProvider);
   const selectionAreaRef = useRef(selectionArea);
   const popupLabelsRef = useRef(popupLabels);
+  const allowStaticTilesRef = useRef(allowStaticTiles);
   dataProviderRef.current = dataProvider;
   selectionAreaRef.current = selectionArea;
   popupLabelsRef.current = popupLabels;
+  allowStaticTilesRef.current = allowStaticTiles;
   const applyingScaleSyncRef = useRef(false);
   const semanticRedrawTimerRef = useRef<number | undefined>(undefined);
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
@@ -633,15 +626,12 @@ export function CityMapPane({
     if (pano) {
       markPanoRef.current(pano);
       void collectPanoLayerValues(
-        pano.pano_id,
-        pano.dataset_id ?? city.datasetId,
-        pano.lon,
-        pano.lat,
+        pano,
+        feature,
         layersRef.current,
-        map,
         resources,
-        sharedRemoteTileZoomRef.current,
-        city.id,
+        city,
+        allowStaticTilesRef.current,
         dataProviderRef.current
       ).then((layerValues) => {
         if (mapRef.current === map && layerValues.length) {
@@ -660,7 +650,7 @@ export function CityMapPane({
          <div class="popup-row"><span>${labels?.zscore ?? (layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore')}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
       )
       .addTo(map);
-    applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content"));
+    popup.once("close", applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content")));
   }
 
   function requestSemanticRedraw(generation: number, message?: string) {
@@ -678,12 +668,12 @@ export function CityMapPane({
 
   function publishRemoteTileZoom(map: MapLibreMap, forceMaxDetail: boolean) {
     if (forceMaxDetail) {
-      remoteTileZoomChangeRef.current(REMOTE_MAX_DETAIL_ZOOM);
+      remoteTileZoomRef.current = REMOTE_MAX_DETAIL_ZOOM;
       return;
     }
     const zoom = settledRemoteTileZoom(map.getZoom(), autoTileZoomRef.current);
     autoTileZoomRef.current = zoom;
-    remoteTileZoomChangeRef.current(zoom);
+    remoteTileZoomRef.current = zoom;
   }
 
   function scheduleSemanticRedraw(generation: number, delayMs = 160) {
@@ -701,7 +691,7 @@ export function CityMapPane({
       if (resizingRef.current || map?.isMoving()) return;
       if (map) {
         publishRemoteTileZoom(map, forceMaxDetailRef.current);
-        reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+        reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
       }
       requestSemanticRedraw(generation);
     }, delayMs);
@@ -734,7 +724,9 @@ export function CityMapPane({
     if (!compactControls) {
       map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-right");
     }
-    map.addControl(new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" }), "bottom-right");
+    const scaleControl = new maplibregl.ScaleControl({ maxWidth: SCALE_CONTROL_MAX_WIDTH, unit: "metric" });
+    map.addControl(scaleControl, "bottom-right");
+    map.off("move", scaleControl._onMove);
     const detachGlass = observeMapGlass(map.getContainer());
     const detachPointImages = attachPointShapeImages(map);
     const detachDiagnostics = attachMapDiagnostics(map, {
@@ -743,32 +735,49 @@ export function CityMapPane({
     });
     map.on("load", () => {
       publishRemoteTileZoom(map, forceMaxDetailRef.current);
-      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
       requestSemanticRedraw(generation, `${city.name} ${initialBasemap.name} ready`);
     });
     map.on("error", (event) => setStatus(event.error?.message ?? "Map error"));
     mapRef.current = map;
     const publishViewport = () => {
-      viewportGenerationRef.current++;
       const container = map.getContainer();
       const center = map.getCenter();
       const zoom = map.getZoom();
       container.dataset.mapZoom = String(zoom);
       container.dataset.groundMetersPerPixel = String(MAPLIBRE_METERS_PER_PIXEL_ZOOM0 / groundScaleForZoom(zoom, center.lat));
       container.dataset.mapCenter = `${center.lng},${center.lat}`;
+      scaleControl._onMove();
     };
     publishViewport();
-    map.on("move", publishViewport);
+    let settleTimer: number | undefined;
+    const clearMotion = () => {
+      if (movingMaps.delete(map) && movingMaps.size === 0) document.documentElement.classList.remove("is-map-interacting");
+    };
+    map.on("movestart", () => {
+      if (applyingResizeRef.current || resizingRef.current || movingMaps.has(map)) return;
+      movingMaps.add(map);
+      if (movingMaps.size === 1) document.documentElement.classList.add("is-map-interacting");
+    });
+    map.on("move", () => { viewportGenerationRef.current++; });
+    map.on("moveend", () => {
+      window.clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(() => {
+        if (map.isMoving()) return;
+        publishViewport();
+        clearMotion();
+      }, 150);
+    });
     const canvas = map.getCanvas();
-    let hoverFrame: number | undefined;
+    let hoverTimer: number | undefined;
     let hoverPoint: MapMouseEvent["point"];
     const semanticPointAt = (point: MapMouseEvent["point"]) => {
       const layers = [...drawnLayerIds.current.keys()].filter(id => map.getLayer(id));
       return layers.length ? map.queryRenderedFeatures(point, { layers })[0] : undefined;
     };
     const clearHover = () => {
-      if (hoverFrame !== undefined) window.cancelAnimationFrame(hoverFrame);
-      hoverFrame = undefined;
+      window.clearTimeout(hoverTimer);
+      hoverTimer = undefined;
       if (canvas.style.cursor) canvas.style.cursor = "";
     };
     const hoverSemanticLayers = (event: MapMouseEvent) => {
@@ -777,12 +786,12 @@ export function CityMapPane({
         return;
       }
       hoverPoint = event.point;
-      if (hoverFrame !== undefined) return;
-      hoverFrame = window.requestAnimationFrame(() => {
-        hoverFrame = undefined;
+      if (hoverTimer !== undefined) return;
+      hoverTimer = window.setTimeout(() => {
+        hoverTimer = undefined;
         const cursor = !map.isMoving() && semanticPointAt(hoverPoint) ? "pointer" : "";
         if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
-      });
+      }, 80);
     };
     map.on("click", (event) => {
       const point = semanticPointAt(event.point);
@@ -795,7 +804,7 @@ export function CityMapPane({
     const unregisterLocalMap = onMapReady?.(map);
     requestSemanticRedraw(generation, `Loading ${city.name}`);
     publishRemoteTileZoom(map, forceMaxDetailRef.current);
-    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
 
     return () => {
       if (semanticRedrawTimerRef.current !== undefined) {
@@ -808,6 +817,8 @@ export function CityMapPane({
       unregisterSceneCamera?.();
       unregisterLocalMap?.();
       clearHover();
+      window.clearTimeout(settleTimer);
+      clearMotion();
       drawnLayerIds.current.clear();
       tiledViewports.current.clear();
       map.remove();
@@ -863,11 +874,11 @@ export function CityMapPane({
     if (!map) return;
     if (compactControls && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
       publishRemoteTileZoom(map, forceMaxDetail);
-      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
       return;
     }
     publishRemoteTileZoom(map, forceMaxDetail);
-    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
     requestSemanticRedraw(styleGenerationRef.current);
   }, [city.datasetId, compactControls, forceMaxDetail]);
 
@@ -878,20 +889,8 @@ export function CityMapPane({
   useEffect(() => {
     priorityTileChangeRef.current = onPriorityTileChange;
     const map = mapRef.current;
-    if (map) reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    if (map) reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
   }, [onPriorityTileChange]);
-
-  useEffect(() => {
-    remoteTileZoomChangeRef.current = onRemoteTileZoomChange;
-  }, [onRemoteTileZoomChange]);
-
-  useEffect(() => {
-    sharedRemoteTileZoomRef.current = sharedRemoteTileZoom;
-    const map = mapRef.current;
-    if (!map) return;
-    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoom, priorityTileChangeRef.current);
-    scheduleSemanticRedraw(styleGenerationRef.current);
-  }, [sharedRemoteTileZoom]);
 
   useEffect(() => {
     selectLayerRef.current = onSelectLayer;
@@ -1008,7 +1007,7 @@ export function CityMapPane({
         onSharedGroundScaleChange?.(nextScale);
       }
       publishRemoteTileZoom(map, forceMaxDetailRef.current);
-      reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+      reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
       scheduleSemanticRedraw(styleGenerationRef.current);
     };
     map.on("moveend", onViewportSettled);
@@ -1031,7 +1030,7 @@ export function CityMapPane({
       applyingScaleSyncRef.current = false;
     }
     publishRemoteTileZoom(map, forceMaxDetailRef.current);
-    reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
+    reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
     scheduleSemanticRedraw(styleGenerationRef.current);
   }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, sharedGroundScale]);
 
@@ -1099,16 +1098,26 @@ export function CityMapPane({
         removeSemanticLayers(currentMap, (_id, layerId) => !wantedIds.has(layerId));
         for (const layerId of tiledViewports.current.keys()) if (!wantedIds.has(layerId)) tiledViewports.current.delete(layerId);
         let displayedContent = false;
+        let waitingForStaticFallback = false;
         for (const layer of layersToDraw) {
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
           const sourcePath = getLayerSourcePath(layer, city.id);
           const remote = isRemoteTileTemplate(sourcePath);
-          const useRenderTiles = remote && forceMaxDetailRef.current && !dataProviderRef.current;
+          const useRenderTiles = remote && !dataProviderRef.current;
+          const staticFallback = isStaticFallbackTileTemplate(sourcePath);
+          if (useRenderTiles && staticFallback && !allowStaticTiles) {
+            waitingForStaticFallback = true;
+            for (const [id, owner] of drawnLayerIds.current) {
+              if (owner === layer.id && currentMap.getLayer(id)) orderedIds.push(id);
+            }
+            continue;
+          }
           let sources: { id: string; data: FeatureCollection }[];
           if (useRenderTiles) {
             try {
               const previous = tiledViewports.current.get(layer.id);
-              const tileCoords = filterStaticFallbackTiles(city.id, visibleRemoteTiles(currentMap, REMOTE_MAX_DETAIL_ZOOM), isStaticFallbackTileTemplate(sourcePath));
+              const tileZoom = staticFallback ? REMOTE_MAX_DETAIL_ZOOM : remoteTileZoomRef.current;
+              const tileCoords = filterStaticFallbackTiles(city.id, visibleRemoteTiles(currentMap, tileZoom), staticFallback);
               const viewport = await loadRemoteTileViewport(resources, sourcePath, tileCoords,
                 tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), previous?.viewport, viewportNeeded);
               if (!viewportNeeded()) return;
@@ -1121,8 +1130,7 @@ export function CityMapPane({
               sources = [{ id: sourceId, data: await getLayerFallbackGeojson(layer.id, city.id) }];
             }
           } else {
-            const geojson = await loadLayerGeojsonForMap(layer, currentMap, resources, sharedRemoteTileZoomRef.current,
-              city.id, dataProviderRef.current, viewportNeeded);
+            const geojson = await loadLocalLayerGeojson(layer, resources, city.id, dataProviderRef.current);
             sources = [{ id: sourceId, data: geojson }];
           }
           if (cancelled || generation !== styleGenerationRef.current) return;
@@ -1162,7 +1170,7 @@ export function CityMapPane({
           } as const;
           const marker = { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) };
           for (const { id, data } of sources) {
-            updateSemanticLayer(currentMap, id, data, paint, marker, id === sourceId ? remoteViewportDiff : undefined);
+            updateSemanticLayer(currentMap, id, data, paint, marker);
             drawnLayerIds.current.set(id, layer.id);
             orderedIds.push(id);
           }
@@ -1187,7 +1195,7 @@ export function CityMapPane({
           }
           setShowMaxDetailWarning(false);
           setStatus(`${layersToDraw.length} rendered / ${visibleTopToBottom.length} visible / ${currentLayers.length} total`);
-          if (!displayedContent && layersToDraw.some((layer) => isLayerWaitingForRemoteData(layer, city.id))) {
+          if (!displayedContent && (waitingForStaticFallback || layersToDraw.some((layer) => isLayerWaitingForRemoteData(layer, city.id)))) {
             setStatus(`Waiting for semantic layer data`);
           } else {
             reportSemanticLoading(false);
@@ -1221,7 +1229,7 @@ export function CityMapPane({
       setShowMaxDetailWarning(false);
       reportSemanticLoading(false);
     };
-  }, [city.id, redrawRequest, semanticDrawKey, onSemanticLayerLoadingChange]);
+  }, [city.id, redrawRequest, semanticDrawKey, allowStaticTiles, onSemanticLayerLoadingChange]);
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex} aria-label={`${city.name} map`} data-map-status={status}>
@@ -1232,7 +1240,7 @@ export function CityMapPane({
       ) : null}
     </section>
   );
-}
+});
 
 function MapRefreshOverlay({ active }: { active: boolean }) {
   if (!active) return null;
@@ -1331,45 +1339,49 @@ function panoPointFromFeature(feature: GeoJSON.Feature, event: MapMouseEvent, la
 }
 
 async function collectPanoLayerValues(
-  panoId: string,
-  datasetId: string,
-  panoLon: number,
-  panoLat: number,
+  pano: PanoMapPoint,
+  clickedFeature: maplibregl.MapGeoJSONFeature,
   layers: SemanticLayer[],
-  map: MapLibreMap,
   resources: SceneResources<FeatureCollection>,
-  remoteTileZoom: number,
-  cityId: CityId,
+  city: CityConfig,
+  allowStaticTiles: boolean,
   dataProvider?: LayerDataProvider
 ): Promise<PanoLayerValue[]> {
-  const values = await Promise.all(
+  const datasetId = pano.dataset_id ?? city.datasetId;
+  const z = REMOTE_MAX_DETAIL_ZOOM;
+  const { x, y } = lonLatToTile(pano.lat, pano.lon, z);
+  return Promise.all(
     layers
       .filter((layer) => layer.status === "ready")
       .map(async (layer) => {
-        const geojson = await loadLayerGeojsonForMap(layer, map, resources, remoteTileZoom, cityId, dataProvider);
-        const matchingFeatures = geojson.features.filter((item) => {
-          const props = item.properties ?? {};
-          const featureDatasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : datasetId;
-          return featureDatasetId === datasetId && String(props.pano_id ?? props.id ?? "") === panoId;
-        });
-        const feature = matchingFeatures.reduce<GeoJSON.Feature | null>((nearest, candidate) => {
-          if (!nearest) return candidate;
-          return pointFeatureDistanceSquared(candidate, panoLon, panoLat) < pointFeatureDistanceSquared(nearest, panoLon, panoLat)
-            ? candidate
-            : nearest;
-        }, null);
-        if (!feature) {
-          return {
-            layer_id: layer.id,
-            layer_name: layer.name,
-            visible: layer.visible,
-            score: null,
-            zscore: null,
-            date: null
-          };
+        let feature: GeoJSON.Feature | undefined;
+        if (layer.id === pano.source_layer_id) {
+          feature = clickedFeature;
+        } else {
+          try {
+            const sourcePath = getLayerSourcePath(layer, city.id);
+            const staticFallback = isStaticFallbackTileTemplate(sourcePath);
+            let points: FeatureCollection | undefined;
+            if (dataProvider || !isRemoteTileTemplate(sourcePath)) {
+              points = await loadLocalLayerGeojson(layer, resources, city.id, dataProvider);
+            } else if (!staticFallback || (allowStaticTiles && filterStaticFallbackTiles(city.id, [{ z, x, y }], true).length)) {
+              points = await resources.load(`tile:${sourcePath}:${z}/${x}/${y}`, () => getRemoteTileGeojson(sourcePath, z, x, y), { cacheable: isCompleteRemoteTile });
+            }
+            let nearestDistance = Number.POSITIVE_INFINITY;
+            for (const candidate of points?.features ?? []) {
+              const props = candidate.properties ?? {};
+              const candidateDataset = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : datasetId;
+              if (candidateDataset !== datasetId || String(props.pano_id ?? props.id ?? "") !== pano.pano_id) continue;
+              const distance = pointFeatureDistanceSquared(candidate, pano.lon, pano.lat);
+              if (distance >= nearestDistance) continue;
+              nearestDistance = distance;
+              feature = candidate;
+            }
+          } catch {
+            // The selected point remains usable if an auxiliary score is unavailable.
+          }
         }
-
-        const props = feature.properties ?? {};
+        const props = feature?.properties ?? {};
         const score = Number(props.score);
         const zscore = Number(props.zscore);
         return {
@@ -1382,7 +1394,6 @@ async function collectPanoLayerValues(
         };
       })
   );
-  return values;
 }
 
 function pointFeatureDistanceSquared(feature: GeoJSON.Feature, lon: number, lat: number): number {
@@ -1392,32 +1403,17 @@ function pointFeatureDistanceSquared(feature: GeoJSON.Feature, lon: number, lat:
   return (coordinates[0] - lon) ** 2 + (coordinates[1] - lat) ** 2;
 }
 
-async function loadLayerGeojsonForMap(
+function loadLocalLayerGeojson(
   layer: SemanticLayer,
-  map: MapLibreMap,
   resources: SceneResources<FeatureCollection>,
-  remoteTileZoom: number,
   cityId: CityId,
-  dataProvider?: LayerDataProvider,
-  viewportNeeded?: () => boolean
+  dataProvider?: LayerDataProvider
 ): Promise<FeatureCollection> {
   if (dataProvider) return dataProvider(layer, cityId);
   const sourcePath = getLayerSourcePath(layer, cityId);
-  if (!isRemoteTileTemplate(sourcePath)) {
-    return resources.load(`${cityId}:${layer.id}:${sourcePath}:${layer.status}`, () => getLayerGeojson(layer.id, cityId), {
-      cacheable: data => data.features.length > 0
-    });
-  }
-  const usesStaticFallback = isStaticFallbackTileTemplate(sourcePath);
-  const tileZoom = usesStaticFallback ? REMOTE_MAX_DETAIL_ZOOM : remoteTileZoom;
-  const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom), usesStaticFallback);
-  const displayed = getRequestedSemanticSourceData(map, sourceIdForCityLayer(cityId, layer.id));
-  try {
-    return await loadRemoteViewport(resources, sourcePath, tiles, tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), displayed, viewportNeeded);
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return getLayerFallbackGeojson(layer.id, cityId);
-  }
+  return resources.load(`${cityId}:${layer.id}:${sourcePath}:${layer.status}`, () => getLayerGeojson(layer.id, cityId), {
+    cacheable: data => data.features.length > 0
+  });
 }
 
 function visibleRemoteTiles(map: MapLibreMap, remoteTileZoom: number): Array<{ z: number; x: number; y: number }> {
@@ -1433,12 +1429,12 @@ function filterStaticFallbackTiles(cityId: CityId, tiles: Array<{ z: number; x: 
   return tiles.filter((tile) => tile.z === range.z && tile.x >= range.minX && tile.x <= range.maxX && tile.y >= range.minY && tile.y <= range.maxY);
 }
 
-function reportPriorityTile(map: MapLibreMap, datasetId: string, remoteTileZoom: number, onPriorityTileChange?: (tile: TileCoord | null) => void) {
+function reportPriorityTile(map: MapLibreMap, city: CityConfig, remoteTileZoom: number, onPriorityTileChange?: MapViewProps["onPriorityTileChange"]) {
   if (!onPriorityTileChange) return;
   const center = map.getCenter();
   const z = clampInteger(remoteTileZoom, 10, REMOTE_MAX_DETAIL_ZOOM);
   const tile = lonLatToTile(center.lat, center.lng, z);
-  onPriorityTileChange({ z, x: tile.x, y: tile.y, dataset_id: datasetId });
+  onPriorityTileChange(city.id, { z, x: tile.x, y: tile.y, dataset_id: city.datasetId });
 }
 
 function tilesForBounds(west: number, south: number, east: number, north: number, z: number): Array<{ z: number; x: number; y: number }> {

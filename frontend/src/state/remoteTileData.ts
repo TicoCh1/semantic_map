@@ -129,10 +129,11 @@ export function remoteRenderTiles(viewport: RemoteTileViewport, previous: readon
   const makeTile = (key: string, tiles: ReadonlyMap<string, FeatureCollection>): RemoteRenderTile => {
     const before = cached.get(key);
     if (before?.tiles.size === tiles.size && [...tiles].every(([id, tile]) => before.tiles.get(id) === tile)) return before;
-    return {
-      key, tiles,
-      data: { type: 'FeatureCollection', features: [...tiles].flatMap(([id, tile]) => identifiedFeatures(id, tile)) }
-    };
+    // Complete spatial sources do not need the synthetic IDs used for diffs.
+    const collections = [...tiles.values()];
+    const data = collections.length === 1 ? collections[0]
+      : { type: 'FeatureCollection' as const, features: collections.flatMap(tile => tile.features) };
+    return { key, tiles, data };
   };
   return [...parents].flatMap(([key, tiles]) => {
     const count = [...tiles.values()].reduce((sum, tile) => sum + tile.features.length, 0);

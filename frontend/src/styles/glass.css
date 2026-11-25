@@ -1,6 +1,7 @@
 /* FORM owns every glass recipe and renderer. This file only adapts app layout,
    neutral control states, and the DOM owned by MapLibre / Photo Sphere Viewer. */
-.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; }
+.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; --map-static-glass: rgba(246, 246, 248, .94); --map-static-control: rgba(248, 248, 250, .82); }
+html.theme-dark-root .semantic-glass-app { --map-static-glass: rgba(35, 37, 42, .94); --map-static-control: rgba(57, 59, 65, .86); }
 .semantic-glass-app .glass { color: var(--ui-text); }
 .semantic-glass-app .glass-button { gap: 7px; }
 .semantic-glass-app .glass-field { min-width: 0; }
@@ -11,11 +12,11 @@
 /* Translate the full-size FORM surface: its left feather moves without scale. */
 #root .sidebar-drawer {
   transform: translateX(calc(100% + var(--form-glass-outset, 42px)));
-  transition: transform 280ms cubic-bezier(.22, .8, .3, 1), visibility 0s 280ms;
-  opacity: 1; visibility: hidden;
+  transition: transform 280ms cubic-bezier(.22, .8, .3, 1), visibility 0s 280ms, content-visibility 0s 280ms allow-discrete;
+  opacity: 1; visibility: hidden; content-visibility: hidden;
 }
 #root .sidebar-dock.is-open .sidebar-drawer {
-  visibility: visible; transform: translateX(0); transition-delay: 0s;
+  visibility: visible; content-visibility: visible; transform: translateX(0); transition-delay: 0s;
 }
 #root .sidebar-dock:not(.is-open) .sidebar-drawer { pointer-events: none; }
 @media (min-width: 1024px) {
@@ -86,6 +87,15 @@ html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass
   font-size: 10px; letter-spacing: 0; text-transform: none; white-space: nowrap;
 }
 #root .map-toolbar > .glass-feather-defs { position: absolute; width: 0; height: 0; }
+/* One live surface is enough for the toolbar. Its controls and popovers keep
+   their FORM semantics, with a static fill where they need contrast. */
+#root .map-toolbar [data-glass] > .glass-renderer { display: none; }
+#root .map-toolbar :is(.glass-button, .glass-state-switch, .glass-select-trigger, .glass-field) { background: var(--map-static-control); }
+#root .map-toolbar :is(.saved-search-dropdown, .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
+html.is-map-interacting #root :is(.form-glass-ui, .map-shell) .glass-renderer { display: none; }
+html.is-map-interacting #root :is(.map-toolbar, .sidebar-drawer, .controls-launcher, .map-refresh-overlay, .map-hidden-layers-overlay,
+  .map-progress-overlay, .map-max-detail-warning, .embedding-pane-label, .embedding-comparison-note, .street-view-panel,
+  .street-view-values, [data-vendor-glass], .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
 .mobile-search-form { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 #root .mobile-map-search > .mobile-search-form { grid-column: 1 / -1; }
 .mobile-search-form > input { flex: 1; min-width: 0; }

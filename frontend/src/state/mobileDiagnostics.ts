@@ -47,9 +47,10 @@ let started = false;
 let entries: MobileDiagnosticEntry[] = [];
 let panel: HTMLDivElement | null = null;
 let panelRenderTimer: number | undefined;
+let cancelPendingWrite: (() => void) | undefined;
 
 export function startMobileDiagnostics() {
-  if (started || typeof window === "undefined") return;
+  if (started || typeof window === "undefined" || (!import.meta.env.DEV && !shouldShowPanel())) return;
   started = true;
   entries = readStoredEntries();
 
@@ -64,7 +65,7 @@ export function startMobileDiagnostics() {
 }
 
 export function recordMobileDiagnostic(type: string, details?: DiagnosticDetails) {
-  if (typeof window === "undefined") return;
+  if (!started) return;
   const entry: MobileDiagnosticEntry = {
     id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
     timestamp: new Date().toISOString(),
@@ -72,12 +73,13 @@ export function recordMobileDiagnostic(type: string, details?: DiagnosticDetails
     details: details ? sanitizeDetails(details) : undefined
   };
   entries = [entry, ...entries].slice(0, MAX_ENTRIES);
-  persistEntries();
+  schedulePersistEntries();
   exposeDiagnosticsApi();
   schedulePanelRender();
 }
 
 export function attachMapDiagnostics(map: DiagnosticMap, options: AttachMapDiagnosticsOptions): () => void {
+  if (!started) return () => {};
   const canvas = map.getCanvas?.();
   const recordMapSnapshot = (type: string, extra: DiagnosticDetails = {}) => {
     recordMobileDiagnostic(type, {
@@ -95,11 +97,24 @@ export function attachMapDiagnostics(map: DiagnosticMap, options: AttachMapDiagn
       stack: event.error?.stack?.slice(0, 1600) ?? null
     });
   };
-  // Shared camera followers emit synthetic end events during every frame.
-  // Avoid synchronous localStorage telemetry writes throughout a gesture.
-  const onMoveEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) recordMapSnapshot("map_moveend"); };
-  const onZoomEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) recordMapSnapshot("map_zoomend"); };
-  const onIdle = () => recordMapSnapshot("map_idle");
+  let snapshotTimer: number | undefined;
+  const pendingSnapshots = new Set<string>();
+  const queueSnapshot = (type: string) => {
+    pendingSnapshots.add(type);
+    window.clearTimeout(snapshotTimer);
+    snapshotTimer = window.setTimeout(() => {
+      const snapshot = {
+        city_id: options.cityId,
+        reduced_pixel_ratio: options.reducedPixelRatio ?? false,
+        ...mapSnapshot(map, options.container ?? null)
+      };
+      for (const pending of pendingSnapshots) recordMobileDiagnostic(pending, snapshot);
+      pendingSnapshots.clear();
+    }, 200);
+  };
+  const onMoveEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) queueSnapshot("map_moveend"); };
+  const onZoomEnd = (event: { sceneCameraSync?: boolean }) => { if (!event.sceneCameraSync) queueSnapshot("map_zoomend"); };
+  const onIdle = () => queueSnapshot("map_idle");
   const onContextLost = (event: Event) => {
     event.preventDefault();
     recordMapSnapshot("webgl_context_lost");
@@ -115,6 +130,7 @@ export function attachMapDiagnostics(map: DiagnosticMap, options: AttachMapDiagn
   recordMapSnapshot("map_diagnostics_attached");
 
   return () => {
+    window.clearTimeout(snapshotTimer);
     map.off("error", onMapError);
     map.off("moveend", onMoveEnd);
     map.off("zoomend", onZoomEnd);
@@ -174,12 +190,13 @@ function installGlobalListeners() {
     { passive: true }
   );
 
-  const closeSession = (type: string) => {
-    recordMobileDiagnostic(type, runtimeSnapshot());
+  window.addEventListener("pagehide", () => {
+    recordMobileDiagnostic("pagehide", runtimeSnapshot());
+    cancelPendingWrite?.();
+    cancelPendingWrite = undefined;
+    persistEntries();
     window.localStorage.removeItem(ACTIVE_SESSION_KEY);
-  };
-  window.addEventListener("pagehide", () => closeSession("pagehide"));
-  window.addEventListener("beforeunload", () => closeSession("beforeunload"));
+  });
 }
 
 function installMainThreadSampler() {
@@ -228,7 +245,7 @@ function exposeDiagnosticsApi() {
     export: () => [...entries],
     clear: () => {
       entries = [];
-      persistEntries();
+      schedulePersistEntries();
       exposeDiagnosticsApi();
       schedulePanelRender();
     },
@@ -298,6 +315,18 @@ function persistEntries() {
     window.localStorage.setItem(DIAGNOSTICS_KEY, JSON.stringify(entries.slice(0, MAX_ENTRIES)));
   } catch {
     // LocalStorage can fail in private browsing or under quota pressure.
+  }
+}
+
+function schedulePersistEntries() {
+  if (cancelPendingWrite) return;
+  const flush = () => { cancelPendingWrite = undefined; persistEntries(); };
+  if (typeof window.requestIdleCallback === "function") {
+    const id = window.requestIdleCallback(flush, { timeout: 3000 });
+    cancelPendingWrite = () => window.cancelIdleCallback(id);
+  } else {
+    const id = window.setTimeout(flush, 1000);
+    cancelPendingWrite = () => window.clearTimeout(id);
   }
 }
 

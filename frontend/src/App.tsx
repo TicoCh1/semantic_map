@@ -505,6 +505,7 @@ export function App() {
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
   const backendCanAttemptSearch = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
   const liveSearchAvailable = backendCanAttemptSearch && !backendConnectionFailed;
+  const allowStaticTiles = backendConfig !== null && (!backendCanAttemptSearch || backendConnectionFailed);
 
   const updateState = useCallback((mutator: (state: LayerState) => LayerState) => {
     setData((current) => {
@@ -914,6 +915,7 @@ export function App() {
         layer={selectedLayer}
         gradient={selectedGradient}
         city={histogramCity}
+        allowStaticTiles={allowStaticTiles}
         range={selectedRange}
         onResetRange={selectedRange.mode !== "default" ? handleResetHistogramRange : undefined}
         onSmartRange={handleSmartHistogramRange}
@@ -968,6 +970,7 @@ export function App() {
             backendConfig={backendConfig}
             promptDisabled={loading}
             liveSearchAvailable={liveSearchAvailable}
+            allowStaticTiles={allowStaticTiles}
           />
         }
         right={sidebar}
