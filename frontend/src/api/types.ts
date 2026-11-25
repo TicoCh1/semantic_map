@@ -51,7 +51,7 @@ export type SemanticLayer = {
   created_at: string;
   rerank_calibration?: RerankLayerCalibration | null;
   rerank_calibration_by_dataset?: Record<string, RerankLayerCalibration>;
-  color_range_overrides_by_dataset?: Record<string, LayerColorRangeOverride>;
+  color_range_override?: LayerColorRangeOverride | null;
   color_range_default?: { lower: number; upper: number };
   rerank_calibration_status?: "pending" | "ready" | "unavailable" | "failed";
   rerank_calibration_retry_after?: number;
@@ -110,7 +110,7 @@ export type LayerPatch = {
   selected?: boolean;
   score_property?: string;
   style?: LayerStyle;
-  color_range_overrides_by_dataset?: Record<string, LayerColorRangeOverride>;
+  color_range_override?: LayerColorRangeOverride | null;
 };
 
 export type FeatureCollection = GeoJsonFeatureCollection<Geometry, Record<string, unknown>>;

@@ -117,68 +117,60 @@ test('A queued calibration is polled before applying the returned z-score bounds
   assert.equal(f.layer.style.score_max, 5.21);
 });
 
-test('Returned GPU bounds become the actual map paint endpoints and midpoint', async () => {
+test('Applying Smart range uses the returned GPU bounds as map paint stops', async () => {
   const f = fixture({ queued: true });
   await f.run();
   const context = vm.createContext({ clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   vm.runInContext(paintCode, context);
+  f.layer.color_range_override = context.smartRangeForLayer(f.layer);
   const paint = context.colorExpression({ score_min:-1, score_max:3,
     stops:[{value:0,color:'blue'}, {value:.5,color:'yellow'}, {value:1,color:'red'}] }, f.layer);
   assert.deepEqual(JSON.parse(JSON.stringify(paint)),
     ['interpolate', ['linear'], ['get','zscore'], 1.21,'blue',3.21,'yellow',5.21,'red']);
 });
 
-test('Smart and manual colour ranges are fixed choices for one city', () => {
+test('Smart range stays fixed and the manual choice replaces it for the layer', () => {
   const context = vm.createContext({ clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   vm.runInContext(paintCode, context);
   const gradient = { score_min: -1, score_max: 3, stops: [
     { value: 0, color: 'blue' }, { value: .5, color: 'yellow' }, { value: 1, color: 'red' }
   ] };
   const layer = { score_property: 'zscore', style: { score_min: -6, score_max: 6 },
-    rerank_calibration_by_dataset: { london_512_8_45_8B: {
+    rerank_calibration: { scope: 'cross_city',
       color_range: { mean: 2.5, lower: .5, upper: 4.5, field: 'zscore' }
-    } }
+    }
   };
-  const london = 'london_512_8_45_8B';
-  const rome = 'rome_512_8_45_8B';
   const fallback = [-1, 'blue', 1, 'yellow', 3, 'red'];
-  const stops = (dataset) => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer, dataset))).slice(3);
-  assert.deepEqual(stops(london), fallback);
-  assert.deepEqual(stops(rome), fallback);
-  assert.equal(context.smartRangeForLayer(layer, rome), undefined);
+  const stops = () => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer))).slice(3);
+  assert.deepEqual(stops(), fallback);
 
-  layer.color_range_overrides_by_dataset = { [london]: context.smartRangeForLayer(layer, london) };
-  assert.equal(context.colorRangeForLayer(layer, gradient, london).mode, 'smart');
-  layer.rerank_calibration_by_dataset[london].color_range = { mean: 4, lower: 2, upper: 6, field: 'zscore' };
-  assert.deepEqual(stops(london), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
+  layer.color_range_override = context.smartRangeForLayer(layer);
+  assert.equal(context.colorRangeForLayer(layer).mode, 'smart');
+  layer.rerank_calibration.color_range = { mean: 4, lower: 2, upper: 6, field: 'zscore' };
+  assert.deepEqual(stops(), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
 
-  layer.color_range_overrides_by_dataset[london] = { lower: -.5, upper: 3.5, field: 'zscore' };
-  assert.equal(context.colorRangeForLayer(layer, gradient, london).mode, 'manual');
-  assert.deepEqual(stops(london), [-.5, 'blue', 1.5, 'yellow', 3.5, 'red']);
-  assert.deepEqual(stops(rome), fallback);
-  delete layer.color_range_overrides_by_dataset[london];
-  assert.deepEqual(stops(london), fallback);
+  layer.color_range_override = { lower: -.5, upper: 3.5, field: 'zscore' };
+  assert.equal(context.colorRangeForLayer(layer).mode, 'manual');
+  assert.deepEqual(stops(), [-.5, 'blue', 1.5, 'yellow', 3.5, 'red']);
+  layer.score_property = 'score';
+  assert.deepEqual(stops(), fallback);
+  layer.score_property = 'zscore';
+  layer.color_range_override = null;
+  assert.deepEqual(stops(), fallback);
 });
 
-test('Shared Smart range applies across cities and preserves another city’s manual range', () => {
+test('Shared Smart range can come from a manifest, and a city-only range does not become shared', () => {
   const context = vm.createContext({});
   vm.runInContext(paintCode, context);
-  const manual = {lower: -2, upper: 2, field: 'zscore'};
+  const color_range = {lower: -.5, upper: 3.5, field: 'zscore'};
   const layer = {
     score_property: 'zscore',
-    remote_result_refs: ['london','new_york','rome','shanghai'].map(dataset_id =>
-      ({dataset_id, color_range_scope: 'cross_city'})),
-    rerank_calibration: {scope: 'cross_city', color_range: {lower: -.5, upper: 3.5, field: 'zscore'}},
-    color_range_overrides_by_dataset: {rome: manual},
+    rerank_calibration_by_dataset: {london: {color_range}},
   };
-  const overrides = context.smartRangeOverridesForLayer(layer, 'london');
-  assert.equal(overrides.rome, manual);
-  assert.equal(overrides.new_york, overrides.london);
-  assert.equal(overrides.shanghai, overrides.london);
-  assert.equal(overrides.london.lower, -.5);
-  const noFit = context.smartRangeOverridesForLayer({...layer, rerank_calibration: null,
-    color_range_overrides_by_dataset: overrides}, 'london');
-  assert.deepEqual(Object.keys(noFit), ['rome']);
+  assert.equal(context.smartRangeForLayer(layer), null);
+  layer.rerank_calibration_by_dataset.rome = {scope: 'cross_city', color_range};
+  assert.equal(context.smartRangeForLayer(layer).lower, -.5);
+  assert.equal(context.smartRangeForLayer(layer).upper, 3.5);
 });
 
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {

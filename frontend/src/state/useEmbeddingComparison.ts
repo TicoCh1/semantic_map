@@ -52,7 +52,7 @@ export function useEmbeddingComparison(
       } : layer.style,
       rerank_calibration: embedding === "new" ? layer.rerank_calibration : null,
       rerank_calibration_by_dataset: embedding === "new" ? layer.rerank_calibration_by_dataset : undefined,
-      color_range_overrides_by_dataset: embedding === "new" ? layer.color_range_overrides_by_dataset : undefined,
+      color_range_override: embedding === "new" ? layer.color_range_override : undefined,
       color_range_default: embedding === "difference"
         ? layer.score_property === "zscore" ? { lower: -3, upper: 3 } : { lower: -0.2, upper: 0.2 }
         : undefined,

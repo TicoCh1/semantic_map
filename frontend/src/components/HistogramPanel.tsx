@@ -3,7 +3,7 @@ import { GlassButton, GlassField } from "@form-glass/react";
 import { Check } from "lucide-react";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { getLayerGeojson } from "../api/client";
-import type { CityConfig, CityId, FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
+import type { CityConfig, FeatureCollection, GradientPreset, SemanticLayer } from "../api/types";
 import { gradientColorForScore, gradientCss } from "../state/color";
 
 type HistogramPanelProps = {
@@ -11,8 +11,6 @@ type HistogramPanelProps = {
   gradient: GradientPreset | null;
   data?: FeatureCollection;
   city?: CityConfig;
-  cities?: CityConfig[];
-  onCityChange?: (cityId: CityId) => void;
   rangeMode?: "default" | "manual" | "smart";
   onResetRange?: (layer: SemanticLayer) => Promise<void>;
   onSmartRange?: (layer: SemanticLayer) => Promise<{ lower: number; upper: number }>;
@@ -28,7 +26,7 @@ type HistogramBin = {
 const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 
-export function HistogramPanel({ layer, gradient, data, city, cities, onCityChange, rangeMode, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, rangeMode, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,7 +84,7 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
     setDraftMin(formatInputValue(scoreMin));
     setDraftMax(formatInputValue(scoreMax));
     setRangeError(null);
-  }, [city?.id, gradient?.score_min, gradient?.score_max, layer?.id, layer?.score_property,
+  }, [gradient?.score_min, gradient?.score_max, layer?.id, layer?.score_property,
     layer?.style.score_min, layer?.style.score_max, rangeMode]);
 
   const histogram = useMemo(() => {
@@ -202,15 +200,8 @@ export function HistogramPanel({ layer, gradient, data, city, cities, onCityChan
         <span>Data</span>
         <strong>Histogram</strong>
       </div>
-      {city && layer ? <div className="histogram-meta">
-        {cities && cities.length > 1 && onCityChange ? (
-          <label className="histogram-property-select">
-            <span>City</span>
-            <ThemedSelect label="Histogram city" value={city.id} onValueChange={onCityChange}>
-              {cities.map(option => <option key={option.id} value={option.id}>{option.name}</option>)}
-            </ThemedSelect>
-          </label>
-        ) : <span>{city.name}</span>}
+      {layer ? <div className="histogram-meta">
+        {city ? <span>{city.name} samples</span> : null}
         <span>{rangeMode === "smart" ? "Smart range" : rangeMode === "manual" ? "Manual range" : "Default range"}</span>
       </div> : null}
 

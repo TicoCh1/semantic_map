@@ -50,7 +50,7 @@ import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
 import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
-import { colorRangeForLayer, smartRangeOverridesForLayer } from "./state/mapStyle";
+import { colorRangeForLayer, smartRangeForLayer } from "./state/mapStyle";
 import { cityConfigsForRemoteBackend } from "./state/cities";
 import { panoDatasetIdForPoint, panoPointKey } from "./state/panoDatasets";
 import { exhibitConfig } from "./state/exhibitConfig";
@@ -146,7 +146,6 @@ export function App() {
   const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
   const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
   const [visibleMapCities, setVisibleMapCities] = useState<CityConfig[]>([]);
-  const [colorRangeCityId, setColorRangeCityId] = useState<CityId>();
   const [remoteLogs, setRemoteLogs] = useState<RemoteLogEntry[]>([]);
   const [mapProgressEntries, setMapProgressEntries] = useState<RemoteLogEntry[]>([]);
   const [refreshingLayers, setRefreshingLayers] = useState(false);
@@ -505,11 +504,10 @@ export function App() {
     return layerGradient(selectedLayer, data.gradients);
   }, [data, selectedLayer]);
 
-  const rangeCity = visibleMapCities.find(city => city.id === colorRangeCityId) ?? visibleMapCities[0];
-  const selectedRange = colorRangeForLayer(selectedLayer, selectedGradient, rangeCity?.datasetId);
+  const histogramCity = visibleMapCities[0];
+  const selectedRange = colorRangeForLayer(selectedLayer);
   const histogramLayer = selectedLayer && {
     ...selectedLayer,
-    rerank_calibration: selectedRange.calibration ?? null,
     style: { ...selectedLayer.style, score_min: selectedRange.lower, score_max: selectedRange.upper }
   };
 
@@ -838,47 +836,21 @@ export function App() {
   }
 
   async function handleHistogramRangeChange(layer: SemanticLayer, scoreMin: number, scoreMax: number) {
-    if (rangeCity) {
-      const overrides = {
-        ...layer.color_range_overrides_by_dataset,
-        [rangeCity.datasetId]: { lower: scoreMin, upper: scoreMax, field: layer.score_property }
-      };
-      await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
-      await refresh();
-      return;
-    }
-    const style = {
-      ...layer.style,
-      score_min: scoreMin,
-      score_max: scoreMax
-    };
-    updateState((state) => ({
-      ...state,
-      layers: state.layers.map((item) => (item.id === layer.id ? { ...item, style } : item))
-    }));
-    try {
-      await patchLayer(layer.id, { style });
-      await refresh();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to update histogram range");
-      throw err;
-    }
+    await patchLayer(layer.id, {
+      color_range_override: { lower: scoreMin, upper: scoreMax, field: layer.score_property }
+    });
+    await refresh();
   }
 
   async function handleResetHistogramRange(layer: SemanticLayer) {
-    if (!rangeCity) return;
-    const overrides = { ...layer.color_range_overrides_by_dataset };
-    delete overrides[rangeCity.datasetId];
-    await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
+    await patchLayer(layer.id, { color_range_override: null });
     await refresh();
   }
 
   async function handleSmartHistogramRange(layer: SemanticLayer) {
-    if (!rangeCity) return selectedRange;
-    const overrides = smartRangeOverridesForLayer(layer, rangeCity.datasetId);
-    await patchLayer(layer.id, { color_range_overrides_by_dataset: overrides });
+    const savedLayer = await patchLayer(layer.id, { color_range_override: smartRangeForLayer(layer) });
     await refresh();
-    return colorRangeForLayer({ ...layer, color_range_overrides_by_dataset: overrides }, selectedGradient, rangeCity.datasetId);
+    return colorRangeForLayer(savedLayer);
   }
 
   async function handleHistogramPropertyChange(layer: SemanticLayer, scoreProperty: string) {
@@ -950,12 +922,10 @@ export function App() {
       <HistogramPanel
         layer={histogramLayer}
         gradient={selectedGradient}
-        city={rangeCity}
-        cities={visibleMapCities}
-        onCityChange={setColorRangeCityId}
+        city={histogramCity}
         rangeMode={selectedRange.mode}
         onResetRange={selectedRange.mode !== "default" ? handleResetHistogramRange : undefined}
-        onSmartRange={rangeCity ? handleSmartHistogramRange : undefined}
+        onSmartRange={handleSmartHistogramRange}
         onRangeChange={handleHistogramRangeChange}
         onPropertyChange={handleHistogramPropertyChange}
       />
@@ -995,7 +965,6 @@ export function App() {
             onSelectLayer={handleMapSelectLayer}
             onPriorityTileChange={handlePriorityTileChange}
             onVisibleCitiesChange={setVisibleMapCities}
-            colorRangeCityId={rangeCity?.id}
             markedPanos={markedPanos}
             selectedPanoKey={selectedPanoKey}
             onMarkPano={handleMarkPano}

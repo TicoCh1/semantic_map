@@ -1,55 +1,39 @@
 import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
-import type { GradientPreset, SemanticLayer } from "../api/types";
+import type { GradientPreset, LayerColorRangeOverride, SemanticLayer } from "../api/types";
 import { DEFAULT_POINT_RADIUS, clamp } from "./color";
 
-export function colorRangeForLayer(layer: SemanticLayer | null, gradient: GradientPreset | null, datasetId?: string) {
-  const cityCalibration = datasetId ? layer?.rerank_calibration_by_dataset?.[datasetId] : undefined;
+export function colorRangeForLayer(layer: SemanticLayer | null) {
   const calibration = layer?.score_property === "zscore"
-    ? cityCalibration ?? (!datasetId || !layer.rerank_calibration_by_dataset ? layer.rerank_calibration : undefined)
+    ? layer.rerank_calibration ?? Object.values(layer.rerank_calibration_by_dataset ?? {})
+      .find(item => item.scope === "cross_city")
     : undefined;
-  const override = datasetId ? layer?.color_range_overrides_by_dataset?.[datasetId] : undefined;
+  const override = layer?.color_range_override;
   if (override && override.field === layer?.score_property
     && Number.isFinite(override.lower) && Number.isFinite(override.upper) && override.lower < override.upper) {
     const mode: "smart" | "manual" = override.source === "smart" ? "smart" : "manual";
     return { lower: override.lower, upper: override.upper, mode, calibration };
   }
   return {
-    lower: datasetId ? layer?.color_range_default?.lower ?? -1 : layer?.style.score_min ?? gradient?.score_min ?? 0,
-    upper: datasetId ? layer?.color_range_default?.upper ?? 3 : layer?.style.score_max ?? gradient?.score_max ?? 1,
+    lower: layer?.color_range_default?.lower ?? -1,
+    upper: layer?.color_range_default?.upper ?? 3,
     mode: "default" as const,
     calibration
   };
 }
 
-export function smartRangeForLayer(layer: SemanticLayer, datasetId: string) {
-  const { calibration } = colorRangeForLayer(layer, null, datasetId);
+export function smartRangeForLayer(layer: SemanticLayer): LayerColorRangeOverride | null {
+  const { calibration } = colorRangeForLayer(layer);
   const range = calibration?.color_range;
   if (range?.field === layer.score_property
     && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper) {
-    return { lower: range.lower, upper: range.upper, field: layer.score_property, source: "smart" as const };
+    return { lower: range.lower, upper: range.upper, field: range.field, source: "smart" };
   }
-  return undefined;
+  return null;
 }
 
-export function smartRangeOverridesForLayer(layer: SemanticLayer, datasetId: string) {
-  const refs = layer.remote_result_refs ?? [];
-  const shared = layer.rerank_calibration?.scope === "cross_city"
-    || refs.some(ref => ref.color_range_scope === "cross_city");
-  const targets = shared ? new Set([datasetId, ...refs.map(ref => ref.dataset_id)]) : [datasetId];
-  const overrides = { ...layer.color_range_overrides_by_dataset };
-  const range = smartRangeForLayer(layer, datasetId);
-  for (const target of targets) {
-    const existing = overrides[target];
-    if (target !== datasetId && existing?.field === layer.score_property && existing.source !== "smart") continue;
-    if (range) overrides[target] = range;
-    else delete overrides[target];
-  }
-  return overrides;
-}
-
-export function colorExpression(gradient: GradientPreset, layer: SemanticLayer, datasetId?: string): ExpressionSpecification {
+export function colorExpression(gradient: GradientPreset, layer: SemanticLayer): ExpressionSpecification {
   const stops = [...gradient.stops].sort((a, b) => a.value - b.value);
-  const { lower: scoreMin, upper: scoreMax } = colorRangeForLayer(layer, gradient, datasetId);
+  const { lower: scoreMin, upper: scoreMax } = colorRangeForLayer(layer);
   const expression: unknown[] = ["interpolate", ["linear"], ["get", layer.score_property || "score"]];
   const expressionStops = [...stops];
 

@@ -7,6 +7,7 @@ import type {
   FeatureCollection,
   GradientPreset,
   GradientStop,
+  LayerColorRangeOverride,
   LayerCreate,
   LayerPatch,
   LayerState,
@@ -868,7 +869,9 @@ function normalizeSourcePaths(raw: Partial<SemanticLayer>, fallback: string): Pa
   return Object.keys(sourcePaths).length ? sourcePaths : undefined;
 }
 
-function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: GradientPreset[]): SemanticLayer | null {
+function normalizeLayer(raw: Partial<SemanticLayer> & {
+  color_range_overrides_by_dataset?: Record<string, LayerColorRangeOverride>;
+}, order: number, gradients: GradientPreset[]): SemanticLayer | null {
   if (!raw.id || !raw.prompt) return null;
   const gradient = gradientById(gradients, raw.style?.gradient_id);
   const queryType = raw.query_type === "pano_reference" ? "pano_reference" : "text";
@@ -893,6 +896,13 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     : layerStyleFromGradient(gradient);
 
   const sourcePath = raw.source_path || `local://mock/${raw.id}-${hashString(String(raw.prompt))}.geojson`;
+  const scoreProperty = raw.score_property || "zscore";
+  const legacyRanges = Object.values(raw.color_range_overrides_by_dataset ?? {}).filter(range =>
+    range?.field === scoreProperty && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper
+  );
+  const rangeOverride = raw.color_range_override === undefined
+    ? legacyRanges.find(range => range.source !== "smart") ?? legacyRanges[0]
+    : raw.color_range_override;
   return {
     id: String(raw.id),
     name: String(raw.name || raw.prompt || raw.id),
@@ -904,13 +914,13 @@ function normalizeLayer(raw: Partial<SemanticLayer>, order: number, gradients: G
     source_type: "geojson",
     source_path: sourcePath,
     source_paths: normalizeSourcePaths(raw, sourcePath),
-    score_property: raw.score_property || "zscore",
+    score_property: scoreProperty,
     style,
     status: raw.status || "ready",
     created_at: raw.created_at || utcNow(),
     rerank_calibration: raw.rerank_calibration || null,
     rerank_calibration_by_dataset: raw.rerank_calibration_by_dataset,
-    color_range_overrides_by_dataset: raw.color_range_overrides_by_dataset,
+    color_range_override: rangeOverride,
     rerank_calibration_status: raw.rerank_calibration_status,
     rerank_calibration_retry_after: raw.rerank_calibration_retry_after,
     rerank_uncalibrated_range: raw.rerank_uncalibrated_range,
@@ -1127,7 +1137,7 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
       created_at: previousLayer?.created_at || utcNow(),
       rerank_calibration: reusableRemote ? previousLayer.rerank_calibration : null,
       rerank_calibration_by_dataset: reusableRemote ? previousLayer.rerank_calibration_by_dataset : undefined,
-      color_range_overrides_by_dataset: previousLayer?.color_range_overrides_by_dataset,
+      color_range_override: previousLayer?.color_range_override,
       rerank_calibration_status: reusableRemote ? previousLayer.rerank_calibration_status : undefined,
       rerank_uncalibrated_range: reusableRemote ? previousLayer.rerank_uncalibrated_range : undefined,
       remote_result_refs: reusableRemote ? previousLayer.remote_result_refs : undefined
@@ -1202,8 +1212,8 @@ export async function patchLayer(layerId: string, payload: LayerPatch): Promise<
   if (payload.visible !== undefined) layer.visible = payload.visible;
   if (payload.score_property !== undefined) layer.score_property = payload.score_property;
   if (payload.style !== undefined) layer.style = payload.style;
-  if (payload.color_range_overrides_by_dataset !== undefined) {
-    layer.color_range_overrides_by_dataset = payload.color_range_overrides_by_dataset;
+  if (payload.color_range_override !== undefined) {
+    layer.color_range_override = payload.color_range_override;
   }
   if (payload.selected) state.selected_layer_id = layer.id;
 

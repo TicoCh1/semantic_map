@@ -51,7 +51,6 @@ type MapViewProps = {
   onSelectLayer: (layerId: string) => void;
   onPriorityTileChange?: (cityId: CityId, tile: TileCoord | null) => void;
   onVisibleCitiesChange?: (cities: CityConfig[]) => void;
-  colorRangeCityId?: CityId;
   markedPanos: MarkedPano[];
   selectedPanoKey: string | null;
   onMarkPano: (pano: PanoMapPoint) => void;
@@ -101,7 +100,6 @@ export const MapView = memo(function MapView({
   onSelectLayer,
   onPriorityTileChange,
   onVisibleCitiesChange,
-  colorRangeCityId,
   markedPanos,
   selectedPanoKey,
   onMarkPano,
@@ -165,8 +163,7 @@ export const MapView = memo(function MapView({
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
   const displayedLayer = comparisonEnabled ? selectedLayer : layers.find(layer => layer.visible);
   const title = displayedLayer?.name ?? "No visible layers";
-  const agreementCity = activeCities.find(city => city.id === colorRangeCityId) ?? activeCities[0];
-  const agreement = colorRangeForLayer(displayedLayer ?? null, null, agreementCity?.datasetId)
+  const agreement = colorRangeForLayer(displayedLayer ?? null)
     .calibration?.correlations?.agreement_percent;
 
   useEffect(() => {
@@ -1019,7 +1016,7 @@ export function CityMapPane({
           const gradient = layerGradient(layer, currentGradients);
           updateSemanticLayer(currentMap, sourceId, geojson, {
               "circle-radius": circleRadiusExpression(layer),
-              "circle-color": gradient ? colorExpression(gradient, layer, city.datasetId) : "#2f80ed",
+              "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
               "circle-opacity": layer.style.opacity,
               "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
               "circle-stroke-width": 0,
@@ -1459,7 +1456,7 @@ function semanticLayerDrawKey(layers: SemanticLayer[], gradients: GradientPreset
     .map((layer) => {
       const style = layer.style;
       const gradient = layerGradient(layer, gradients);
-      const range = colorRangeForLayer(layer, gradient, city.datasetId);
+      const range = colorRangeForLayer(layer);
       return [
         layer.id,
         layer.status,
