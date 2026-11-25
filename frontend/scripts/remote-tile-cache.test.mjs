@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {SceneResources} from '../src/state/sceneResources.ts';
-import {isCompleteRemoteTile,loadRemoteViewport,remoteViewportDiff,unavailableRemoteTile} from '../src/state/remoteTileData.ts';
+import {isCompleteRemoteTile,loadRemoteViewport,remoteViewportDiff,settledRemoteTileZoom,unavailableRemoteTile} from '../src/state/remoteTileData.ts';
 import {updateSemanticLayer,updateSemanticSource} from '../src/state/semanticLayerRenderer.ts';
 
 test('Successful empty tiles and their views retain data identity through repeated small pans',async()=>{
@@ -35,7 +35,17 @@ const points = (count) => ({
   features: Array.from({length: count}, () => ({type: 'Feature', geometry: {type: 'Point', coordinates: [0, 0]}, properties: {id: 'shared-pano-id'}}))
 });
 
-test('zoom retains its covering source and cross-tile pans reuse the overlap after cache eviction', async () => {
+test('slight zoom reversals near a tile zoom boundary keep the selected detail', () => {
+  assert.equal(settledRemoteTileZoom(11.97), 11);
+  assert.equal(settledRemoteTileZoom(12.05, 11), 11);
+  assert.equal(settledRemoteTileZoom(11.95, 12), 12);
+  assert.equal(settledRemoteTileZoom(12.12, 11), 12);
+  assert.equal(settledRemoteTileZoom(11.87, 12), 11);
+  assert.equal(settledRemoteTileZoom(17.5, 11), 13);
+  assert.equal(settledRemoteTileZoom(2.5, 13), 10);
+});
+
+test('zoom and short return pans reuse nearby rendered tiles after cache eviction', async () => {
   const cache = new SceneResources(1, 1, 8, data => data.features.length);
   const requests = [];
   const loader = async ({x}) => { requests.push(x); return points(x === 2 ? 10 : 1); };
@@ -44,12 +54,16 @@ test('zoom retains its covering source and cross-tile pans reuse the overlap aft
   assert.equal(zoomed, first);
   const panned = await loadRemoteViewport(cache, 'revision-a', [tile(2), tile(3)], loader, first);
   assert.deepEqual(requests, [1, 2, 3]);
-  assert.equal(panned.features[0], first.features[1]);
+  assert.equal(panned.features[1], first.features[1]);
   const diff = remoteViewportDiff(first, panned);
-  assert.deepEqual(diff.remove, ['13/1/0:0']);
+  assert.deepEqual(diff.remove, []);
   assert.deepEqual(diff.add.map(feature => feature.id), ['13/3/0:0']);
   assert.equal(new Set(panned.features.map(feature => feature.id)).size, panned.features.length);
   assert.equal(diff.add[0].properties.id, 'shared-pano-id');
+  assert.equal(await loadRemoteViewport(cache, 'revision-a', [tile(1), tile(2)], loader, panned), panned);
+  assert.deepEqual(requests, [1, 2, 3]);
+  const distant = await loadRemoteViewport(cache, 'revision-a', [tile(12)], loader, panned);
+  assert.deepEqual(distant.features.map(feature => feature.id), ['13/12/0:0']);
   const replacement = await loadRemoteViewport(cache, 'revision-b', [tile(2)], loader, panned);
   assert.equal(remoteViewportDiff(panned, replacement), undefined);
 });

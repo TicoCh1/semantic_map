@@ -5,15 +5,16 @@ import { SceneResources } from "../src/state/sceneResources.ts";
 import { preserveSceneStyle } from "../src/state/mapSceneStyle.ts";
 
 function map(lat, lng = 0) {
-  const listeners = new Set();
+  const listeners = { move: new Set(), moveend: new Set() };
   return {
-    center: { lat, lng }, zoom: 12, bearing: 0, pitch: 0, jumps: 0,
+    center: { lat, lng }, zoom: 12, bearing: 0, pitch: 0, jumps: 0, moving: false, zooming: false,
     getCenter() { return this.center; }, getZoom() { return this.zoom; },
     getBearing() { return this.bearing; }, getPitch() { return this.pitch; },
     getMinZoom() { return 2; }, getMaxZoom() { return 18; },
-    on(_, fn) { listeners.add(fn); }, off(_, fn) { listeners.delete(fn); },
-    emit() { for (const fn of listeners) fn(); },
-    jumpTo(camera) { this.jumps++; Object.assign(this, camera); this.emit(); }
+    isMoving() { return this.moving; }, isZooming() { return this.zooming; },
+    on(event, fn) { listeners[event].add(fn); }, off(event, fn) { listeners[event].delete(fn); },
+    emit(event = "move") { for (const fn of listeners[event]) fn(); },
+    jumpTo(camera) { this.jumps++; Object.assign(this, camera); this.emit(); this.emit("moveend"); }
   };
 }
 test("500 continuous frames synchronize city ground resolution without feedback or moving city centers", () => {
@@ -41,6 +42,29 @@ test("same-city comparisons share pan, rotation and pitch; removed maps are neve
   a.zoom = 15; a.emit(); assert.equal(b.jumps, jumps);
   const replacement = map(51.5); camera.register(replacement, "camera");
   assert.deepEqual(replacement.center, a.center); assert.equal(replacement.zoom, 15);
+});
+test("city drag avoids tiny peer zoom jumps and reconciles the exact scale on release", () => {
+  const a = map(51.5, -0.1), b = map(31.2, 121.4);
+  const camera = new MapSceneCamera(groundScaleForZoom(12, 51.5));
+  camera.register(a, "resolution"); camera.register(b, "resolution");
+  const initialJumps = b.jumps;
+  a.moving = true;
+  for (let step = 1; step <= 80; step++) {
+    a.center = { lat: 51.5 + step * 0.0003, lng: -0.1 };
+    a.emit();
+  }
+  assert.equal(b.jumps, initialJumps);
+  a.moving = false;
+  a.emit("moveend");
+  assert.equal(b.jumps, initialJumps + 1);
+  const exactScale = () => Math.abs(groundScaleForZoom(a.zoom, a.center.lat) / groundScaleForZoom(b.zoom, b.center.lat) - 1) < 1e-10;
+  assert.ok(exactScale());
+  a.moving = true;
+  a.zooming = true;
+  a.zoom += 0.005;
+  a.emit();
+  assert.equal(b.jumps, initialJumps + 2);
+  assert.ok(exactScale());
 });
 test("resize events cannot publish a stale scale; zoom limits remain compatible at different latitudes", () => {
   const camera = new MapSceneCamera(groundScaleForZoom(12, 51.5));

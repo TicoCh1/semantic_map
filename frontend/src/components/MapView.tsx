@@ -5,7 +5,7 @@ import { attachPointShapeImages, getRequestedSemanticSourceData, normalizePointS
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
-import { loadRemoteViewport, remoteViewportDiff } from "../state/remoteTileData";
+import { loadRemoteViewport, remoteViewportDiff, REMOTE_MAX_DETAIL_ZOOM, settledRemoteTileZoom } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
@@ -63,7 +63,6 @@ type MapViewProps = {
   liveSearchAvailable?: boolean;
 };
 
-const REMOTE_MAX_DETAIL_ZOOM = 13;
 const CITY_SELECTION_KEY = "semantic-map-selected-cities-v2";
 const MOBILE_CITY_KEY = "semantic-map-mobile-city-v1";
 const CITY_SPLIT_KEY = "semantic-map-city-split-percent";
@@ -573,6 +572,7 @@ export function CityMapPane({
   const forceMaxDetailChangeRef = useRef(onForceMaxDetailChange);
   const sharedGroundScaleRef = useRef(sharedGroundScale);
   const sharedRemoteTileZoomRef = useRef(sharedRemoteTileZoom);
+  const autoTileZoomRef = useRef<number>();
   const priorityTileChangeRef = useRef(onPriorityTileChange);
   const remoteTileZoomChangeRef = useRef(onRemoteTileZoomChange);
   const selectLayerRef = useRef(onSelectLayer);
@@ -661,6 +661,16 @@ export function CityMapPane({
     }));
   }
 
+  function publishRemoteTileZoom(map: MapLibreMap, forceMaxDetail: boolean) {
+    if (forceMaxDetail) {
+      remoteTileZoomChangeRef.current(REMOTE_MAX_DETAIL_ZOOM);
+      return;
+    }
+    const zoom = settledRemoteTileZoom(map.getZoom(), autoTileZoomRef.current);
+    autoTileZoomRef.current = zoom;
+    remoteTileZoomChangeRef.current(zoom);
+  }
+
   function scheduleSemanticRedraw(generation: number, delayMs = 160) {
     if (styleGenerationRef.current !== generation) return;
     if (semanticRedrawTimerRef.current !== undefined) {
@@ -675,7 +685,7 @@ export function CityMapPane({
       const map = mapRef.current;
       if (resizingRef.current || map?.isMoving()) return;
       if (map) {
-        reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+        publishRemoteTileZoom(map, forceMaxDetailRef.current);
         reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
       }
       requestSemanticRedraw(generation);
@@ -686,6 +696,7 @@ export function CityMapPane({
     if (!containerRef.current || mapRef.current) return;
 
     const initialBasemap = basemapById(basemapId);
+    autoTileZoomRef.current = undefined;
     const generation = styleGenerationRef.current + 1;
     styleGenerationRef.current = generation;
     basemapRef.current = initialBasemap.id;
@@ -716,7 +727,7 @@ export function CityMapPane({
       container: containerRef.current
     });
     map.on("load", () => {
-      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+      publishRemoteTileZoom(map, forceMaxDetailRef.current);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
       requestSemanticRedraw(generation, `${city.name} ${initialBasemap.name} ready`);
     });
@@ -768,7 +779,7 @@ export function CityMapPane({
     const unregisterSceneCamera = sceneCamera?.register(map, cameraMode, () => applyingResizeRef.current || resizingRef.current);
     const unregisterLocalMap = onMapReady?.(map);
     requestSemanticRedraw(generation, `Loading ${city.name}`);
-    reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+    publishRemoteTileZoom(map, forceMaxDetailRef.current);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
 
     return () => {
@@ -835,11 +846,11 @@ export function CityMapPane({
     const map = mapRef.current;
     if (!map) return;
     if (compactControls && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
-      reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
+      publishRemoteTileZoom(map, forceMaxDetail);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
       return;
     }
-    reportRemoteTileZoom(map, forceMaxDetail, remoteTileZoomChangeRef.current);
+    publishRemoteTileZoom(map, forceMaxDetail);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
     requestSemanticRedraw(styleGenerationRef.current);
   }, [city.datasetId, compactControls, forceMaxDetail]);
@@ -980,7 +991,7 @@ export function CityMapPane({
         sharedGroundScaleRef.current = nextScale;
         onSharedGroundScaleChange?.(nextScale);
       }
-      reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+      publishRemoteTileZoom(map, forceMaxDetailRef.current);
       reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
       scheduleSemanticRedraw(styleGenerationRef.current);
     };
@@ -1003,7 +1014,7 @@ export function CityMapPane({
     } finally {
       applyingScaleSyncRef.current = false;
     }
-    reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
+    publishRemoteTileZoom(map, forceMaxDetailRef.current);
     reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
     scheduleSemanticRedraw(styleGenerationRef.current);
   }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, sharedGroundScale]);
@@ -1362,15 +1373,6 @@ function filterStaticFallbackTiles(cityId: CityId, tiles: Array<{ z: number; x: 
   const range = STATIC_FALLBACK_TILE_RANGES[cityId];
   if (!range) return [];
   return tiles.filter((tile) => tile.z === range.z && tile.x >= range.minX && tile.x <= range.maxX && tile.y >= range.minY && tile.y <= range.maxY);
-}
-
-function remoteTileZoomForMap(map: MapLibreMap, forceMaxDetail: boolean): number {
-  return forceMaxDetail ? REMOTE_MAX_DETAIL_ZOOM : clampInteger(Math.floor(map.getZoom()), 10, REMOTE_MAX_DETAIL_ZOOM);
-}
-
-function reportRemoteTileZoom(map: MapLibreMap, forceMaxDetail: boolean, onRemoteTileZoomChange?: (zoom: number) => void) {
-  if (!onRemoteTileZoomChange) return;
-  onRemoteTileZoomChange(remoteTileZoomForMap(map, forceMaxDetail));
 }
 
 function reportPriorityTile(map: MapLibreMap, datasetId: string, remoteTileZoom: number, onPriorityTileChange?: (tile: TileCoord | null) => void) {

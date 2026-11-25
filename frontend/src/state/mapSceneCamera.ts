@@ -7,10 +7,15 @@ export type SceneCameraMap = {
   getPitch(): number;
   getMinZoom(): number;
   getMaxZoom(): number;
+  isMoving(): boolean;
+  isZooming(): boolean;
   jumpTo(camera: { center?: { lng: number; lat: number }; zoom: number; bearing: number; pitch: number }, eventData?: { sceneCameraSync: boolean }): unknown;
-  on(event: "move", listener: () => void): unknown;
-  off(event: "move", listener: () => void): unknown;
+  on(event: "move" | "moveend", listener: () => void): unknown;
+  off(event: "move" | "moveend", listener: () => void): unknown;
 };
+
+const CAMERA_EPSILON = 1e-7;
+const PEER_PAN_ZOOM_EPSILON = 0.01;
 
 export function groundScaleForZoom(zoom: number, lat: number): number {
   return 2 ** zoom / latitudeCos(lat);
@@ -42,11 +47,14 @@ export class MapSceneCamera {
       }, { sceneCameraSync: true });
     } finally { this.applying = false; }
     this.members.add(map);
-    const synchronize = () => {
+    const synchronize = (settled: boolean) => {
       if (this.applying || ignoreMove()) return;
       this.applying = true;
       try {
         const center = map.getCenter();
+        const bearing = map.getBearing();
+        const pitch = map.getPitch();
+        const pan = !settled && mode === "resolution" && map.isMoving() && !map.isZooming();
         let scale = groundScaleForZoom(map.getZoom(), center.lat);
         // Clamp the shared scale once, rather than letting a limited peer fight
         // the gesture and feed a second, incompatible scale back to the source.
@@ -61,16 +69,22 @@ export class MapSceneCamera {
         for (const member of this.members) {
           const memberCenter = member.getCenter();
           const zoom = zoomForGroundScale(scale, mode === "camera" ? center.lat : memberCenter.lat);
-          if (Math.abs(member.getZoom() - zoom) < 1e-7 && member.getBearing() === map.getBearing() && member.getPitch() === map.getPitch()
+          // Latitude shifts during a drag make tiny changes to scale. Defer
+          // those peer repaints until the gesture settles, keeping zoom live.
+          const epsilon = pan && member !== map ? PEER_PAN_ZOOM_EPSILON : CAMERA_EPSILON;
+          if (Math.abs(member.getZoom() - zoom) < epsilon && member.getBearing() === bearing && member.getPitch() === pitch
             && (mode !== "camera" || (memberCenter.lng === center.lng && memberCenter.lat === center.lat))) continue;
-          member.jumpTo({ ...(mode === "camera" ? { center } : {}), zoom, bearing: map.getBearing(), pitch: map.getPitch() }, { sceneCameraSync: true });
+          member.jumpTo({ ...(mode === "camera" ? { center } : {}), zoom, bearing, pitch }, { sceneCameraSync: true });
         }
       } finally { this.applying = false; }
     };
-    map.on("move", synchronize);
+    const onMove = () => synchronize(false);
+    const onMoveEnd = () => synchronize(true);
+    map.on("move", onMove);
+    map.on("moveend", onMoveEnd);
     // A replacement city can have different latitude/zoom limits. Reconcile
     // the entire group immediately instead of waiting for the next gesture.
-    synchronize();
-    return () => { map.off("move", synchronize); this.members.delete(map); };
+    synchronize(true);
+    return () => { map.off("move", onMove); map.off("moveend", onMoveEnd); this.members.delete(map); };
   }
 }
