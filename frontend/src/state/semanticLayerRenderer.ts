@@ -1,8 +1,10 @@
-import type { CircleLayerSpecification, SymbolLayerSpecification, GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
+import type { CircleLayerSpecification, SymbolLayerSpecification, GeoJSONSource, GeoJSONSourceDiff, Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection, PointShape } from "../api/types";
 
 type SemanticMap = Pick<MapLibreMap, "getSource" | "getLayer" | "addSource" | "addLayer" | "removeLayer" | "setPaintProperty" | "setLayoutProperty" | "hasImage" | "addImage">;
-const submittedData = new WeakMap<object, FeatureCollection>();
+type CalculateSourceDiff = (previous: FeatureCollection, next: FeatureCollection) => GeoJSONSourceDiff | undefined;
+type SourceUpdate = { submitted?: FeatureCollection; requested: FeatureCollection; pending: boolean; calculateDiff?: CalculateSourceDiff };
+const submittedData = new WeakMap<GeoJSONSource, SourceUpdate>();
 const submittedPaint = new WeakMap<object, Map<string, string>>();
 const submittedLayout = new WeakMap<object, Map<string, string>>();
 const shapes = ["square", "diamond", "triangle"] as const;
@@ -71,15 +73,51 @@ export function attachPointShapeImages(map: MapLibreMap) {
   return () => { map.off("styleimagemissing", onMissing); };
 }
 
-export function updateSemanticSource(map: Pick<SemanticMap, "getSource" | "addSource">, id: string, data: FeatureCollection) {
+export function getRequestedSemanticSourceData(map: Pick<SemanticMap, "getSource">, id: string): FeatureCollection | undefined {
   const source = map.getSource(id) as GeoJSONSource | undefined;
-  if (source) {
-    if (submittedData.get(source) !== data) source.setData(data);
-    submittedData.set(source, data);
-  } else {
+  return source && submittedData.get(source)?.requested;
+}
+
+export function updateSemanticSource(map: Pick<SemanticMap, "getSource" | "addSource">, id: string, data: FeatureCollection, calculateDiff?: CalculateSourceDiff) {
+  const source = map.getSource(id) as GeoJSONSource | undefined;
+  if (!source) {
     map.addSource(id, { type: "geojson", data });
-    const added = map.getSource(id);
-    if (added) submittedData.set(added, data);
+    const added = map.getSource(id) as GeoJSONSource | undefined;
+    if (added) submittedData.set(added, { submitted: data, requested: data, pending: false });
+    return;
+  }
+
+  let state = submittedData.get(source);
+  if (!state) {
+    state = { requested: data, pending: false };
+    submittedData.set(source, state);
+  }
+  state.requested = data;
+  state.calculateDiff = calculateDiff;
+  submitSemanticSourceUpdate(map, id, source, state);
+}
+
+function submitSemanticSourceUpdate(
+  map: Pick<SemanticMap, "getSource">,
+  id: string,
+  source: GeoJSONSource,
+  state: SourceUpdate
+) {
+  if (state.pending || state.requested === state.submitted || map.getSource(id) !== source) return;
+  const next = state.requested;
+  const diff = state.submitted && state.calculateDiff?.(state.submitted, next);
+  state.submitted = next;
+  if (diff && !diff.add?.length && !diff.remove?.length) return;
+  const completion = diff ? source.updateData(diff) : source.setData(next);
+  if (completion) {
+    state.pending = true;
+    const continueUpdates = () => {
+      state.pending = false;
+      submitSemanticSourceUpdate(map, id, source, state);
+    };
+    // A full setData must not replace MapLibre's local data while an older
+    // worker result is still applying its diff. Keep only the newest request.
+    void completion.then(continueUpdates, continueUpdates);
   }
 }
 
@@ -105,9 +143,10 @@ export function updateSemanticLayer(
   id: string,
   data: FeatureCollection,
   circlePaint: NonNullable<CircleLayerSpecification["paint"]>,
-  marker?: { shape: PointShape; size: NonNullable<SymbolLayerSpecification["layout"]>["icon-size"] }
+  marker?: { shape: PointShape; size: NonNullable<SymbolLayerSpecification["layout"]>["icon-size"] },
+  calculateDiff?: CalculateSourceDiff
 ) {
-  updateSemanticSource(map, id, data);
+  updateSemanticSource(map, id, data, calculateDiff);
 
   const shape = normalizePointShape(marker?.shape);
   const type = shape === "circle" ? "circle" : "symbol";

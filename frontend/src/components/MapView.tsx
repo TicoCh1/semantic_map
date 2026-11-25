@@ -1,11 +1,11 @@
 import { ThemedSelect } from "./ThemedSelect";
 import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
-import { attachPointShapeImages, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
+import { attachPointShapeImages, getRequestedSemanticSourceData, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
-import { isCompleteRemoteTile } from "../state/remoteTileData";
+import { loadRemoteViewport, remoteViewportDiff } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
@@ -21,8 +21,7 @@ import {
   getLayerSourcePath,
   getRemoteTileGeojson,
   isRemoteTileTemplate,
-  isStaticFallbackTileTemplate,
-  mergeFeatureCollections
+  isStaticFallbackTileTemplate
 } from "../api/client";
 import { StreetViewPanel } from "./StreetViewPanel";
 import { SavedPromptSearch } from "./SavedPromptSearch";
@@ -581,6 +580,7 @@ export function CityMapPane({
   const selectPanoRef = useRef(onSelectPano);
   const panoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const styleGenerationRef = useRef(0);
+  const viewportGenerationRef = useRef(0);
   const drawnLayerIds = useRef<Set<string>>(new Set());
   const localResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const resources = sceneResources ?? localResources;
@@ -723,6 +723,7 @@ export function CityMapPane({
     map.on("error", (event) => setStatus(event.error?.message ?? "Map error"));
     mapRef.current = map;
     const publishViewport = () => {
+      viewportGenerationRef.current++;
       const container = map.getContainer();
       const center = map.getCenter();
       const zoom = map.getZoom();
@@ -1026,6 +1027,7 @@ export function CityMapPane({
 
     async function draw(attempt = 0) {
       if (cancelled || generation !== styleGenerationRef.current) return;
+      const viewportGeneration = viewportGenerationRef.current;
 
       try {
         const currentLayers = layersRef.current;
@@ -1081,6 +1083,9 @@ export function CityMapPane({
             dataProviderRef.current
           );
           if (cancelled || generation !== styleGenerationRef.current) return;
+          // Slow tile requests can finish during the next gesture. The settled
+          // camera will schedule its own draw with the current tile coverage.
+          if (viewportGeneration !== viewportGenerationRef.current && isRemoteTileTemplate(getLayerSourcePath(layer, city.id))) return;
 
           const sourceId = sourceIdForCityLayer(city.id, layer.id);
           // A new scoring job can temporarily have no published tiles. Keep
@@ -1094,7 +1099,7 @@ export function CityMapPane({
               "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
               "circle-stroke-width": 0,
               "circle-stroke-opacity": 0
-          }, { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) });
+          }, { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) }, remoteViewportDiff);
 
           drawnLayerIds.current.add(sourceId);
           if (!displayedContent && geojson.features.length) {
@@ -1338,20 +1343,9 @@ async function loadLayerGeojsonForMap(
   const usesStaticFallback = isStaticFallbackTileTemplate(sourcePath);
   const tileZoom = usesStaticFallback ? REMOTE_MAX_DETAIL_ZOOM : remoteTileZoom;
   const tiles = filterStaticFallbackTiles(cityId, visibleRemoteTiles(map, tileZoom), usesStaticFallback);
-  if (!tiles.length) return emptyFeatureCollection();
-  const combinedKey = `view:${sourcePath}:${tiles.map(tile => `${tile.z}/${tile.x}/${tile.y}`).join("|")}`;
-  let complete = true;
+  const displayed = getRequestedSemanticSourceData(map, sourceIdForCityLayer(cityId, layer.id));
   try {
-    // Aggregation must not occupy a request slot while waiting for tile loaders.
-    return await resources.load(combinedKey, async () => {
-      const collections = await Promise.all(tiles.map(tile => resources.load(
-        `tile:${sourcePath}:${tile.z}/${tile.x}/${tile.y}`,
-        () => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y),
-        { cacheable: isCompleteRemoteTile }
-      )));
-      complete = collections.every(isCompleteRemoteTile);
-      return mergeFeatureCollections(collections);
-    }, { scheduled: false, cacheable: () => complete });
+    return await loadRemoteViewport(resources, sourcePath, tiles, tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), displayed);
   } catch {
     return getLayerFallbackGeojson(layer.id, cityId);
   }
@@ -1368,13 +1362,6 @@ function filterStaticFallbackTiles(cityId: CityId, tiles: Array<{ z: number; x: 
   const range = STATIC_FALLBACK_TILE_RANGES[cityId];
   if (!range) return [];
   return tiles.filter((tile) => tile.z === range.z && tile.x >= range.minX && tile.x <= range.maxX && tile.y >= range.minY && tile.y <= range.maxY);
-}
-
-function emptyFeatureCollection(): FeatureCollection {
-  return {
-    type: "FeatureCollection",
-    features: []
-  } as FeatureCollection;
 }
 
 function remoteTileZoomForMap(map: MapLibreMap, forceMaxDetail: boolean): number {
