@@ -917,7 +917,7 @@ export function App() {
         city={histogramCity}
         allowStaticTiles={allowStaticTiles}
         range={selectedRange}
-        onResetRange={selectedRange.mode !== "default" ? handleResetHistogramRange : undefined}
+        onResetRange={selectedRange.overridden ? handleResetHistogramRange : undefined}
         onSmartRange={handleSmartHistogramRange}
         onRangeChange={handleHistogramRangeChange}
         onPropertyChange={handleHistogramPropertyChange}

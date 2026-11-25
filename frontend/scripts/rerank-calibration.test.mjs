@@ -117,12 +117,13 @@ test('A queued calibration is polled before applying the returned z-score bounds
   assert.equal(f.layer.style.score_max, 5.21);
 });
 
-test('Applying Smart range uses the returned GPU bounds as map paint stops', async () => {
+test('The returned GPU bounds become the map paint stops without applying an override', async () => {
   const f = fixture({ queued: true });
   await f.run();
   const context = vm.createContext({ clamp: (v, lo, hi) => Math.min(hi, Math.max(lo, v)) });
   vm.runInContext(paintCode, context);
-  f.layer.color_range_override = context.smartRangeForLayer(f.layer);
+  assert.equal(context.colorRangeForLayer(f.layer).mode, 'smart');
+  assert.equal(context.colorRangeForLayer(f.layer).overridden, false);
   const paint = context.colorExpression({ score_min:-1, score_max:3,
     stops:[{value:0,color:'blue'}, {value:.5,color:'yellow'}, {value:1,color:'red'}] }, f.layer);
   assert.deepEqual(JSON.parse(JSON.stringify(paint)),
@@ -142,10 +143,11 @@ test('Smart range stays fixed and the manual choice replaces it for the layer', 
   };
   const fallback = [-1, 'blue', 1, 'yellow', 3, 'red'];
   const stops = () => JSON.parse(JSON.stringify(context.colorExpression(gradient, layer))).slice(3);
-  assert.deepEqual(stops(), fallback);
+  assert.deepEqual(stops(), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
 
   layer.color_range_override = context.smartRangeForLayer(layer);
   assert.equal(context.colorRangeForLayer(layer).mode, 'smart');
+  assert.equal(context.colorRangeForLayer(layer).overridden, true);
   layer.rerank_calibration.color_range = { mean: 4, lower: 2, upper: 6, field: 'zscore' };
   assert.deepEqual(stops(), [.5, 'blue', 2.5, 'yellow', 4.5, 'red']);
 
@@ -156,6 +158,9 @@ test('Smart range stays fixed and the manual choice replaces it for the layer', 
   assert.deepEqual(stops(), fallback);
   layer.score_property = 'zscore';
   layer.color_range_override = null;
+  assert.deepEqual(stops(), [2, 'blue', 4, 'yellow', 6, 'red']);
+  layer.rerank_calibration.color_range = { lower: 6, upper: 2, field: 'zscore' };
+  assert.equal(context.colorRangeForLayer(layer).mode, 'default');
   assert.deepEqual(stops(), fallback);
 });
 
@@ -168,9 +173,11 @@ test('Shared Smart range can come from a manifest, and a city-only range does no
     rerank_calibration_by_dataset: {london: {color_range}},
   };
   assert.equal(context.smartRangeForLayer(layer), null);
+  assert.equal(context.colorRangeForLayer(layer).mode, 'default');
   layer.rerank_calibration_by_dataset.rome = {scope: 'cross_city', color_range};
   assert.equal(context.smartRangeForLayer(layer).lower, -.5);
   assert.equal(context.smartRangeForLayer(layer).upper, 3.5);
+  assert.equal(context.colorRangeForLayer(layer).mode, 'smart');
 });
 
 test('Cached retrieval layers stay resumable until range calibration finishes', async () => {

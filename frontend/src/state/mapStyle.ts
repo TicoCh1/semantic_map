@@ -1,5 +1,5 @@
 import type { ExpressionSpecification } from "@maplibre/maplibre-gl-style-spec";
-import type { GradientPreset, LayerColorRangeOverride, SemanticLayer } from "../api/types";
+import type { GradientPreset, LayerColorRangeOverride, RerankColorRange, SemanticLayer } from "../api/types";
 import { DEFAULT_POINT_RADIUS, clamp } from "./color";
 
 export function colorRangeForLayer(layer: SemanticLayer | null) {
@@ -8,27 +8,35 @@ export function colorRangeForLayer(layer: SemanticLayer | null) {
       .find(item => item.scope === "cross_city")
     : undefined;
   const override = layer?.color_range_override;
-  if (override && override.field === layer?.score_property
-    && Number.isFinite(override.lower) && Number.isFinite(override.upper) && override.lower < override.upper) {
+  if (rangeMatchesField(override, layer?.score_property)) {
     const mode: "smart" | "manual" = override.source === "smart" ? "smart" : "manual";
-    return { lower: override.lower, upper: override.upper, mode, calibration };
+    return { lower: override.lower, upper: override.upper, mode, calibration, overridden: true };
+  }
+  const smartRange = calibration?.color_range;
+  if (rangeMatchesField(smartRange, layer?.score_property)) {
+    return { lower: smartRange.lower, upper: smartRange.upper, mode: "smart" as const, calibration, overridden: false };
   }
   return {
     lower: layer?.color_range_default?.lower ?? -1,
     upper: layer?.color_range_default?.upper ?? 3,
     mode: "default" as const,
-    calibration
+    calibration,
+    overridden: false
   };
 }
 
 export function smartRangeForLayer(layer: SemanticLayer): LayerColorRangeOverride | null {
   const { calibration } = colorRangeForLayer(layer);
   const range = calibration?.color_range;
-  if (range?.field === layer.score_property
-    && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper) {
+  if (rangeMatchesField(range, layer.score_property)) {
     return { lower: range.lower, upper: range.upper, field: range.field, source: "smart" };
   }
   return null;
+}
+
+function rangeMatchesField(range: LayerColorRangeOverride | RerankColorRange | null | undefined,
+  field: string | undefined): range is LayerColorRangeOverride | RerankColorRange {
+  return !!range && range.field === field && Number.isFinite(range.lower) && Number.isFinite(range.upper) && range.lower < range.upper;
 }
 
 export function colorExpression(gradient: GradientPreset, layer: SemanticLayer): ExpressionSpecification {
