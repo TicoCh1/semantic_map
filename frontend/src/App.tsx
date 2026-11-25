@@ -144,7 +144,6 @@ export function App() {
   const [attributionHost, setAttributionHost] = useState<HTMLDivElement | null>(null);
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
   const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
-  const [priorityTiles, setPriorityTiles] = useState<CityPriorityTiles>({});
   const [visibleMapCities, setVisibleMapCities] = useState<CityConfig[]>([]);
   const [remoteLogs, setRemoteLogs] = useState<RemoteLogEntry[]>([]);
   const [mapProgressEntries, setMapProgressEntries] = useState<RemoteLogEntry[]>([]);
@@ -214,10 +213,6 @@ export function App() {
       return resumeRemoteScoringJobs();
     });
   }, []);
-
-  useEffect(() => {
-    priorityTilesRef.current = priorityTiles;
-  }, [priorityTiles]);
 
   useEffect(() => {
     if (!backendConfig?.enabled || !backendConfig.baseUrl) return;
@@ -506,10 +501,6 @@ export function App() {
 
   const histogramCity = visibleMapCities[0];
   const selectedRange = colorRangeForLayer(selectedLayer);
-  const histogramLayer = selectedLayer && {
-    ...selectedLayer,
-    style: { ...selectedLayer.style, score_min: selectedRange.lower, score_max: selectedRange.upper }
-  };
 
   const scoreField = selectedLayer?.score_property === "zscore" ? "zscore" : "score";
   const backendCanAttemptSearch = Boolean(backendConfig?.enabled && isUsableRemoteBackendUrl(backendConfig.baseUrl));
@@ -522,19 +513,19 @@ export function App() {
     });
   }, []);
 
-  async function handleCreate(prompt: string) {
+  const handleCreate = useCallback(async (prompt: string) => {
     setError(null);
     if (!liveSearchAvailable) {
       setError(STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE);
       return;
     }
     try {
-      await createScoringJob(prompt, priorityTiles);
+      await createScoringJob(prompt, priorityTilesRef.current);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit prompt");
     }
-  }
+  }, [liveSearchAvailable, refresh]);
 
   async function handleCreateReference(reference: PanoReference) {
     setError(null);
@@ -547,7 +538,7 @@ export function App() {
       return;
     }
     try {
-      await createPanoReferenceScoringJob(reference, priorityTiles);
+      await createPanoReferenceScoringJob(reference, priorityTilesRef.current);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to submit reference pano");
@@ -568,7 +559,7 @@ export function App() {
         await refresh();
         return;
       }
-      const result = await refreshAllScoringLayers(priorityTiles);
+      const result = await refreshAllScoringLayers(priorityTilesRef.current);
       setBackendConnectionFailed(result.failed > 0 && result.submitted === 0 && result.skipped === 0);
       await refresh();
     } catch {
@@ -593,14 +584,14 @@ export function App() {
   }, [handleSelect]);
 
   const handlePriorityTileChange = useCallback((cityId: CityId, tile: TileCoord | null) => {
-    setPriorityTiles((current) => {
-      const previous = current[cityId];
-      if ((!previous && !tile) || (previous && tile && previous.z === tile.z && previous.x === tile.x && previous.y === tile.y && previous.dataset_id === tile.dataset_id)) return current;
-      const next = { ...current };
-      if (tile) next[cityId] = tile;
-      else delete next[cityId];
-      return next;
-    });
+    // Requests read a viewport snapshot. The tile coordinates have no UI consumers.
+    const current = priorityTilesRef.current;
+    const previous = current[cityId];
+    if ((!previous && !tile) || (previous && tile && previous.z === tile.z && previous.x === tile.x && previous.y === tile.y && previous.dataset_id === tile.dataset_id)) return;
+    const next = { ...current };
+    if (tile) next[cityId] = tile;
+    else delete next[cityId];
+    priorityTilesRef.current = next;
   }, []);
 
   const handleSelectPano = useCallback((panoKey: string) => {
@@ -920,10 +911,10 @@ export function App() {
         highlightHiddenEyes={data.state.layers.length > 0 && data.state.layers.every((layer) => !layer.visible)}
       />
       <HistogramPanel
-        layer={histogramLayer}
+        layer={selectedLayer}
         gradient={selectedGradient}
         city={histogramCity}
-        rangeMode={selectedRange.mode}
+        range={selectedRange}
         onResetRange={selectedRange.mode !== "default" ? handleResetHistogramRange : undefined}
         onSmartRange={handleSmartHistogramRange}
         onRangeChange={handleHistogramRangeChange}

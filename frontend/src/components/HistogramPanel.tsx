@@ -11,7 +11,7 @@ type HistogramPanelProps = {
   gradient: GradientPreset | null;
   data?: FeatureCollection;
   city?: CityConfig;
-  rangeMode?: "default" | "manual" | "smart";
+  range?: { lower: number; upper: number; mode: "default" | "manual" | "smart" };
   onResetRange?: (layer: SemanticLayer) => Promise<void>;
   onSmartRange?: (layer: SemanticLayer) => Promise<{ lower: number; upper: number }>;
   onRangeChange?: (layer: SemanticLayer, scoreMin: number, scoreMax: number) => Promise<void>;
@@ -25,8 +25,9 @@ type HistogramBin = {
 
 const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
+const MAX_HISTOGRAM_BINS = 512;
 
-export function HistogramPanel({ layer, gradient, data, city, rangeMode, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, range, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -36,6 +37,10 @@ export function HistogramPanel({ layer, gradient, data, city, rangeMode, onReset
   const [rangeError, setRangeError] = useState<string | null>(null);
   const [propertySaving, setPropertySaving] = useState(false);
   const [bucketWidth, setBucketWidth] = useState(readSavedBucketWidth);
+  const rangeMode = range?.mode;
+  const scoreMin = range?.lower ?? layer?.style.score_min ?? gradient?.score_min ?? 0;
+  const scoreMax = range?.upper ?? layer?.style.score_max ?? gradient?.score_max ?? 1;
+  const includeOutliers = Boolean(city);
 
   useEffect(() => {
     window.localStorage.setItem(BUCKET_WIDTH_STORAGE_KEY, String(bucketWidth));
@@ -79,47 +84,47 @@ export function HistogramPanel({ layer, gradient, data, city, rangeMode, onReset
   }, [data, city?.id, layer?.id, city ? layer?.source_paths?.[city.id] : layer?.source_path, layer?.score_property]);
 
   useEffect(() => {
-    const scoreMin = layer?.style.score_min ?? gradient?.score_min ?? 0;
-    const scoreMax = layer?.style.score_max ?? gradient?.score_max ?? 1;
     setDraftMin(formatInputValue(scoreMin));
     setDraftMax(formatInputValue(scoreMax));
     setRangeError(null);
-  }, [gradient?.score_min, gradient?.score_max, layer?.id, layer?.score_property,
-    layer?.style.score_min, layer?.style.score_max, rangeMode]);
+  }, [layer?.id, layer?.score_property, rangeMode, scoreMin, scoreMax]);
 
   const histogram = useMemo(() => {
-    if (!layer || !gradient || !values.length) return null;
+    if (!gradient || !values.length) return null;
 
-    const scoreMin = layer.style.score_min ?? gradient.score_min ?? 0;
-    const scoreMax = layer.style.score_max ?? gradient.score_max ?? 1;
     const rangeMin = Math.min(scoreMin, scoreMax);
     const rangeMax = Math.max(scoreMin, scoreMax);
     const span = rangeMax - rangeMin || 1;
-    const safeBucketWidth = BUCKET_WIDTH_OPTIONS.includes(bucketWidth) ? bucketWidth : BUCKET_WIDTH_OPTIONS[0];
-    const binCount = Math.max(1, Math.ceil(span / safeBucketWidth));
+    if (!Number.isFinite(span)) return null;
+    const effectiveBucketWidth = Math.max(bucketWidth, span / MAX_HISTOGRAM_BINS);
+    const binCount = Math.max(1, Math.ceil(span / effectiveBucketWidth));
     const counts = Array.from({ length: binCount }, () => 0);
     let visibleCount = 0;
     let below = 0;
     let above = 0;
+    let dataMin = Infinity;
+    let dataMax = -Infinity;
 
     for (const value of values) {
+      dataMin = Math.min(dataMin, value);
+      dataMax = Math.max(dataMax, value);
       if (value < rangeMin) below += 1;
       else if (value > rangeMax) above += 1;
       else visibleCount += 1;
-      if (!city && (value < rangeMin || value > rangeMax)) continue;
-      const rawIndex = Math.floor((value - rangeMin) / safeBucketWidth);
+      if (!includeOutliers && (value < rangeMin || value > rangeMax)) continue;
+      const rawIndex = Math.floor((value - rangeMin) / effectiveBucketWidth);
       const index = Math.min(Math.max(rawIndex, 0), binCount - 1);
       counts[index] += 1;
     }
 
     const bins: HistogramBin[] = counts.map((count, index) => {
-      const bucketStart = rangeMin + index * safeBucketWidth;
-      const bucketEnd = Math.min(rangeMax, bucketStart + safeBucketWidth);
-      const center = (bucketStart + bucketEnd) / 2;
+      const bucketStart = rangeMin + index * effectiveBucketWidth;
+      const bucketEnd = Math.min(rangeMax, bucketStart + effectiveBucketWidth);
+      const center = bucketStart + (bucketEnd - bucketStart) / 2;
       return {
         count,
-        color: gradientColorForScore(gradient, city && index === binCount - 1 && above ? rangeMax
-          : city && index === 0 && below ? rangeMin : center, rangeMin, rangeMax)
+        color: gradientColorForScore(gradient, includeOutliers && index === binCount - 1 && above ? rangeMax
+          : includeOutliers && index === 0 && below ? rangeMin : center, rangeMin, rangeMax)
       };
     });
 
@@ -129,20 +134,21 @@ export function HistogramPanel({ layer, gradient, data, city, rangeMode, onReset
       rangeMin,
       rangeMax,
       midpoint: rangeMin + span / 2,
-      dataMin: values.reduce((minimum, value) => Math.min(minimum, value), Infinity),
-      dataMax: values.reduce((maximum, value) => Math.max(maximum, value), -Infinity),
+      dataMin,
+      dataMax,
       visibleCount,
       below,
       above,
-      bucketWidth: safeBucketWidth
+      bucketWidth: effectiveBucketWidth
     };
-  }, [bucketWidth, city, gradient, layer, values]);
+  }, [bucketWidth, gradient, includeOutliers, scoreMin, scoreMax, values]);
 
   const canApplyRange =
     Boolean(layer && onRangeChange) &&
     draftMin.trim() !== "" && draftMax.trim() !== "" &&
     Number.isFinite(Number(draftMin)) &&
     Number.isFinite(Number(draftMax)) &&
+    Number.isFinite(Number(draftMax) - Number(draftMin)) &&
     Number(draftMin) < Number(draftMax) &&
     !rangeSaving;
 
@@ -225,7 +231,7 @@ export function HistogramPanel({ layer, gradient, data, city, rangeMode, onReset
             </label>
             <label className="histogram-property-select histogram-bucket-select">
               <span>Bucket</span>
-              <ThemedSelect label="Histogram bucket width" value={histogram.bucketWidth} onValueChange={event => setBucketWidth(Number(event))}>
+              <ThemedSelect label="Histogram bucket width" value={bucketWidth} onValueChange={event => setBucketWidth(Number(event))}>
                 {BUCKET_WIDTH_OPTIONS.map((option) => (
                   <option value={option} key={option}>
                     {option}
@@ -234,6 +240,7 @@ export function HistogramPanel({ layer, gradient, data, city, rangeMode, onReset
               </ThemedSelect>
             </label>
           </div>
+          {histogram.bucketWidth > bucketWidth && <div className="histogram-meta">Displayed bucket width {formatInputValue(histogram.bucketWidth)}</div>}
           <div className="histogram-stats">
             <span><strong>{histogram.visibleCount.toLocaleString()}</strong> / {values.length.toLocaleString()} {city ? "sampled points in range" : "points"}</span>
             <span title="Full data range">{formatValue(histogram.dataMin)} to {formatValue(histogram.dataMax)}</span>

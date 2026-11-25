@@ -1,7 +1,7 @@
 import type { CircleLayerSpecification, SymbolLayerSpecification, GeoJSONSource, Map as MapLibreMap } from "maplibre-gl";
 import type { FeatureCollection, PointShape } from "../api/types";
 
-type SemanticMap = Pick<MapLibreMap, "getSource" | "getLayer" | "addSource" | "addLayer" | "removeLayer" | "setPaintProperty" | "setLayoutProperty" | "moveLayer" | "hasImage" | "addImage">;
+type SemanticMap = Pick<MapLibreMap, "getSource" | "getLayer" | "addSource" | "addLayer" | "removeLayer" | "setPaintProperty" | "setLayoutProperty" | "hasImage" | "addImage">;
 const submittedData = new WeakMap<object, FeatureCollection>();
 const submittedPaint = new WeakMap<object, Map<string, string>>();
 const submittedLayout = new WeakMap<object, Map<string, string>>();
@@ -71,15 +71,7 @@ export function attachPointShapeImages(map: MapLibreMap) {
   return () => { map.off("styleimagemissing", onMissing); };
 }
 
-/** Preserve the source and hit-target ID across shape changes. Circles use the
- * native fast path; other shapes use overlap-enabled, gradient-coloured SDFs. */
-export function updateSemanticLayer(
-  map: SemanticMap,
-  id: string,
-  data: FeatureCollection,
-  circlePaint: NonNullable<CircleLayerSpecification["paint"]>,
-  marker?: { shape: PointShape; size: NonNullable<SymbolLayerSpecification["layout"]>["icon-size"] }
-) {
+export function updateSemanticSource(map: Pick<SemanticMap, "getSource" | "addSource">, id: string, data: FeatureCollection) {
   const source = map.getSource(id) as GeoJSONSource | undefined;
   if (source) {
     if (submittedData.get(source) !== data) source.setData(data);
@@ -89,6 +81,33 @@ export function updateSemanticLayer(
     const added = map.getSource(id);
     if (added) submittedData.set(added, data);
   }
+}
+
+/** Keep the semantic stack above the basemap. MapLibre invalidates symbol
+ * placement on every moveLayer call, even when the layer stays in place. */
+export function syncSemanticLayerOrder(map: Pick<MapLibreMap, "getLayersOrder" | "moveLayer">, ids: readonly string[]) {
+  const order = map.getLayersOrder();
+  const offset = order.length - ids.length;
+  for (let index = ids.length - 1; index >= 0; index--) {
+    const id = ids[index];
+    const target = offset + index;
+    if (order[target] === id) continue;
+    map.moveLayer(id, order[target + 1]);
+    order.splice(order.indexOf(id), 1);
+    order.splice(target, 0, id);
+  }
+}
+
+/** Preserve the source and hit-target ID across shape changes. Circles use the
+ * native fast path; other shapes use overlap-enabled, gradient-coloured SDFs. */
+export function updateSemanticLayer(
+  map: SemanticMap,
+  id: string,
+  data: FeatureCollection,
+  circlePaint: NonNullable<CircleLayerSpecification["paint"]>,
+  marker?: { shape: PointShape; size: NonNullable<SymbolLayerSpecification["layout"]>["icon-size"] }
+) {
+  updateSemanticSource(map, id, data);
 
   const shape = normalizePointShape(marker?.shape);
   const type = shape === "circle" ? "circle" : "symbol";
@@ -125,7 +144,6 @@ export function updateSemanticLayer(
       }
       cache.set(existing, previous);
     }
-    map.moveLayer(id);
   } else {
     if (type === "circle") map.addLayer({ id, type, source: id, paint: circlePaint });
     else map.addLayer({ id, type, source: id, layout, paint: paint as SymbolLayerSpecification["paint"] });

@@ -1,7 +1,7 @@
 import { ThemedSelect } from "./ThemedSelect";
 import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
-import { attachPointShapeImages, normalizePointShape, POINT_ICON_HALF_SIZE, updateSemanticLayer } from "../state/semanticLayerRenderer";
+import { attachPointShapeImages, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
@@ -10,7 +10,7 @@ import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
-import type { Map as MapLibreMap, MapLayerMouseEvent, MapEventType } from "maplibre-gl";
+import type { Map as MapLibreMap, MapMouseEvent, MapEventType } from "maplibre-gl";
 
 import { Check, Copy, Search, SendHorizontal } from "lucide-react";
 import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -582,15 +582,16 @@ export function CityMapPane({
   const panoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const styleGenerationRef = useRef(0);
   const drawnLayerIds = useRef<Set<string>>(new Set());
-  const handlerCleanups = useRef<Map<string, Array<() => void>>>(new Map());
   const localResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const resources = sceneResources ?? localResources;
   const layersRef = useRef(layers);
   const gradientsRef = useRef(gradients);
   const dataProviderRef = useRef(dataProvider);
   const selectionAreaRef = useRef(selectionArea);
+  const popupLabelsRef = useRef(popupLabels);
   dataProviderRef.current = dataProvider;
   selectionAreaRef.current = selectionArea;
+  popupLabelsRef.current = popupLabels;
   const applyingScaleSyncRef = useRef(false);
   const semanticRedrawTimerRef = useRef<number | undefined>(undefined);
   const [redrawRequest, setRedrawRequest] = useState({ generation: 0, nonce: 0 });
@@ -602,12 +603,49 @@ export function CityMapPane({
 
   function clearSemanticLayers(map: MapLibreMap) {
     for (const layerId of drawnLayerIds.current) {
-      handlerCleanups.current.get(layerId)?.forEach((cleanup) => cleanup());
-      handlerCleanups.current.delete(layerId);
       if (map.getLayer(layerId)) map.removeLayer(layerId);
       if (map.getSource(layerId)) map.removeSource(layerId);
     }
     drawnLayerIds.current.clear();
+  }
+
+  function inspectSemanticPoint(map: MapLibreMap, event: MapMouseEvent, feature: maplibregl.MapGeoJSONFeature) {
+    const layer = layersRef.current.find(item => sourceIdForCityLayer(city.id, item.id) === feature.layer.id);
+    if (!layer) return;
+    selectLayerRef.current(layer.id);
+    const props = feature.properties ?? {};
+    const pano = panoPointFromFeature(feature, event, layer, city);
+    if (pano) {
+      markPanoRef.current(pano);
+      void collectPanoLayerValues(
+        pano.pano_id,
+        pano.dataset_id ?? city.datasetId,
+        pano.lon,
+        pano.lat,
+        layersRef.current,
+        map,
+        resources,
+        sharedRemoteTileZoomRef.current,
+        city.id,
+        dataProviderRef.current
+      ).then((layerValues) => {
+        if (mapRef.current === map && layerValues.length) {
+          markPanoRef.current({ ...pano, layer_values: layerValues });
+        }
+      });
+    }
+    const score = Number(props.score);
+    const zscore = Number(props.zscore);
+    const labels = popupLabelsRef.current;
+    const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
+      .setLngLat(pano ? [pano.lon, pano.lat] : event.lngLat)
+      .setHTML(
+        `<div class="popup-title">${layer.name}</div>
+         <div class="popup-row"><span>${labels?.score ?? (layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score')}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
+         <div class="popup-row"><span>${labels?.zscore ?? (layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore')}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
+      )
+      .addTo(map);
+    applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content"));
   }
 
   function requestSemanticRedraw(generation: number, message?: string) {
@@ -635,6 +673,7 @@ export function CityMapPane({
     semanticRedrawTimerRef.current = window.setTimeout(() => {
       semanticRedrawTimerRef.current = undefined;
       const map = mapRef.current;
+      if (resizingRef.current || map?.isMoving()) return;
       if (map) {
         reportRemoteTileZoom(map, forceMaxDetailRef.current, remoteTileZoomChangeRef.current);
         reportPriorityTile(map, city.datasetId, sharedRemoteTileZoomRef.current, priorityTileChangeRef.current);
@@ -685,11 +724,46 @@ export function CityMapPane({
     mapRef.current = map;
     const publishViewport = () => {
       const container = map.getContainer();
-      container.dataset.mapZoom = String(map.getZoom());
-      container.dataset.groundMetersPerPixel = String(MAPLIBRE_METERS_PER_PIXEL_ZOOM0 / groundScaleForZoom(map.getZoom(), map.getCenter().lat));
-      container.dataset.mapCenter = `${map.getCenter().lng},${map.getCenter().lat}`;
+      const center = map.getCenter();
+      const zoom = map.getZoom();
+      container.dataset.mapZoom = String(zoom);
+      container.dataset.groundMetersPerPixel = String(MAPLIBRE_METERS_PER_PIXEL_ZOOM0 / groundScaleForZoom(zoom, center.lat));
+      container.dataset.mapCenter = `${center.lng},${center.lat}`;
     };
-    map.on("render", publishViewport);
+    publishViewport();
+    map.on("move", publishViewport);
+    const canvas = map.getCanvas();
+    let hoverFrame: number | undefined;
+    let hoverPoint: MapMouseEvent["point"];
+    const semanticPointAt = (point: MapMouseEvent["point"]) => {
+      const layers = [...drawnLayerIds.current].filter(id => map.getLayer(id));
+      return layers.length ? map.queryRenderedFeatures(point, { layers })[0] : undefined;
+    };
+    const clearHover = () => {
+      if (hoverFrame !== undefined) window.cancelAnimationFrame(hoverFrame);
+      hoverFrame = undefined;
+      if (canvas.style.cursor) canvas.style.cursor = "";
+    };
+    const hoverSemanticLayers = (event: MapMouseEvent) => {
+      if (!drawnLayerIds.current.size || map.isMoving() || event.originalEvent.buttons) {
+        clearHover();
+        return;
+      }
+      hoverPoint = event.point;
+      if (hoverFrame !== undefined) return;
+      hoverFrame = window.requestAnimationFrame(() => {
+        hoverFrame = undefined;
+        const cursor = !map.isMoving() && semanticPointAt(hoverPoint) ? "pointer" : "";
+        if (canvas.style.cursor !== cursor) canvas.style.cursor = cursor;
+      });
+    };
+    map.on("click", (event) => {
+      const point = semanticPointAt(event.point);
+      if (point) inspectSemanticPoint(map, event, point);
+    });
+    map.on("mousemove", hoverSemanticLayers);
+    map.on("mouseout", clearHover);
+    map.on("movestart", clearHover);
     const unregisterSceneCamera = sceneCamera?.register(map, cameraMode, () => applyingResizeRef.current || resizingRef.current);
     const unregisterLocalMap = onMapReady?.(map);
     requestSemanticRedraw(generation, `Loading ${city.name}`);
@@ -706,6 +780,8 @@ export function CityMapPane({
       detachPointImages();
       unregisterSceneCamera?.();
       unregisterLocalMap?.();
+      clearHover();
+      drawnLayerIds.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -972,27 +1048,24 @@ export function CityMapPane({
           }, 1200);
         }
 
-        if (!currentMap.getStyle()?.layers) {
+        if (!currentMap.getLayersOrder().length && !currentMap.getStyle()?.layers) {
           throw new Error("Map style is not ready");
         }
 
         const area = selectionAreaRef.current;
         if (area) {
-          const areaSource = currentMap.getSource("reference-selection") as maplibregl.GeoJSONSource | undefined;
-          if (areaSource) areaSource.setData(area);
-          else currentMap.addSource("reference-selection", { type: "geojson", data: area });
+          updateSemanticSource(currentMap, "reference-selection", area);
           if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
           if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
         }
 
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
-        const wantedIds = new Set(layersToDraw.map((layer) => sourceIdForCityLayer(city.id, layer.id)));
+        const orderedIds = layersToDraw.map((layer) => sourceIdForCityLayer(city.id, layer.id));
+        const wantedIds = new Set(orderedIds);
         // Remove only layers the user hid/deleted, retaining visible data during fetches.
         for (const id of drawnLayerIds.current) {
           if (wantedIds.has(id)) continue;
-          handlerCleanups.current.get(id)?.forEach((cleanup) => cleanup());
-          handlerCleanups.current.delete(id);
           if (currentMap.getLayer(id)) currentMap.removeLayer(id);
           if (currentMap.getSource(id)) currentMap.removeSource(id);
           drawnLayerIds.current.delete(id);
@@ -1023,62 +1096,6 @@ export function CityMapPane({
               "circle-stroke-opacity": 0
           }, { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) });
 
-          handlerCleanups.current.get(sourceId)?.forEach((cleanup) => cleanup());
-
-          const onMouseEnter = () => {
-            currentMap.getCanvas().style.cursor = "pointer";
-          };
-          const onMouseLeave = () => {
-            currentMap.getCanvas().style.cursor = "";
-          };
-          const onClick = (event: MapLayerMouseEvent) => {
-            selectLayerRef.current(layer.id);
-            const feature = event.features?.[0];
-            if (!feature) return;
-            const props = feature.properties ?? {};
-            const pano = panoPointFromFeature(feature, event, layer, city);
-            if (pano) {
-              markPanoRef.current(pano);
-              void collectPanoLayerValues(
-                pano.pano_id,
-                pano.dataset_id ?? city.datasetId,
-                pano.lon,
-                pano.lat,
-                layersRef.current,
-                currentMap,
-                resources,
-                sharedRemoteTileZoomRef.current,
-                city.id,
-                dataProviderRef.current
-              ).then((layerValues) => {
-                if (!cancelled && layerValues.length) {
-                  markPanoRef.current({ ...pano, layer_values: layerValues });
-                }
-              });
-            }
-            const score = Number(props.score);
-            const zscore = Number(props.zscore);
-            const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
-              .setLngLat(pano ? [pano.lon, pano.lat] : event.lngLat)
-              .setHTML(
-                `<div class="popup-title">${layer.name}</div>
-                 <div class="popup-row"><span>ID</span><span>${props.id ?? ""}</span></div>
-                 <div class="popup-row"><span>${popupLabels?.score ?? (layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score')}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
-                 <div class="popup-row"><span>${popupLabels?.zscore ?? (layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore')}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
-              )
-              .addTo(currentMap);
-            applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content"));
-          };
-
-          currentMap.on("mouseenter", sourceId, onMouseEnter);
-          currentMap.on("mouseleave", sourceId, onMouseLeave);
-          currentMap.on("click", sourceId, onClick);
-          handlerCleanups.current.set(sourceId, [
-            () => currentMap.off("mouseenter", sourceId, onMouseEnter),
-            () => currentMap.off("mouseleave", sourceId, onMouseLeave),
-            () => currentMap.off("click", sourceId, onClick)
-          ]);
-
           drawnLayerIds.current.add(sourceId);
           if (!displayedContent && geojson.features.length) {
             displayedContent = true;
@@ -1086,10 +1103,11 @@ export function CityMapPane({
           }
         }
 
-        const missingLayer = layersToDraw.some((layer) => !currentMap.getLayer(sourceIdForCityLayer(city.id, layer.id)));
+        const missingLayer = orderedIds.some(id => !currentMap.getLayer(id));
         if (missingLayer) {
           throw new Error("Semantic layers were not attached");
         }
+        syncSemanticLayerOrder(currentMap, orderedIds);
 
         if (!cancelled && generation === styleGenerationRef.current) {
           if (maxDetailWarningTimer !== undefined) {
@@ -1202,7 +1220,7 @@ function MapProgressOverlay({ entries }: { entries: RemoteLogEntry[] }) {
   );
 }
 
-function panoPointFromFeature(feature: GeoJSON.Feature, event: MapLayerMouseEvent, layer: SemanticLayer, city: CityConfig): PanoMapPoint | null {
+function panoPointFromFeature(feature: GeoJSON.Feature, event: MapMouseEvent, layer: SemanticLayer, city: CityConfig): PanoMapPoint | null {
   const props = feature.properties ?? {};
   const rawId = props.pano_id ?? props.id;
   if (rawId === undefined || rawId === null) return null;
