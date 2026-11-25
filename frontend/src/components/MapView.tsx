@@ -5,7 +5,7 @@ import { attachPointShapeImages, getRequestedSemanticSourceData, normalizePointS
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
-import { loadRemoteViewport, remoteViewportDiff, REMOTE_MAX_DETAIL_ZOOM, settledRemoteTileZoom } from "../state/remoteTileData";
+import { loadRemoteTileViewport, loadRemoteViewport, remoteRenderTiles, remoteViewportDiff, REMOTE_MAX_DETAIL_ZOOM, settledRemoteTileZoom, type RemoteRenderTile, type RemoteTileViewport } from "../state/remoteTileData";
 import { preserveSceneStyle } from "../state/mapSceneStyle";
 import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
 import * as maplibregl from "maplibre-gl";
@@ -82,6 +82,18 @@ const STATIC_FALLBACK_TILE_RANGES: Partial<Record<CityId, { z: number; minX: num
   london: { z: 13, minX: 4091, maxX: 4095, minY: 2721, maxY: 2725 },
   shanghai: { z: 13, minX: 6858, maxX: 6861, minY: 3345, maxY: 3348 }
 };
+
+let nextSemanticTileFrame = Promise.resolve();
+
+/** Share upload slots between panes so preparing two dense maps cannot run
+ * all of MapLibre's worker serialization in one browser task. */
+function waitForSemanticTileFrame() {
+  nextSemanticTileFrame = nextSemanticTileFrame.then(() => new Promise<void>(resolve => {
+    const timer = window.setTimeout(() => { window.cancelAnimationFrame(frame); resolve(); }, 50);
+    const frame = window.requestAnimationFrame(() => { window.clearTimeout(timer); resolve(); });
+  }));
+  return nextSemanticTileFrame;
+}
 
 function isCompactMapViewport(): boolean {
   return typeof window !== "undefined" && window.matchMedia("(max-width: 700px)").matches;
@@ -581,7 +593,8 @@ export function CityMapPane({
   const panoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
   const styleGenerationRef = useRef(0);
   const viewportGenerationRef = useRef(0);
-  const drawnLayerIds = useRef<Set<string>>(new Set());
+  const drawnLayerIds = useRef(new Map<string, string>());
+  const tiledViewports = useRef(new Map<string, { viewport: RemoteTileViewport; tiles: RemoteRenderTile[] }>());
   const localResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const resources = sceneResources ?? localResources;
   const layersRef = useRef(layers);
@@ -601,16 +614,18 @@ export function CityMapPane({
   layersRef.current = layers;
   gradientsRef.current = gradients;
 
-  function clearSemanticLayers(map: MapLibreMap) {
-    for (const layerId of drawnLayerIds.current) {
-      if (map.getLayer(layerId)) map.removeLayer(layerId);
-      if (map.getSource(layerId)) map.removeSource(layerId);
+  function removeSemanticLayers(map: MapLibreMap, shouldRemove: (sourceId: string, layerId: string) => boolean) {
+    for (const [id, layerId] of drawnLayerIds.current) {
+      if (!shouldRemove(id, layerId)) continue;
+      if (map.getLayer(id)) map.removeLayer(id);
+      if (map.getSource(id)) map.removeSource(id);
+      drawnLayerIds.current.delete(id);
     }
-    drawnLayerIds.current.clear();
   }
 
   function inspectSemanticPoint(map: MapLibreMap, event: MapMouseEvent, feature: maplibregl.MapGeoJSONFeature) {
-    const layer = layersRef.current.find(item => sourceIdForCityLayer(city.id, item.id) === feature.layer.id);
+    const layerId = drawnLayerIds.current.get(feature.layer.id);
+    const layer = layersRef.current.find(item => item.id === layerId);
     if (!layer) return;
     selectLayerRef.current(layer.id);
     const props = feature.properties ?? {};
@@ -748,7 +763,7 @@ export function CityMapPane({
     let hoverFrame: number | undefined;
     let hoverPoint: MapMouseEvent["point"];
     const semanticPointAt = (point: MapMouseEvent["point"]) => {
-      const layers = [...drawnLayerIds.current].filter(id => map.getLayer(id));
+      const layers = [...drawnLayerIds.current.keys()].filter(id => map.getLayer(id));
       return layers.length ? map.queryRenderedFeatures(point, { layers })[0] : undefined;
     };
     const clearHover = () => {
@@ -794,6 +809,7 @@ export function CityMapPane({
       unregisterLocalMap?.();
       clearHover();
       drawnLayerIds.current.clear();
+      tiledViewports.current.clear();
       map.remove();
       mapRef.current = null;
     };
@@ -958,7 +974,7 @@ export function CityMapPane({
     map.once("style.load", onStyleReady);
     map.once("idle", onStyleReady);
     map.setStyle(basemapStyle(nextBasemap), {
-      transformStyle: (previous, next) => preserveSceneStyle(previous, next, new Set([...drawnLayerIds.current, "reference-selection"]))
+      transformStyle: (previous, next) => preserveSceneStyle(previous, next, new Set([...drawnLayerIds.current.keys(), "reference-selection"]))
     });
     requestSemanticRedraw(generation);
 
@@ -1047,12 +1063,13 @@ export function CityMapPane({
         const currentGradients = gradientsRef.current;
         const visibleTopToBottom = currentLayers.filter((layer) => layer.visible);
         if (!visibleTopToBottom.length) {
-          clearSemanticLayers(currentMap);
+          removeSemanticLayers(currentMap, () => true);
+          tiledViewports.current.clear();
           setStatus(`0 rendered / 0 visible / ${currentLayers.length} total`);
           reportSemanticLoading(false);
           return;
         }
-        reportSemanticLoading(![...drawnLayerIds.current].some((id) => currentMap.getLayer(id)));
+        reportSemanticLoading(![...drawnLayerIds.current.keys()].some(id => currentMap.getLayer(id)));
 
         if (forceMaxDetailRef.current && maxDetailWarningTimer === undefined) {
           setShowMaxDetailWarning(false);
@@ -1076,47 +1093,82 @@ export function CityMapPane({
 
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
-        const orderedIds = layersToDraw.map((layer) => sourceIdForCityLayer(city.id, layer.id));
-        const wantedIds = new Set(orderedIds);
+        const orderedIds: string[] = [];
+        const wantedIds = new Set(layersToDraw.map(layer => layer.id));
         // Remove only layers the user hid/deleted, retaining visible data during fetches.
-        for (const id of drawnLayerIds.current) {
-          if (wantedIds.has(id)) continue;
-          if (currentMap.getLayer(id)) currentMap.removeLayer(id);
-          if (currentMap.getSource(id)) currentMap.removeSource(id);
-          drawnLayerIds.current.delete(id);
-        }
+        removeSemanticLayers(currentMap, (_id, layerId) => !wantedIds.has(layerId));
+        for (const layerId of tiledViewports.current.keys()) if (!wantedIds.has(layerId)) tiledViewports.current.delete(layerId);
         let displayedContent = false;
         for (const layer of layersToDraw) {
-          const geojson = await loadLayerGeojsonForMap(
-            layer,
-            currentMap,
-            resources,
-            sharedRemoteTileZoomRef.current,
-            city.id,
-            dataProviderRef.current,
-            viewportNeeded
-          );
+          const sourceId = sourceIdForCityLayer(city.id, layer.id);
+          const sourcePath = getLayerSourcePath(layer, city.id);
+          const remote = isRemoteTileTemplate(sourcePath);
+          const useRenderTiles = remote && forceMaxDetailRef.current && !dataProviderRef.current;
+          let sources: { id: string; data: FeatureCollection }[];
+          if (useRenderTiles) {
+            try {
+              const previous = tiledViewports.current.get(layer.id);
+              const tileCoords = filterStaticFallbackTiles(city.id, visibleRemoteTiles(currentMap, REMOTE_MAX_DETAIL_ZOOM), isStaticFallbackTileTemplate(sourcePath));
+              const viewport = await loadRemoteTileViewport(resources, sourcePath, tileCoords,
+                tile => getRemoteTileGeojson(sourcePath, tile.z, tile.x, tile.y), previous?.viewport, viewportNeeded);
+              if (!viewportNeeded()) return;
+              const tiles = viewport === previous?.viewport ? previous.tiles : remoteRenderTiles(viewport, previous?.tiles);
+              tiledViewports.current.set(layer.id, { viewport, tiles });
+              sources = tiles.map(tile => ({ id: `${sourceId}--render-tile-${tile.key.replace(/\//g, "-")}`, data: tile.data }));
+            } catch (error) {
+              if (error instanceof DOMException && error.name === "AbortError") throw error;
+              if (!viewportNeeded()) return;
+              sources = [{ id: sourceId, data: await getLayerFallbackGeojson(layer.id, city.id) }];
+            }
+          } else {
+            const geojson = await loadLayerGeojsonForMap(layer, currentMap, resources, sharedRemoteTileZoomRef.current,
+              city.id, dataProviderRef.current, viewportNeeded);
+            sources = [{ id: sourceId, data: geojson }];
+          }
           if (cancelled || generation !== styleGenerationRef.current) return;
           // Slow tile requests can finish during the next gesture. The settled
           // camera will schedule its own draw with the current tile coverage.
-          if (!viewportNeeded() && isRemoteTileTemplate(getLayerSourcePath(layer, city.id))) return;
-
-          const sourceId = sourceIdForCityLayer(city.id, layer.id);
+          if (!viewportNeeded() && remote) return;
+          const hasContent = sources.some(source => source.data.features.length > 0);
           // A new scoring job can temporarily have no published tiles. Keep
           // its last visible result until replacement content becomes ready.
-          if (!geojson.features.length && isLayerWaitingForRemoteData(layer, city.id) && currentMap.getLayer(sourceId)) continue;
+          if (!hasContent && isLayerWaitingForRemoteData(layer, city.id)) {
+            const existing = [...drawnLayerIds.current]
+              .filter(([id, owner]) => owner === layer.id && currentMap.getLayer(id));
+            if (existing.length) {
+              orderedIds.push(...existing.map(([id]) => id));
+              continue;
+            }
+          }
+          const nextIds = new Set(sources.map(source => source.id));
+          if (useRenderTiles) {
+            removeSemanticLayers(currentMap, (id, owner) => owner === layer.id && !nextIds.has(id) && !currentMap.getLayer(id));
+            for (const { id, data } of sources) {
+              if (id === sourceId || getRequestedSemanticSourceData(currentMap, id) === data) continue;
+              await waitForSemanticTileFrame();
+              if (!viewportNeeded()) return;
+              updateSemanticSource(currentMap, id, data);
+              drawnLayerIds.current.set(id, layer.id);
+            }
+          }
           const gradient = layerGradient(layer, currentGradients);
-          updateSemanticLayer(currentMap, sourceId, geojson, {
-              "circle-radius": circleRadiusExpression(layer),
-              "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
-              "circle-opacity": layer.style.opacity,
-              "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
-              "circle-stroke-width": 0,
-              "circle-stroke-opacity": 0
-          }, { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) }, remoteViewportDiff);
-
-          drawnLayerIds.current.add(sourceId);
-          if (!displayedContent && geojson.features.length) {
+          const paint = {
+            "circle-radius": circleRadiusExpression(layer),
+            "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
+            "circle-opacity": layer.style.opacity,
+            "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
+            "circle-stroke-width": 0,
+            "circle-stroke-opacity": 0
+          } as const;
+          const marker = { shape: normalizePointShape(layer.style.point_shape), size: circleRadiusExpression(layer, 1 / POINT_ICON_HALF_SIZE) };
+          for (const { id, data } of sources) {
+            updateSemanticLayer(currentMap, id, data, paint, marker, id === sourceId ? remoteViewportDiff : undefined);
+            drawnLayerIds.current.set(id, layer.id);
+            orderedIds.push(id);
+          }
+          removeSemanticLayers(currentMap, (id, owner) => owner === layer.id && !nextIds.has(id));
+          if (!useRenderTiles) tiledViewports.current.delete(layer.id);
+          if (!displayedContent && hasContent) {
             displayedContent = true;
             reportSemanticLoading(false);
           }

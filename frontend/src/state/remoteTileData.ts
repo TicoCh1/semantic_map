@@ -28,8 +28,8 @@ export function isCompleteRemoteTile(data: FeatureCollection): boolean {
 }
 
 type Tile = { z: number; x: number; y: number };
-type Viewport = { template: string; zoom: number; tiles: Map<string, FeatureCollection> };
-const viewports = new WeakMap<FeatureCollection, Viewport>();
+export type RemoteTileViewport = { template: string; zoom: number; tiles: ReadonlyMap<string, FeatureCollection> };
+const viewports = new WeakMap<FeatureCollection, RemoteTileViewport>();
 const emptyViewport: FeatureCollection = { type: 'FeatureCollection', features: [] };
 const identifiedTiles = new WeakMap<FeatureCollection, { key: string; features: FeatureCollection['features'] }>();
 const RETAINED_TILE_MARGIN = 2;
@@ -45,7 +45,7 @@ function identifiedFeatures(key: string, tile: FeatureCollection): FeatureCollec
   return features;
 }
 
-function nearbyTiles(tiles: Tile[], tileKeys: string[], previous?: Map<string, FeatureCollection>) {
+function nearbyTiles(tiles: Tile[], tileKeys: string[], previous?: ReadonlyMap<string, FeatureCollection>) {
   const nearby = new Map<string, FeatureCollection>();
   if (!previous?.size) return nearby;
   const visible = new Set(tileKeys);
@@ -68,6 +68,79 @@ function nearbyTiles(tiles: Tile[], tileKeys: string[], previous?: Map<string, F
   return nearby;
 }
 
+function planRemoteTiles(template: string, tiles: Tile[], previous?: RemoteTileViewport) {
+  const zoom = tiles[0]?.z ?? REMOTE_MAX_DETAIL_ZOOM;
+  const tileKeys = tiles.map(tile => `${tile.z}/${tile.x}/${tile.y}`);
+  const retained = previous?.template === template && previous.zoom === zoom ? previous.tiles : undefined;
+  const covered = Boolean(tileKeys.length && retained && tileKeys.every(key => retained.has(key)));
+  const nearby = covered ? new Map<string, FeatureCollection>() : nearbyTiles(tiles, tileKeys, retained);
+  const sourceKeys = [...tileKeys, ...nearby.keys()].sort();
+  return { zoom, tileKeys, retained, covered, nearby, sourceKeys };
+}
+
+async function readRemoteTiles(
+  resources: SceneResources<FeatureCollection>, template: string, tiles: Tile[],
+  loadTile: (tile: Tile) => Promise<FeatureCollection>, plan: ReturnType<typeof planRemoteTiles>, needed?: () => boolean
+) {
+  const { tileKeys, retained, nearby, zoom } = plan;
+  const collections = await Promise.all(tiles.map((tile, index) => {
+    const key = tileKeys[index];
+    return retained?.get(key) ?? resources.load(`tile:${template}:${key}`, () => loadTile(tile), {
+      cacheable: isCompleteRemoteTile,
+      needed
+    });
+  }));
+  if (needed && !needed()) throw new DOMException('Viewport is no longer current', 'AbortError');
+  const byTile = new Map<string, FeatureCollection>();
+  for (const [index, key] of tileKeys.entries()) {
+    if (isCompleteRemoteTile(collections[index])) byTile.set(key, collections[index]);
+  }
+  const complete = byTile.size === tileKeys.length;
+  for (const [key, tile] of nearby) byTile.set(key, tile);
+  return { viewport: { template, zoom, tiles: byTile } satisfies RemoteTileViewport, complete };
+}
+
+export async function loadRemoteTileViewport(
+  resources: SceneResources<FeatureCollection>, template: string, tiles: Tile[],
+  loadTile: (tile: Tile) => Promise<FeatureCollection>, previous?: RemoteTileViewport, needed?: () => boolean
+): Promise<RemoteTileViewport> {
+  const plan = planRemoteTiles(template, tiles, previous);
+  if (previous && plan.covered) return previous;
+  return (await readRemoteTiles(resources, template, tiles, loadTile, plan, needed)).viewport;
+}
+
+export type RemoteRenderTile = { key: string; tiles: ReadonlyMap<string, FeatureCollection>; data: FeatureCollection };
+const MAX_RENDER_TILE_POINTS = 18_000;
+
+/** Keep each worker index spatially local. A parent tile can carry four small
+ * children, while dense parents retain independent child indexes. */
+export function remoteRenderTiles(viewport: RemoteTileViewport, previous: readonly RemoteRenderTile[] = []): RemoteRenderTile[] {
+  const parents = new Map<string, Map<string, FeatureCollection>>();
+  for (const key of [...viewport.tiles.keys()].sort()) {
+    const tile = viewport.tiles.get(key)!;
+    if (!tile.features.length) continue;
+    const [z, x, y] = key.split('/').map(Number);
+    const parent = `${z - 1}/${Math.floor(x / 2)}/${Math.floor(y / 2)}`;
+    const group = parents.get(parent) ?? new Map<string, FeatureCollection>();
+    group.set(key, tile);
+    parents.set(parent, group);
+  }
+  const cached = new Map(previous.map(tile => [tile.key, tile]));
+  const makeTile = (key: string, tiles: ReadonlyMap<string, FeatureCollection>): RemoteRenderTile => {
+    const before = cached.get(key);
+    if (before?.tiles.size === tiles.size && [...tiles].every(([id, tile]) => before.tiles.get(id) === tile)) return before;
+    return {
+      key, tiles,
+      data: { type: 'FeatureCollection', features: [...tiles].flatMap(([id, tile]) => identifiedFeatures(id, tile)) }
+    };
+  };
+  return [...parents].flatMap(([key, tiles]) => {
+    const count = [...tiles.values()].reduce((sum, tile) => sum + tile.features.length, 0);
+    if (count <= MAX_RENDER_TILE_POINTS) return [makeTile(key, tiles)];
+    return [...tiles].map(([id, tile]) => makeTile(id, new Map([[id, tile]])));
+  });
+}
+
 export function loadRemoteViewport(
   resources: SceneResources<FeatureCollection>,
   template: string,
@@ -77,46 +150,30 @@ export function loadRemoteViewport(
   needed?: () => boolean
 ): Promise<FeatureCollection> {
   if (!tiles.length) return Promise.resolve(emptyViewport);
-  const zoom = tiles[0].z;
-  const tileKeys = tiles.map(tile => `${tile.z}/${tile.x}/${tile.y}`);
   const previous = displayed && viewports.get(displayed);
-  const retained = previous?.template === template && previous.zoom === zoom ? previous.tiles : undefined;
+  const plan = planRemoteTiles(template, tiles, previous);
   // At the same detail level MapLibre already clips the covered source to the
   // camera. Keep that source when zooming into a subset of its tiles.
-  if (displayed && retained && tileKeys.every(key => retained.has(key))) return Promise.resolve(displayed);
+  if (displayed && plan.covered) return Promise.resolve(displayed);
 
   // Keep nearby, already-loaded tiles in the render source. MapLibre clips
   // them off screen and can show them again immediately on a short return pan.
-  const nearby = nearbyTiles(tiles, tileKeys, retained);
-  const sourceKeys = [...tileKeys, ...nearby.keys()].sort();
   let complete = false;
-  return resources.load(`view:${template}:${sourceKeys.join('|')}`, async (viewportNeeded) => {
-    const collections = await Promise.all(tiles.map((tile, index) => {
-      const key = tileKeys[index];
-      return retained?.get(key) ?? resources.load(`tile:${template}:${key}`, () => loadTile(tile), {
-        cacheable: isCompleteRemoteTile,
-        needed: viewportNeeded
-      });
-    }));
-    if (!viewportNeeded()) throw new DOMException('Viewport is no longer current', 'AbortError');
-    const byTile = new Map(tileKeys.flatMap((key, index) => {
-      const tile = collections[index];
-      return isCompleteRemoteTile(tile) ? [[key, tile] as const] : [];
-    }));
-    complete = byTile.size === tileKeys.length;
-    for (const [key, tile] of nearby) byTile.set(key, tile);
+  return resources.load(`view:${template}:${plan.sourceKeys.join('|')}`, async (viewportNeeded) => {
+    const loaded = await readRemoteTiles(resources, template, tiles, loadTile, plan, viewportNeeded);
+    const { viewport } = loaded;
+    complete = loaded.complete;
     const data: FeatureCollection = {
       type: 'FeatureCollection',
-      features: sourceKeys.flatMap(key => {
-        const tile = byTile.get(key);
+      features: plan.sourceKeys.flatMap(key => {
+        const tile = viewport.tiles.get(key);
         return tile ? identifiedFeatures(key, tile) : [];
       })
     };
-    viewports.set(data, { template, zoom, tiles: byTile });
+    viewports.set(data, viewport);
     return data;
-    // Keep the tile cache for reuse across panes. An expanded source already
-    // lives with its pane and can be large enough to evict its own raw tiles.
-  }, { scheduled: false, cacheable: () => complete && nearby.size === 0, needed });
+  // An expanded source already lives with its pane and can evict raw tiles.
+  }, { scheduled: false, cacheable: () => complete && plan.nearby.size === 0, needed });
 }
 
 export function remoteViewportDiff(previous: FeatureCollection, next: FeatureCollection): GeoJSONSourceDiff | undefined {

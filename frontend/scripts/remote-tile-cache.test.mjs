@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {SceneResources} from '../src/state/sceneResources.ts';
-import {isCompleteRemoteTile,loadRemoteViewport,remoteViewportDiff,settledRemoteTileZoom,unavailableRemoteTile} from '../src/state/remoteTileData.ts';
+import {isCompleteRemoteTile,loadRemoteTileViewport,loadRemoteViewport,remoteRenderTiles,remoteViewportDiff,settledRemoteTileZoom,unavailableRemoteTile} from '../src/state/remoteTileData.ts';
 import {updateSemanticLayer,updateSemanticSource} from '../src/state/semanticLayerRenderer.ts';
 
 test('Successful empty tiles and their views retain data identity through repeated small pans',async()=>{
@@ -103,6 +103,27 @@ test('an abandoned viewport skips its queued tiles and keeps overlapping request
 
   await loadRemoteViewport(cache, 'revision', [tile(1), tile(3)], load);
   assert.deepEqual(started, [1, 2, 4, 3], 'a started tile is cached, while a skipped tile remains retryable');
+});
+
+test('render tiles preserve every point once and reuse unchanged spatial sources', async () => {
+  const cache = new SceneResources();
+  const counts = [10_000, 10_000, 2, 3, 0];
+  const load = async ({x}) => points(counts[x]);
+  const requested = counts.map((_count, x) => tile(x));
+  const viewport = await loadRemoteTileViewport(cache, 'revision', requested, load);
+  const sources = remoteRenderTiles(viewport);
+  assert.deepEqual(sources.map(source => [source.key, source.data.features.length]), [
+    ['13/0/0', 10_000], ['13/1/0', 10_000], ['12/1/0', 5]
+  ]);
+  const ids = sources.flatMap(source => source.data.features.map(feature => feature.id));
+  assert.equal(ids.length, counts.reduce((sum, count) => sum + count, 0));
+  assert.equal(new Set(ids).size, ids.length);
+  const zoomed = await loadRemoteTileViewport(cache, 'revision', requested.slice(1, 4), load, viewport);
+  assert.equal(zoomed, viewport);
+  const reuse = remoteRenderTiles(zoomed, sources);
+  assert.ok(reuse.every((source, index) => source === sources[index]));
+  const replacement = await loadRemoteTileViewport(cache, 'new-revision', [tile(2)], async () => points(1), viewport);
+  assert.equal(remoteRenderTiles(replacement, sources)[0].data.features.length, 1);
 });
 
 test('a pending worker diff coalesces later viewport submissions and serializes a full replacement', async () => {
