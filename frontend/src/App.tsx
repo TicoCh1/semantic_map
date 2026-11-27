@@ -1,8 +1,7 @@
-import { GlassSwitch } from "@form-glass/react";
 import { SemanticGlassProvider } from "./styles/SemanticGlassProvider";
-import { GlassButton, Glass, GlassDialog, GlassContentSwitch, GlassScrollArea } from "@form-glass/react";
+import { GlassButton, GlassLink, Glass } from "@form-glass/react";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, ChevronLeft, ChevronRight, Info, MonitorPlay, RefreshCw, X } from "lucide-react";
+import { MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
   REMOTE_LOG_EVENT,
   checkRemoteBackendReachable,
@@ -43,11 +42,11 @@ import type {
 import { GradientEditor } from "./components/GradientEditor";
 import { HistogramPanel } from "./components/HistogramPanel";
 import { LayerPanel } from "./components/LayerPanel";
-import { LogPanel } from "./components/LogPanel";
-import { MapView } from "./components/MapView";
+import { MapControls } from "./components/MapControls";
+import { MapWorkspace } from "./components/MapWorkspace";
+import { RegionHeatmaps } from "./atlas/RegionHeatmaps";
 import { PromptBar } from "./components/PromptBar";
 import { ScreensaverOverlay } from "./components/ScreensaverOverlay";
-import { SplitPane } from "./components/SplitPane";
 import { normalizeBasemapId, type BasemapId } from "./state/basemaps";
 import { layerGradient, layerStyleFromGradient } from "./state/color";
 import { colorRangeForLayer, smartRangeForLayer } from "./state/mapStyle";
@@ -56,7 +55,7 @@ import { panoDatasetIdForPoint, panoPointKey } from "./state/panoDatasets";
 import { exhibitConfig } from "./state/exhibitConfig";
 import { runtimeConfig } from "./state/runtimeConfig";
 import { STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "./state/staticDeployment";
-import { TUTORIAL_PAGES } from "./state/tutorialContent";
+import { ExhibitIntroModal } from "./components/ExhibitIntroModal";
 
 function keyForPano(pano: Pick<PanoMapPoint, "pano_id" | "pano_key" | "dataset_id" | "pano_dataset_id" | "city_id">): string {
   if (pano.pano_key) return pano.pano_key;
@@ -136,12 +135,17 @@ function loadInitialBasemapId(): BasemapId {
 }
 
 export function App() {
+  return new URLSearchParams(window.location.search).get("view") === "atlas"
+    ? <RegionHeatmaps initialBasemap={loadInitialBasemapId()} initialDark={loadInitialDarkMode()} />
+    : <PromptWorkspace />;
+}
+
+function PromptWorkspace() {
   const [data, setData] = useState<AppStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [darkMode, setDarkMode] = useState(loadInitialDarkMode);
   const [basemapId, setBasemapId] = useState<BasemapId>(loadInitialBasemapId);
-  const [attributionHost, setAttributionHost] = useState<HTMLDivElement | null>(null);
   const [backendConfig, setBackendConfig] = useState<RemoteBackendConfig | null>(null);
   const [backendConnectionFailed, setBackendConnectionFailed] = useState(false);
   const [visibleMapCities, setVisibleMapCities] = useState<CityConfig[]>([]);
@@ -869,26 +873,20 @@ export function App() {
             <RefreshCw size={16} />
             Reload
           </GlassButton>
+          <GlassLink href="?view=atlas">Region heatmaps</GlassLink>
         </div>
       </div></SemanticGlassProvider>
     );
   }
 
   const sidebar = (
-    <div className="sidebar-content">
-      <div className="sidebar-top-bar">
-        {runtimeConfig.mode === "screensaver" ? (
-          <GlassButton className="secondary-button intro-button compact-action" onClick={() => setShowScreensaver(true)} title="Start screensaver" aria-label="Start screensaver">
-            <MonitorPlay size={16} />
-          </GlassButton>
-        ) : (
-          <GlassButton className="secondary-button intro-button" onClick={() => setShowExhibitIntro(true)}>
-            <Info size={16} />
-            Project intro
-          </GlassButton>
-        )}
-        <GlassSwitch className="theme-toggle" label="Dark mode" checked={darkMode} onChange={handleDarkModeChange} />
-      </div>
+    <MapControls dark={darkMode} onDarkChange={handleDarkModeChange} onIntro={() => setShowExhibitIntro(true)}
+      logs={remoteLogs} onClearLogs={() => setRemoteLogs([])} error={error}
+      introButton={runtimeConfig.mode === "screensaver" ? (
+        <GlassButton className="secondary-button intro-button compact-action" onClick={() => setShowScreensaver(true)} title="Start screensaver" aria-label="Start screensaver">
+          <MonitorPlay size={16} />
+        </GlassButton>
+      ) : undefined}>
       <PromptBar
         disabled={loading}
         liveSearchAvailable={liveSearchAvailable}
@@ -930,162 +928,42 @@ export function App() {
         onSavePreset={handleSaveGradient}
         onDeletePreset={(gradient) => handleDeleteGradient(gradient)}
       />
-      {error ? (
-        <div className="error-panel">
-          <AlertCircle size={16} />
-          <span>{error}</span>
-        </div>
-      ) : null}
-      <LogPanel entries={remoteLogs} onClear={() => setRemoteLogs([])} />
-    </div>
+    </MapControls>
   );
 
   return (
-    <SemanticGlassProvider dark={darkMode}>
-      <SplitPane
-        className={darkMode ? "theme-dark" : ""}
-        revealControls={showExhibitIntro}
-        footer={<div ref={setAttributionHost} className="map-attribution" data-glass-audit-ignore="vendor-attribution" aria-label="Map attribution" />}
-        left={
-          <MapView
-            cities={mapCities}
-            layers={data.state.layers}
-            gradients={data.gradients}
-            selectedLayerId={data.state.selected_layer_id}
-            basemapId={basemapId}
-            attributionHost={attributionHost}
-            onBasemapChange={handleBasemapChange}
-            onSelectLayer={handleMapSelectLayer}
-            onPriorityTileChange={handlePriorityTileChange}
-            onVisibleCitiesChange={setVisibleMapCities}
-            markedPanos={markedPanos}
-            selectedPanoKey={selectedPanoKey}
-            onMarkPano={handleMarkPano}
-            onSelectPano={handleSelectPano}
-            onRemovePano={handleRemovePano}
-            scoreField={scoreField}
-            progressEntries={mapProgressEntries}
-            refreshingLayers={refreshingLayers}
-            onCreatePrompt={handleCreate}
-            backendConfig={backendConfig}
-            promptDisabled={loading}
-            liveSearchAvailable={liveSearchAvailable}
-            allowStaticTiles={allowStaticTiles}
-          />
-        }
-        right={sidebar}
-      />
+    <MapWorkspace dark={darkMode} revealControls={showExhibitIntro} sidebar={sidebar}
+      cities={mapCities}
+      layers={data.state.layers}
+      gradients={data.gradients}
+      selectedLayerId={data.state.selected_layer_id}
+      basemapId={basemapId}
+      onBasemapChange={handleBasemapChange}
+      onSelectLayer={handleMapSelectLayer}
+      onPriorityTileChange={handlePriorityTileChange}
+      onVisibleCitiesChange={setVisibleMapCities}
+      markedPanos={markedPanos}
+      selectedPanoKey={selectedPanoKey}
+      onMarkPano={handleMarkPano}
+      onSelectPano={handleSelectPano}
+      onRemovePano={handleRemovePano}
+      scoreField={scoreField}
+      progressEntries={mapProgressEntries}
+      refreshingLayers={refreshingLayers}
+      onCreatePrompt={handleCreate}
+      backendConfig={backendConfig}
+      promptDisabled={loading}
+      liveSearchAvailable={liveSearchAvailable}
+      allowStaticTiles={allowStaticTiles}
+    >
       {idleResetCountdown !== null ? (
         <Glass className="idle-reset-warning" fade={[]}>Long inactivity detected. Resetting in {idleResetCountdown} seconds.</Glass>
       ) : null}
       <ExhibitIntroModal open={showExhibitIntro} version={introVersion} onClose={handleCloseExhibitIntro} />
       {showScreensaver ? <ScreensaverOverlay onClose={() => setShowScreensaver(false)} /> : null}
-    </SemanticGlassProvider>
+    </MapWorkspace>
   );
 }
-
-function ExhibitIntroModal({ open, version, onClose }: { open: boolean; version: number; onClose: () => void }) {
-  const [pageIndex, setPageIndex] = useState(0);
-  const [highlightRect, setHighlightRect] = useState<TourHighlightRect | null>(null);
-  useEffect(() => { if (open) setPageIndex(0); }, [open, version]);
-  const page = TUTORIAL_PAGES[pageIndex];
-  const isFirst = pageIndex === 0;
-
-
-  useEffect(() => {
-    if (!open) return;
-    // The welcome page focuses on the introduction rather than a specific control.
-    if (!page.target) {
-      setHighlightRect(null);
-      return;
-    }
-    let activeElement: HTMLElement | null = null;
-    let settleTimer: number | undefined;
-
-    const setActiveElement = (element: HTMLElement | null) => {
-      if (activeElement === element) return;
-      activeElement?.classList.remove("tour-target-active");
-      activeElement = element;
-      activeElement?.classList.add("tour-target-active");
-    };
-
-    const resolveTarget = () =>
-      document.querySelector<HTMLElement>(`[data-tour-target="${page.target}"]`) ??
-      document.querySelector<HTMLElement>('[data-tour-target="map"]');
-
-    const updateHighlight = () => {
-      const target = resolveTarget();
-      setActiveElement(target);
-      if (!target) {
-        setHighlightRect(null);
-        return;
-      }
-
-      const rect = target.getBoundingClientRect();
-      const padding = 8;
-      const left = Math.max(8, rect.left - padding);
-      const top = Math.max(8, rect.top - padding);
-      const width = Math.min(window.innerWidth - left - 8, rect.width + padding * 2);
-      const height = Math.min(window.innerHeight - top - 8, rect.height + padding * 2);
-      setHighlightRect({ left, top, width, height });
-    };
-
-    const target = resolveTarget();
-    target?.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-    updateHighlight();
-    settleTimer = window.setTimeout(updateHighlight, 360);
-    window.addEventListener("resize", updateHighlight);
-    window.addEventListener("scroll", updateHighlight, true);
-
-    return () => {
-      if (settleTimer !== undefined) window.clearTimeout(settleTimer);
-      window.removeEventListener("resize", updateHighlight);
-      window.removeEventListener("scroll", updateHighlight, true);
-      activeElement?.classList.remove("tour-target-active");
-      setHighlightRect(null);
-    };
-  }, [page.target, open]);
-
-  return (
-    <>
-      {open && isFirst && <Glass className="tutorial-focus-backdrop" fade={[]} shape="flush" material="tutorial-focus" aria-hidden="true" />}
-      {open && !isFirst && highlightRect && <div className="tour-highlight-frame" style={highlightRect} />}
-      <GlassDialog open={open} onOpenChange={next => { if (!next) onClose(); }}
-        title="UrbanFabric tutorial" closeLabel="Close tutorial" className="exhibit-modal">
-        <GlassContentSwitch value={String(pageIndex)} render={key => {
-          const displayed = TUTORIAL_PAGES[Number(key)];
-          return <>
-            <div className="intro-progress-row" aria-label={`Tutorial step ${Number(key) + 1} of ${TUTORIAL_PAGES.length}`}>
-              {TUTORIAL_PAGES.map((item, index) => <GlassButton className={`intro-progress-dot${index === Number(key) ? " is-active" : ""}`}
-                key={item.eyebrow} onClick={() => setPageIndex(index)} title={item.title} aria-label={`Step ${index + 1}: ${item.title}`} />)}
-            </div>
-            <GlassScrollArea maxHeight="48dvh" label="Tutorial content">
-              <span className="intro-page-eyebrow">{displayed.eyebrow}</span>
-              <h3>{displayed.title}</h3><p>{displayed.body}</p>
-              {displayed.items.length > 0 && <ul className="intro-step-list">{displayed.items.map(item => <li key={item}>{item}</li>)}</ul>}
-            </GlassScrollArea>
-            <div className="intro-modal-footer">
-              <GlassButton onClick={onClose}>Skip tutorial</GlassButton>
-              <div className="intro-modal-actions">
-                <GlassButton onClick={() => setPageIndex(index => Math.max(0, index - 1))} disabled={Number(key) === 0}><ChevronLeft size={16}/>Back</GlassButton>
-                <GlassButton onClick={() => Number(key) === TUTORIAL_PAGES.length - 1 ? onClose() : setPageIndex(index => index + 1)}>
-                  {Number(key) === TUTORIAL_PAGES.length - 1 ? "Start exploring" : "Next"}<ChevronRight size={16}/>
-                </GlassButton>
-              </div>
-            </div>
-          </>;
-        }}/>
-      </GlassDialog>
-    </>
-  );
-}
-
-type TourHighlightRect = {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
-};
 
 function updateMapProgressEntries(
   entry: RemoteLogEntry,

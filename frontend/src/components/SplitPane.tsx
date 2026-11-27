@@ -8,14 +8,16 @@ type SplitPaneProps = {
   footer?: ReactNode;
   className?: string;
   revealControls?: boolean;
+  controlsRequest?: { open: boolean };
 };
 
-export function SplitPane({ left, right, footer, className = "", revealControls = false }: SplitPaneProps) {
+export function SplitPane({ left, right, footer, className = "", revealControls = false, controlsRequest }: SplitPaneProps) {
   const dock = useRef<HTMLDivElement>(null);
   const [rightWidth, setRightWidth] = useState(430);
   const [dragging, setDragging] = useState(false);
   const [pinned, setPinned] = useState(false);
   const open = revealControls || dragging || pinned;
+  useEffect(() => { if (controlsRequest) setPinned(controlsRequest.open); }, [controlsRequest]);
 
   useEffect(() => {
     const drawer = dock.current?.querySelector<HTMLElement>(".sidebar-drawer");

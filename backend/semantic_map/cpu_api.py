@@ -175,6 +175,8 @@ def create_app(settings=None, experiment_root=None):
     install_access_logging(app, settings.workspace_root)
     app.include_router(create_cpu_verification_router(verification_settings, lambda: app.state.catalog, panos))
     protected = [Depends(require_backend_token)]
+    from .region_atlas_api import router as atlas_router
+    app.include_router(atlas_router, dependencies=protected)
 
     @app.get('/api/ready')
     @app.get('/api/health')

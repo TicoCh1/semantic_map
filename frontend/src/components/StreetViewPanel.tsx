@@ -175,9 +175,7 @@ function PanoLayerValues({
   onToggleExpanded: () => void;
   onReferenceDragStart: (event: DragEvent) => void;
 }) {
-  const values = pano.layer_values?.length
-    ? pano.layer_values
-    : [
+  const values = pano.layer_values ?? [
         {
           layer_id: pano.source_layer_id ?? "selected",
           layer_name: pano.source_layer_name ?? "Selected layer",

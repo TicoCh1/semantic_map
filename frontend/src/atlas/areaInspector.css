@@ -1,0 +1,13 @@
+.area-picking canvas { cursor: crosshair !important; }
+.area-inspector { display: grid; gap: .5rem; }
+.area-actions { display: flex; align-items: center; gap: .6rem; }
+.area-actions > * { min-width: 0; }
+.area-inspector p { margin: .4rem 0; font-size: .8rem; line-height: 1.4; }
+.area-inspector small { display: block; font-size: .72rem; opacity: .78; }
+.area-inspector ul { list-style: none; padding: 0; margin: .25rem 0; }
+.area-inspector li, .area-columns { display: grid; grid-template-columns: minmax(0,1fr) 3em 3em; align-items: center; gap: .3rem; font-size: .8rem; padding: .24rem 0; }
+.area-inspector li > span:not(:first-child), .area-columns > span:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.area-columns { font-size: .7rem; opacity: .72; margin-top: .4rem; }
+.area-track { display: block; height: 3px; border-radius: 3px; margin-top: .18rem; background: color-mix(in srgb,currentColor 12%,transparent); }
+.area-track i { display: block; height: 100%; background: currentColor; opacity: .58; border-radius: inherit; }
+.area-inspector .secondary-button { margin: .2rem .35rem .2rem 0; }

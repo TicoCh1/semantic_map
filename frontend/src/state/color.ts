@@ -162,3 +162,8 @@ export function layerStyleFromGradient(gradient: GradientPreset, previous?: Laye
     absolute_radius: previous?.absolute_radius ?? false
   };
 }
+
+/** Starting point size and zoom behaviour for new Semantic Map layers. */
+export function newSemanticLayerStyle(gradient: GradientPreset, scoreMin = gradient.score_min, scoreMax = gradient.score_max): LayerStyle {
+  return { ...layerStyleFromGradient(gradient), score_min: scoreMin, score_max: scoreMax, point_radius: 3, absolute_radius: false };
+}

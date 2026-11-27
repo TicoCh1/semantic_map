@@ -116,6 +116,7 @@ export type LayerPatch = {
 export type FeatureCollection = GeoJsonFeatureCollection<Geometry, Record<string, unknown>>;
 
 export type PanoMapPoint = {
+  cell_index?: number;
   pano_id: string;
   pano_key?: string;
   dataset_id?: string | null;

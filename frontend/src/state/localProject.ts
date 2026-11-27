@@ -25,7 +25,7 @@ import type {
   SemanticLayer,
   TileCoord
 } from "../api/types";
-import { DEFAULT_POINT_RADIUS, clamp, layerStyleFromGradient, slugify } from "./color";
+import { DEFAULT_POINT_RADIUS, clamp, layerStyleFromGradient, newSemanticLayerStyle, slugify } from "./color";
 import { reportDemoMonitorEvent } from "./demoMonitor";
 import { exhibitConfig } from "./exhibitConfig";
 import { cityConfigForDataset, cityConfigForId, cityConfigsForRemoteBackend, DEFAULT_CITY_CONFIGS, normaliseCityConfigs } from "./cities";
@@ -51,7 +51,6 @@ const STATE_UPDATED_EVENT = "semantic-map-local-state-updated";
 const EXHIBIT_RESET_EVENT = "semantic-map-exhibit-reset";
 const EXHIBIT_SCORE_MIN = -1;
 const EXHIBIT_SCORE_MAX = 3;
-const EXHIBIT_POINT_RADIUS = 3;
 const REFERENCE_ZSCORE_MIN = 2;
 const REFERENCE_ZSCORE_MAX = 6;
 export const REMOTE_LOG_EVENT = "semantic-map-remote-log";
@@ -444,6 +443,15 @@ function resolveRemoteUrl(config: RemoteBackendConfig, pathOrUrl: string): strin
   return `${normalizeBackendBaseUrl(config.baseUrl)}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
 }
 
+/** Read a Semantic Map backend resource with the current URL and bearer token. */
+export async function apiFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  const config = await getRemoteBackendConfig();
+  if (!config.enabled || !isUsableRemoteBackendUrl(config.baseUrl)) throw new Error("Set the Backend URL in Map controls.");
+  const headers = new Headers(remoteAuthHeaders(config));
+  new Headers(init.headers).forEach((value, name) => headers.set(name, value));
+  return fetchRemoteWithTimeout(resolveRemoteUrl(config, path), { ...init, headers });
+}
+
 async function fetchRemoteWithTimeout(input: RequestInfo | URL, init: RequestInit = {}, timeoutMs = REMOTE_REQUEST_TIMEOUT_MS): Promise<Response> {
   const controller = new AbortController();
   const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -719,22 +727,7 @@ function createLayerRecord(payload: LayerCreate, existingIds: Set<string>, gradi
   const id = layerIdForPrompt(prompt, existingIds);
   const label = (payload.name || prompt || id).trim();
   const name = label.length > 58 ? `${label.slice(0, 55).trim()}...` : label;
-  const style = {
-    ...layerStyleFromGradient(gradient, {
-      gradient_id: gradient.id,
-      gradient_name: gradient.name,
-      stops: gradient.stops,
-      opacity: gradient.opacity,
-      score_min: EXHIBIT_SCORE_MIN,
-      score_max: EXHIBIT_SCORE_MAX,
-      point_radius: EXHIBIT_POINT_RADIUS,
-      absolute_radius: false
-    }),
-    score_min: EXHIBIT_SCORE_MIN,
-    score_max: EXHIBIT_SCORE_MAX,
-    point_radius: EXHIBIT_POINT_RADIUS,
-    absolute_radius: false
-  };
+  const style = newSemanticLayerStyle(gradient, EXHIBIT_SCORE_MIN, EXHIBIT_SCORE_MAX);
 
   const staticSpec = exhibitSpecForPrompt(prompt);
   const fallbackSources = staticSpec ? staticFallbackSources(staticSpec.staticDataKey) : null;
@@ -761,22 +754,7 @@ function createReferenceLayerRecord(reference: PanoReference, existingIds: Set<s
   const prompt = referenceLayerPrompt(normalizedReference);
   const gradient = gradientById(gradients, "turbo");
   const id = layerIdForPrompt(prompt, existingIds);
-  const style = {
-    ...layerStyleFromGradient(gradient, {
-      gradient_id: gradient.id,
-      gradient_name: gradient.name,
-      stops: gradient.stops,
-      opacity: gradient.opacity,
-      score_min: REFERENCE_ZSCORE_MIN,
-      score_max: REFERENCE_ZSCORE_MAX,
-      point_radius: EXHIBIT_POINT_RADIUS,
-      absolute_radius: false
-    }),
-    score_min: REFERENCE_ZSCORE_MIN,
-    score_max: REFERENCE_ZSCORE_MAX,
-    point_radius: EXHIBIT_POINT_RADIUS,
-    absolute_radius: false
-  };
+  const style = newSemanticLayerStyle(gradient, REFERENCE_ZSCORE_MIN, REFERENCE_ZSCORE_MAX);
 
   const sourcePath = `local://mock/${id}-${hashString(`${normalizedReference.dataset_id}:${normalizedReference.pano_id}`)}.geojson`;
   return {
@@ -934,27 +912,7 @@ function createDefaultExhibitLayers(gradients: GradientPreset[]): SemanticLayer[
     const gradient = gradientById(gradients, spec.gradientId);
     const id = layerIdForPrompt(spec.prompt, usedIds);
     usedIds.add(id);
-    const style = {
-      ...layerStyleFromGradient(
-        {
-          ...gradient,
-          score_min: spec.scoreMin,
-          score_max: spec.scoreMax
-        },
-        {
-          gradient_id: gradient.id,
-          opacity: gradient.opacity,
-          score_min: spec.scoreMin,
-          score_max: spec.scoreMax,
-          point_radius: EXHIBIT_POINT_RADIUS,
-          absolute_radius: false
-        }
-      ),
-      score_min: spec.scoreMin,
-      score_max: spec.scoreMax,
-      point_radius: EXHIBIT_POINT_RADIUS,
-      absolute_radius: false
-    };
+    const style = newSemanticLayerStyle(gradient, spec.scoreMin, spec.scoreMax);
     const fallbackSources = staticFallbackSources(spec.staticDataKey);
     return {
       id,
@@ -1097,25 +1055,7 @@ export async function resetExhibitState(): Promise<AppStateResponse> {
     const id = previousLayer?.id || layerIdForPrompt(spec.prompt, usedIds);
     usedIds.add(id);
     const style = {
-      ...layerStyleFromGradient(
-        {
-          ...gradient,
-          score_min: spec.scoreMin,
-          score_max: spec.scoreMax
-        },
-        {
-          gradient_id: gradient.id,
-          opacity: gradient.opacity,
-          score_min: spec.scoreMin,
-          score_max: spec.scoreMax,
-          point_radius: EXHIBIT_POINT_RADIUS,
-          absolute_radius: false
-        }
-      ),
-      score_min: spec.scoreMin,
-      score_max: spec.scoreMax,
-      point_radius: EXHIBIT_POINT_RADIUS,
-      absolute_radius: false,
+      ...newSemanticLayerStyle(gradient, spec.scoreMin, spec.scoreMax),
       ...(calibratedRange ? { score_min: calibratedRange.lower, score_max: calibratedRange.upper } : {})
     };
 

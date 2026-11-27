@@ -13,7 +13,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import type { Map as MapLibreMap, MapMouseEvent, MapEventType } from "maplibre-gl";
 
 import { Check, Copy, Search, SendHorizontal } from "lucide-react";
-import { memo, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, type ReactNode, type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CityConfig, CityId, FeatureCollection, GradientPreset, MarkedPano, PanoLayerValue, PanoMapPoint, RemoteLogEntry, SemanticLayer, TileCoord } from "../api/types";
 import {
   getLayerFallbackGeojson,
@@ -38,7 +38,14 @@ import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STAT
 // Bundle the v6 worker and its shared module into the deployed Vite assets.
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
-type MapViewProps = {
+export type MapViewProps = {
+  regionHeatmaps?: {
+    selector: ReactNode;
+    radiusMeters?: number;
+    dataProvider: LayerDataProvider;
+    selectionAreas: Record<string, FeatureCollection>;
+    register: (cityId: string, map: MapLibreMap) => () => void;
+  };
   backendConfig?: RemoteBackendConfig | null;
   cities: CityConfig[];
   layers: SemanticLayer[];
@@ -102,6 +109,7 @@ function isCompactMapViewport(): boolean {
 }
 
 export const MapView = memo(function MapView({
+  regionHeatmaps,
   cities,
   layers,
   gradients,
@@ -282,12 +290,14 @@ export const MapView = memo(function MapView({
       data-tour-target="map"
     >
       <Glass className="map-toolbar" fade={["top", "right", "bottom", "left"]}>
+        {regionHeatmaps ? <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule">{regionHeatmaps.selector}</Glass> : <>
         {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
         <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></Glass> :
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
+        </>}
         <div className="map-summary" data-displayed-layer-id={displayedLayer?.id}>
           <strong title={title}>{title}</strong>
-          <span className="map-agreement">Scoring agreement {agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}</span>
+          <span className="map-agreement">{regionHeatmaps ? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
@@ -302,13 +312,22 @@ export const MapView = memo(function MapView({
             </GlassButton>
           ))}
         </div>
-        {comparisonCities.length > 0 && <label className="basemap-select comparison-mode-select">
+        <label className="basemap-select comparison-mode-select">
           <span>View</span>
-          <ThemedSelect label="Map comparison mode" value={comparisonEnabled ? comparisonMode : "cities"} onValueChange={e => setComparisonMode(e as typeof comparisonMode)}>
-            <option value="cities">Compare cities</option><option value="embeddings">Old vs new embedding</option>
-            <option value="difference">Difference mode</option>
+          <ThemedSelect label="Map comparison mode" value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"} onValueChange={mode => {
+            if (mode === "atlas" || regionHeatmaps) {
+              const url = new URL(window.location.href);
+              if (mode === "atlas") url.searchParams.set("view", "atlas");
+              else { url.searchParams.delete("view"); url.searchParams.delete("query"); }
+              window.location.assign(url);
+            } else setComparisonMode(mode as typeof comparisonMode);
+          }}>
+            <option value="cities">Compare cities</option>
+            <option value="atlas">Region heatmaps</option>
+            {comparisonCities.length > 0 && <option value="embeddings">Old vs new embedding</option>}
+            {comparisonCities.length > 0 && <option value="difference">Difference mode</option>}
           </ThemedSelect>
-        </label>}
+        </label>
         {comparisonEnabled ? <label className="basemap-select comparison-city-select">
           <span>City</span>
           <ThemedSelect label="Embedding comparison city" value={comparisonCity?.id} onValueChange={e => setComparisonCityId(e)}>
@@ -356,6 +375,10 @@ export const MapView = memo(function MapView({
           <CityMapPane
             key={`${comparisonEnabled ? comparisonMode : "cities"}-${city.id}-${index}`}
             city={city}
+            dataProvider={regionHeatmaps?.dataProvider}
+            selectionArea={regionHeatmaps?.selectionAreas[city.id]}
+            onMapReady={regionHeatmaps && (map => regionHeatmaps.register(city.id, map))}
+            popupLabels={regionHeatmaps && { score: "Window similarity", zscore: "Four-city z" }}
             layers={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index] : layers}
             gradients={gradients}
             basemapId={basemapId}
@@ -425,7 +448,7 @@ export const MapView = memo(function MapView({
   );
 });
 
-export type LayerDataProvider = (layer: SemanticLayer, cityId: CityId) => Promise<FeatureCollection>;
+export type LayerDataProvider = (layer: SemanticLayer, cityId: CityId, detailBounds?: [number, number, number, number]) => Promise<FeatureCollection>;
 
 type CityMapPaneProps = {
   dataProvider?: LayerDataProvider;
@@ -582,6 +605,12 @@ export const CityMapPane = memo(function CityMapPane({
   const markPanoRef = useRef(onMarkPano);
   const selectPanoRef = useRef(onSelectPano);
   const panoMarkersRef = useRef<Map<string, maplibregl.Marker>>(new Map());
+  const regionPopup = useRef<{ popup: maplibregl.Popup; key: string; layerId: string } | null>(null);
+  const displayedLayerId = layers.find(layer => layer.visible)?.id;
+  useEffect(() => {
+    const active = regionPopup.current;
+    if (active && (active.key !== selectedPanoKey || active.layerId !== displayedLayerId)) active.popup.remove();
+  }, [displayedLayerId, selectedPanoKey]);
   const styleGenerationRef = useRef(0);
   const viewportGenerationRef = useRef(0);
   const drawnLayerIds = useRef(new Map<string, string>());
@@ -625,7 +654,7 @@ export const CityMapPane = memo(function CityMapPane({
     const pano = panoPointFromFeature(feature, event, layer, city);
     if (pano) {
       markPanoRef.current(pano);
-      void collectPanoLayerValues(
+      if (pano.cell_index === undefined) void collectPanoLayerValues(
         pano,
         feature,
         layersRef.current,
@@ -642,14 +671,37 @@ export const CityMapPane = memo(function CityMapPane({
     const score = Number(props.score);
     const zscore = Number(props.zscore);
     const labels = popupLabelsRef.current;
+    const content = document.createElement("div");
+    const title = document.createElement("div");
+    title.className = "popup-title";
+    title.textContent = layer.name;
+    content.append(title);
+    function addRow(label: string, value: string) {
+      const row = document.createElement("div");
+      row.className = "popup-row";
+      for (const text of [label, value]) {
+        const span = document.createElement("span");
+        span.textContent = text;
+        row.append(span);
+      }
+      content.append(row);
+    }
+    const difference = layer.id.endsWith(":embedding-difference");
+    addRow(labels?.score ?? (difference ? "Δ score" : "score"), Number.isFinite(score) ? score.toFixed(4) : "");
+    addRow(labels?.zscore ?? (difference ? "Δ zscore" : "zscore"), Number.isFinite(zscore) ? zscore.toFixed(3) : "");
+    if (typeof props.sim_pct === "number") {
+      addRow("Four-city percentile", props.sim_pct.toFixed(2));
+      if (props.is_self_zone) addRow("Source overlap", "Within 300 m");
+    }
+    regionPopup.current?.popup.remove();
     const popup = new maplibregl.Popup({ closeButton: true, closeOnClick: true })
       .setLngLat(pano ? [pano.lon, pano.lat] : event.lngLat)
-      .setHTML(
-        `<div class="popup-title">${layer.name}</div>
-         <div class="popup-row"><span>${labels?.score ?? (layer.id.endsWith(':embedding-difference') ? 'Δ score' : 'score')}</span><span>${Number.isFinite(score) ? score.toFixed(4) : ""}</span></div>
-         <div class="popup-row"><span>${labels?.zscore ?? (layer.id.endsWith(':embedding-difference') ? 'Δ zscore' : 'zscore')}</span><span>${Number.isFinite(zscore) ? zscore.toFixed(3) : ""}</span></div>`
-      )
+      .setDOMContent(content)
       .addTo(map);
+    if (pano?.cell_index !== undefined && pano.pano_key) {
+      regionPopup.current = { popup, key: pano.pano_key, layerId: layer.id };
+      popup.once("close", () => { if (regionPopup.current?.popup === popup) regionPopup.current = null; });
+    }
     popup.once("close", applyGlassSurface(popup.getElement().querySelector(".maplibregl-popup-content")));
   }
 
@@ -1061,6 +1113,12 @@ export const CityMapPane = memo(function CityMapPane({
         const currentLayers = layersRef.current;
         const currentGradients = gradientsRef.current;
         const visibleTopToBottom = currentLayers.filter((layer) => layer.visible);
+        const area = selectionAreaRef.current;
+        if (area && (area.features.length || currentMap.getSource("reference-selection"))) {
+          updateSemanticSource(currentMap, "reference-selection", area);
+          if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
+          if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
+        }
         if (!visibleTopToBottom.length) {
           removeSemanticLayers(currentMap, () => true);
           tiledViewports.current.clear();
@@ -1083,12 +1141,7 @@ export const CityMapPane = memo(function CityMapPane({
           throw new Error("Map style is not ready");
         }
 
-        const area = selectionAreaRef.current;
-        if (area) {
-          updateSemanticSource(currentMap, "reference-selection", area);
-          if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
-          if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
-        }
+
 
         const renderableTopToBottom = renderableSemanticLayers(visibleTopToBottom);
         const layersToDraw = renderableTopToBottom.slice().reverse();
@@ -1130,7 +1183,11 @@ export const CityMapPane = memo(function CityMapPane({
               sources = [{ id: sourceId, data: await getLayerFallbackGeojson(layer.id, city.id) }];
             }
           } else {
-            const geojson = await loadLocalLayerGeojson(layer, resources, city.id, dataProviderRef.current);
+            const bounds = currentMap.getBounds();
+            const detailed = forceMaxDetailRef.current || remoteTileZoomRef.current === REMOTE_MAX_DETAIL_ZOOM;
+            const geojson = dataProviderRef.current
+              ? await dataProviderRef.current(layer, city.id, detailed ? [bounds.getWest(), bounds.getSouth(), bounds.getEast(), bounds.getNorth()] : undefined)
+              : await loadLocalLayerGeojson(layer, resources, city.id);
             sources = [{ id: sourceId, data: geojson }];
           }
           if (cancelled || generation !== styleGenerationRef.current) return;
@@ -1229,7 +1286,7 @@ export const CityMapPane = memo(function CityMapPane({
       setShowMaxDetailWarning(false);
       reportSemanticLoading(false);
     };
-  }, [city.id, redrawRequest, semanticDrawKey, allowStaticTiles, onSemanticLayerLoadingChange]);
+  }, [city.id, redrawRequest, semanticDrawKey, allowStaticTiles, onSemanticLayerLoadingChange, dataProvider, selectionArea]);
 
   return (
     <section className={`city-map-pane city-map-pane-${city.id}`} data-split-index={splitIndex} aria-label={`${city.name} map`} data-map-status={status}>
@@ -1317,6 +1374,11 @@ function panoPointFromFeature(feature: GeoJSON.Feature, event: MapMouseEvent, la
     }
   }
 
+  // Map tiles quantize point geometry. Use the capture coordinates for panorama identity.
+  if (Number.isFinite(props.pano_lon) && Number.isFinite(props.pano_lat)) {
+    lon = props.pano_lon;
+    lat = props.pano_lat;
+  }
   const score = Number(props.score);
   const zscore = Number(props.zscore);
   const datasetId = typeof props.dataset_id === "string" && props.dataset_id ? props.dataset_id : city.datasetId;
@@ -1324,6 +1386,7 @@ function panoPointFromFeature(feature: GeoJSON.Feature, event: MapMouseEvent, la
   const panoDatasetId = explicitPanoDatasetId || panoDatasetIdForPoint(datasetId, lon, lat);
   return {
     pano_id: panoId,
+    ...(Number.isInteger(props.cell_index) ? { cell_index: props.cell_index } : {}),
     pano_key: panoPointKey(panoDatasetId, panoId, lon, lat),
     dataset_id: datasetId,
     pano_dataset_id: panoDatasetId,

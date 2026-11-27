@@ -1,13 +1,14 @@
 import { GlassSwitch } from "@form-glass/react";
 import { GlassButton, GlassInput, GlassTextarea } from "@form-glass/react";
 import { Check, Copy, SendHorizontal } from "lucide-react";
-import { useState, type DragEvent } from "react";
+import { useState, type ReactNode, type DragEvent } from "react";
 import { SavedPromptSearch } from "./SavedPromptSearch";
 import { saveRemoteBackendConfig } from "../api/client";
 import { PANO_REFERENCE_DRAG_TYPE, type PanoReference, type RemoteBackendConfig } from "../api/types";
 import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STATIC_DEPLOYMENT_SEARCH_UNAVAILABLE_MESSAGE } from "../state/staticDeployment";
 
 type PromptBarProps = {
+  searchSlot?: ReactNode;
   disabled?: boolean;
   liveSearchAvailable?: boolean;
   backendConfig: RemoteBackendConfig | null;
@@ -17,7 +18,7 @@ type PromptBarProps = {
   onCreateReference?: (reference: PanoReference) => Promise<void>;
 };
 
-export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig, remoteConfigLocked = false, onConfigChange, onCreate, onCreateReference }: PromptBarProps) {
+export function PromptBar({ searchSlot, disabled, liveSearchAvailable = true, backendConfig, remoteConfigLocked = false, onConfigChange, onCreate, onCreateReference }: PromptBarProps) {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [referenceDragOver, setReferenceDragOver] = useState(false);
@@ -99,7 +100,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
           />
         </div>
       ) : null}
-      {backendConfig?.enabled && backendConfig.mode === "cpu" ? <SavedPromptSearch config={backendConfig} disabled={disabled || !liveSearchAvailable} onCreate={onCreate} /> : <div className={`prompt-input-row${liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? " has-action" : ""}`}>
+      {searchSlot ?? (backendConfig?.enabled && backendConfig.mode === "cpu" ? <SavedPromptSearch config={backendConfig} disabled={disabled || !liveSearchAvailable} onCreate={onCreate} /> : <div className={`prompt-input-row${liveSearchAvailable || STATIC_DEPLOYMENT_CONTACT_EMAIL ? " has-action" : ""}`}>
         <GlassTextarea label="Prompt"
           id="prompt-input"
           value={prompt}
@@ -120,7 +121,7 @@ export function PromptBar({ disabled, liveSearchAvailable = true, backendConfig,
         >
           {liveSearchAvailable ? <SendHorizontal size={18} /> : contactCopied ? <Check size={18} /> : <Copy size={18} />}
         </GlassButton> : null}
-      </div>}
+      </div>)}
     </section>
   );
 }

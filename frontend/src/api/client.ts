@@ -1,5 +1,6 @@
 export {
   REMOTE_LOG_EVENT,
+  apiFetch,
   checkRemoteBackendReachable,
   createLayer,
   createPanoReferenceScoringJob,

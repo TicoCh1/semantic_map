@@ -264,3 +264,5 @@ html #root .glass-state-switch.detail-state-switch[aria-checked=true] > .glass-s
 @media (prefers-reduced-motion: reduce) {
   #root .sidebar-drawer { transition: none; }
 }
+
+#root .region-rank-marker { color: white; font: 600 12px/18px system-ui, sans-serif; }

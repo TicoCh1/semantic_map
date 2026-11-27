@@ -14,6 +14,7 @@ type HistogramPanelProps = {
   allowStaticTiles?: boolean;
   range?: { lower: number; upper: number; mode: "default" | "manual" | "smart" };
   onResetRange?: (layer: SemanticLayer) => Promise<void>;
+  smartRangeTitle?: string;
   onSmartRange?: (layer: SemanticLayer) => Promise<{ lower: number; upper: number }>;
   onRangeChange?: (layer: SemanticLayer, scoreMin: number, scoreMax: number) => Promise<void>;
   onPropertyChange?: (layer: SemanticLayer, property: string) => Promise<void>;
@@ -28,7 +29,7 @@ const BUCKET_WIDTH_STORAGE_KEY = "semantic-map-histogram-bucket-width";
 const BUCKET_WIDTH_OPTIONS = [0.05, 0.02, 0.01];
 const MAX_HISTOGRAM_BINS = 512;
 
-export function HistogramPanel({ layer, gradient, data, city, allowStaticTiles = true, range, onResetRange, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
+export function HistogramPanel({ layer, gradient, data, city, allowStaticTiles = true, range, onResetRange, smartRangeTitle, onSmartRange, onRangeChange, onPropertyChange }: HistogramPanelProps) {
   const [values, setValues] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -295,7 +296,7 @@ export function HistogramPanel({ layer, gradient, data, city, allowStaticTiles =
                 Set range
               </GlassButton>
               {onSmartRange ? <GlassButton className="secondary-button range-apply" onClick={() => void applySmartRange(layer)}
-                disabled={rangeSaving} title="Use the reranker range, or −1 to 3 when unavailable">
+                disabled={rangeSaving} title={smartRangeTitle ?? "Use the reranker range, or −1 to 3 when unavailable"}>
                 Smart range
               </GlassButton> : null}
             </div>
