@@ -308,19 +308,11 @@ export const MapView = memo(function MapView({
           <strong title={title}>{title}</strong>
           <span className="map-agreement">{regionHeatmaps ? regionHeatmaps.description ?? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
         </div>
-        <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
-          {cities.map((city) => (
-            <GlassButton
-              key={city.id}
-              type="button"
-              className={city.id === mobileCityId ? "is-active" : ""}
-              aria-pressed={city.id === mobileCityId}
-              onClick={() => setMobileCityId(city.id)}
-            >
-              {city.name}
-            </GlassButton>
-          ))}
-        </div>
+        {compactViewport && !comparisonEnabled && <div className="mobile-city-picker">
+          <ThemedSelect label="Map city" value={mobileCityId} onValueChange={setMobileCityId}>
+            {cities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
+          </ThemedSelect>
+        </div>}
         <label className="basemap-select comparison-mode-select">
           <span>View</span>
           <ThemedSelect label="Map comparison mode" value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"} onValueChange={mode => {

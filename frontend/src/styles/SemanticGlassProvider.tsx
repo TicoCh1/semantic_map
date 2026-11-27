@@ -1,5 +1,5 @@
 import { Glass, GlassProvider, type GlassValues } from "@form-glass/react";
-import { type ReactNode, useSyncExternalStore } from "react";
+import { type ReactNode, useLayoutEffect, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { getVendorGlass, subscribeVendorGlass } from "./glass";
 
@@ -20,6 +20,9 @@ function VendorGlassSurfaces() {
   ))}</>;
 }
 export function SemanticGlassProvider({ dark, children }: { dark: boolean; children: ReactNode }) {
+  useLayoutEffect(() => {
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", dark ? "#191b1e" : "#eceeeb");
+  }, [dark]);
   return <GlassProvider theme={dark ? "dark" : "light"} values={dark ? darkValues : lightValues} fadeContents={false} diagnostics={import.meta.env.DEV}
     refractionEnabled={false} className="semantic-glass-app">
     {children}

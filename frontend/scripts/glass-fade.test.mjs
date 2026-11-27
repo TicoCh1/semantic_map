@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
+import postcss from "postcss";
 import { glassFadeProgress, GLASS_FADE_STEPS, GLASS_SAMPLES } from "../src/styles/glassFade.ts";
 
 test("smooth profiles join the untouched backdrop and solid core without slope or curvature jumps", () => {
@@ -40,15 +41,20 @@ test("the sampled CSS approximation stays close to the smooth profile, including
 });
 
 test("all edge, corner and divider masks consume the same complete profile", async () => {
-  const css = await fs.readFile(new URL("../src/styles/glass.css", import.meta.url), "utf8");
-  let masks = 0;
-  for (const gradient of css.split(/(?:radial|linear)-gradient\(/).slice(1)) {
-    if (!gradient.includes("--glass-fade-alpha-")) continue;
-    masks++;
-    for (let i = 0; i <= GLASS_FADE_STEPS; i++) {
-      assert.ok(gradient.includes(`--glass-fade-alpha-${i})`), `missing curve sample ${i}`);
-    }
+  const css = await fs.readFile(new URL(import.meta.resolve("@form-glass/react/styles.css")), "utf8");
+  const sheet = postcss.parse(css);
+  for (const property of ["mask-image", "-webkit-mask-image"]) {
+    let masks = 0;
+    sheet.walkDecls(property, declaration => {
+      for (const gradient of declaration.value.split(/(?:radial|linear)-gradient\(/).slice(1)) {
+        if (!gradient.includes("--glass-fade-alpha-")) continue;
+        masks++;
+        for (let i = 0; i <= GLASS_FADE_STEPS; i++) {
+          assert.ok(gradient.includes(`--glass-fade-alpha-${i})`), `missing curve sample ${i}`);
+        }
+      }
+    });
+    assert.equal(masks, 10, `${property}: four corners, four edges and two divider axes`);
   }
-  assert.equal(masks, 10, "four corners, four edges and two divider axes");
   for (const sample of GLASS_SAMPLES) assert.ok(css.includes(`--glass-blur-weight-${sample}`));
 });

@@ -332,13 +332,49 @@ html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glas
 @media (max-width: 700px) {
   #root .split-pane .map-toolbar {
     top: max(6px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left));
-    right: max(8px, env(safe-area-inset-right)); max-width: none; padding: 5px 8px;
-    grid-template-columns: minmax(0,1fr) auto; gap: 2px 6px;
+    right: max(8px, env(safe-area-inset-right)); max-width: none; padding: 3px 4px;
+    grid-template-columns: minmax(0,.85fr) minmax(0,1.25fr) auto; gap: 4px;
   }
-  #root .map-toolbar .comparison-mode-select { grid-column: 1; grid-row: 3; width: auto; min-width: 0; }
-  #root .map-toolbar .map-detail-toggle { grid-column: 2; grid-row: 3; }
-  #root .split-pane .is-embedding-comparison .map-toolbar .map-detail-toggle { grid-row: 3; }
-  #root .map-toolbar .comparison-mode-select .glass-select { max-width: 100%; }
-  #root .map-toolbar .mobile-city-switch { min-height: 38px; }
-  #root .map-toolbar .mobile-city-switch button { height: 38px; }
+  #root .map-toolbar :is(.mobile-city-picker, .comparison-city-select) { grid-area: 2 / 1; align-self: center; min-width: 0; }
+  #root .map-toolbar .comparison-mode-select { grid-area: 2 / 2; }
+  #root .map-toolbar :is(.comparison-mode-select, .comparison-city-select) { width: auto; min-width: 0; min-height: 36px; }
+  #root .map-toolbar :is(.comparison-mode-select, .comparison-city-select) > span:first-child { display: none; }
+  #root .map-toolbar :is(.mobile-city-picker, .basemap-select) .glass-select { width: 100%; min-width: 0; }
+  #root .split-pane .map-toolbar .map-detail-toggle { grid-area: 2 / 3; align-self: center; min-height: 36px; margin: 0; padding-inline: 10px; }
+  #root .map-toolbar .glass-select-trigger { width: 100%; min-height: 36px; }
+  #root .map-toolbar :is(.glass-select-trigger, .map-detail-toggle, .mobile-map-search) { --glass-radius: 999px; border-radius: var(--glass-radius); }
+  #root .split-pane .map-toolbar .mobile-map-search {
+    min-height: 36px; padding: 0 12px; background: var(--map-static-control);
+  }
+  #root .map-toolbar :is(.saved-search-field, .mobile-search-form) { min-height: 36px; padding: 0; gap: 6px; }
+  #root .map-toolbar .mobile-map-search .glass-field { padding: 0; min-height: 0; background: transparent; }
+  #root .map-toolbar .mobile-map-search input { height: 36px; min-height: 0; padding: 0; font-size: 16px; }
+  #root .map-toolbar .saved-search-badge, #root .sidebar-content .prompt-bar > :not(.backend-config-row) { display: none; }
+  #root .sidebar-content .prompt-bar:not(:has(.backend-config-row)) { display: none; }
+}
+
+:root { --map-page-edge: #eceeeb; background-color: var(--map-page-edge); }
+html.theme-dark-root { --map-page-edge: #191b1e; color-scheme: dark; }
+body { background-color: var(--map-page-edge); }
+@media (max-width: 700px) {
+  html, body, #root .split-pane { overflow: clip; }
+  body { min-height: 100dvh; }
+}
+@media (max-width: 1023px) {
+  #root .control-scroll-viewport {
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 14px);
+    mask-image: linear-gradient(to bottom, transparent, black 14px);
+    padding-top: 16px;
+  }
+  #root .sidebar-dock .sidebar-footer { margin-top: 12px; padding: 10px 0 max(6px, env(safe-area-inset-bottom)); }
+}
+@supports (-webkit-touch-callout: none) {
+  @media (max-width: 700px) {
+    /* Keep interaction in the visible viewport while the map paints behind
+       translucent browser controls out to the large viewport. */
+    html, body { overflow: clip; }
+    #root .split-pane { overflow: visible; }
+    #root .map-shell > .city-map-layout { bottom: min(0px, calc(100dvh - 100lvh)); }
+    #root .city-map-pane .maplibregl-ctrl-bottom-right { margin-bottom: max(0px, calc(100lvh - 100dvh)); }
+  }
 }

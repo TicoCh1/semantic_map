@@ -16,6 +16,13 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
   const [rightWidth, setRightWidth] = useState(430);
   const [dragging, setDragging] = useState(false);
   const [pinned, setPinned] = useState(false);
+  const [sheet, setSheet] = useState(() => matchMedia("(max-width: 1023px)").matches);
+  useEffect(() => {
+    const media = matchMedia("(max-width: 1023px)");
+    const update = () => setSheet(media.matches);
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
   const open = revealControls || dragging || pinned;
   useEffect(() => { if (controlsRequest) setPinned(controlsRequest.open); }, [controlsRequest]);
 
@@ -75,10 +82,14 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
         <GlassSwitch className="controls-launcher controls-state-switch" label="Controls"
           ariaLabel="Map controls" checked={open}
           onChange={(next) => { if (next) setPinned(true); else closeControls(); }} />
-        <Glass className="sidebar-drawer" fade={["left"]} shape="flush" aria-hidden={!open}>
+        <Glass className="sidebar-drawer" fade={[sheet ? "top" : "left"]} shape="flush" aria-hidden={!open}>
           <div className="split-resizer" onPointerDown={startDrag} title="Resize controls" />
-          <aside id="map-controls" className="split-side" aria-label="Map controls"><GlassScrollArea className="control-scroll" viewportClassName="control-scroll-viewport" label="Scroll map controls" height="100%">{right}</GlassScrollArea></aside>
-          {footer && <footer className="sidebar-footer">{footer}</footer>}
+          <aside id="map-controls" className="split-side" aria-label="Map controls">
+            <GlassScrollArea className="control-scroll" viewportClassName="control-scroll-viewport" label="Scroll map controls" height="100%">
+              {right}
+              {footer && <footer className="sidebar-footer">{footer}</footer>}
+            </GlassScrollArea>
+          </aside>
         </Glass>
       </div>
     </div>
