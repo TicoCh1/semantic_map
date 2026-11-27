@@ -1,7 +1,7 @@
 import { ThemedSelect } from "./ThemedSelect";
 import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
-import { attachPointShapeImages, getRequestedSemanticSourceData, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
+import { attachPointShapeImages, ensurePointImage, getRequestedSemanticSourceData, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
 import { createMapResizeScheduler } from "../state/mapResize";
 import { MapSceneCamera, groundScaleForZoom, zoomForGroundScale, latitudeCos } from "../state/mapSceneCamera";
 import { SceneResources } from "../state/sceneResources";
@@ -1114,18 +1114,26 @@ export const CityMapPane = memo(function CityMapPane({
         const currentGradients = gradientsRef.current;
         const visibleTopToBottom = currentLayers.filter((layer) => layer.visible);
         const area = selectionAreaRef.current;
+        const hasBoundarySamples = area?.features.some(f => f.properties.categoryColor);
         if (area && (area.features.length || currentMap.getSource("reference-selection"))) {
           updateSemanticSource(currentMap, "reference-selection", area);
           if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
           if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
-          if (!currentMap.getLayer("boundary-classes") && area.features.some(f => f.properties.categoryColor)) {
-            currentMap.addLayer({ id:"boundary-classes", type:"circle", source:"reference-selection",
-              filter:["has","categoryColor"], paint:{
-                "circle-color":["get","categoryColor"],
-                "circle-radius":["case",["get","highlighted"],5,3],
-                "circle-opacity":["case",["get","highlighted"],1,.45],
-                "circle-stroke-color":"#303338", "circle-stroke-width":1
-              } });
+          if (hasBoundarySamples && !currentMap.getLayer("boundary-classes")) {
+            currentMap.addLayer({
+              id: "boundary-classes", type: "symbol", source: "reference-selection",
+              filter: ["has", "categoryColor"],
+              layout: {
+                "icon-image": ensurePointImage(currentMap, "square"),
+                "icon-size": ["case", ["get", "highlighted"], 5 / POINT_ICON_HALF_SIZE, 3 / POINT_ICON_HALF_SIZE],
+                "icon-allow-overlap": true, "icon-ignore-placement": true, "icon-padding": 0,
+                "symbol-sort-key": ["case", ["get", "highlighted"], 1, 0]
+              },
+              paint: {
+                "icon-color": ["get", "categoryColor"],
+                "icon-opacity": ["case", ["get", "highlighted"], 1, 0.1]
+              }
+            });
           }
         }
         if (!visibleTopToBottom.length) {
@@ -1229,7 +1237,7 @@ export const CityMapPane = memo(function CityMapPane({
           const paint = {
             "circle-radius": circleRadiusExpression(layer),
             "circle-color": gradient ? colorExpression(gradient, layer) : "#2f80ed",
-            "circle-opacity": layer.style.opacity,
+            "circle-opacity": hasBoundarySamples ? layer.style.opacity * 0.12 : layer.style.opacity,
             "circle-pitch-scale": layer.style.absolute_radius ? "map" : "viewport",
             "circle-stroke-width": 0,
             "circle-stroke-opacity": 0

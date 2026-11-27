@@ -33,11 +33,12 @@ export function BoundarySearch({maps, value, onChange, requestControls, onResult
   useEffect(() => () => pending.current?.abort(), []);
   useEffect(() => {
     const palette = new Map(analysis?.themes.map(t => [t.id ?? t.label, t.color]));
-    onSamples((analysis?.points ?? []).map(({xy,id,label}) => ({
+    // Show the full heatmap again once the submitted result is on the map.
+    onSamples((result ? [] : analysis?.points ?? []).map(({xy,id,label}) => ({
       type:"Feature", geometry:{type:"Point", coordinates:xy},
       properties:{category:label, categoryColor:palette.get(id ?? label), highlighted:!theme || theme===(id ?? label)}
     })));
-  }, [analysis, theme, onSamples]);
+  }, [analysis, theme, result, onSamples]);
   function start() {
     beforeEdit.current = {value, analysis, theme, result};
     invalidate(); setDrawing(true); requestControls({open:false});

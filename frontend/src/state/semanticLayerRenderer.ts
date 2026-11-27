@@ -57,7 +57,7 @@ export function pointShapeImage(shape: IconShape) {
   return image;
 }
 
-function ensurePointImage(map: Pick<SemanticMap, "hasImage" | "addImage">, shape: IconShape) {
+export function ensurePointImage(map: Pick<SemanticMap, "hasImage" | "addImage">, shape: IconShape) {
   const id = iconPrefix + shape;
   if (!map.hasImage(id)) map.addImage(id, pointShapeImage(shape), { sdf: true });
   return id;

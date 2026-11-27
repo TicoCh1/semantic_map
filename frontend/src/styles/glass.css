@@ -78,12 +78,10 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
 #root .comparison-mode-select .glass-select { width: 185px; }
 #root .glass-select-trigger .select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #root .glass-select-popover { color: var(--ui-text); }
-/* A multi-row menu uses the panel radius, independently of its trigger. */
-#root .glass-select-popover .glass-select-menu {
-  --glass-radius: var(--ui-radius); border-radius: var(--ui-radius);
-}
-#root .glass-select-popover .glass-select-option {
-  --glass-radius: min(8px, var(--ui-radius)); border-radius: var(--glass-radius);
+/* Keep the trigger's visible corner as the menu extends, including pill triggers. */
+#root .glass-select-popover :is(.glass-select-menu, .glass-select-option) {
+  --glass-radius: min(var(--select-anchor-radius), calc(var(--select-anchor-height) / 2));
+  border-radius: var(--glass-radius);
 }
 #root .histogram-property-select .glass-select { flex: 0 0 90px; width: 90px; min-width: 0; }
 #root .map-toolbar .map-summary { width: 192px; max-width: 192px; flex: 0 1 192px; gap: 3px; }
