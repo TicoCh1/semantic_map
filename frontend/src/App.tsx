@@ -45,6 +45,7 @@ import { GradientEditor } from "./components/GradientEditor";
 import { HistogramPanel } from "./components/HistogramPanel";
 import { LayerPanel } from "./components/LayerPanel";
 import { MapControls } from "./components/MapControls";
+import { WorkspaceDrawerState } from "./components/SplitPane";
 import { MapWorkspace } from "./components/MapWorkspace";
 import { RegionHeatmaps } from "./atlas/RegionHeatmaps";
 import { PromptBar } from "./components/PromptBar";
@@ -137,6 +138,11 @@ function loadInitialBasemapId(): BasemapId {
 }
 
 export function App() {
+  const drawerState = useRef<boolean>();
+  return <WorkspaceDrawerState.Provider value={drawerState}><WorkspaceRouter /></WorkspaceDrawerState.Provider>;
+}
+
+function WorkspaceRouter() {
   const readWorkspace = (): Workspace => {
     const view = new URLSearchParams(window.location.search).get("view");
     return view === "atlas" || view === "tsne" ? view : "cities";

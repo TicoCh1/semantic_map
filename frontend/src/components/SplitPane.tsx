@@ -1,7 +1,9 @@
 import { GlassScrollArea } from "@form-glass/react";
 import { GlassSwitch } from "@form-glass/react";
 import { MapGlassSurface } from "./MapGlassSurface";
-import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useLayoutEffect, type MutableRefObject, type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+
+export const WorkspaceDrawerState = createContext<MutableRefObject<boolean | undefined> | null>(null);
 
 type SplitPaneProps = {
   left: ReactNode;
@@ -9,14 +11,17 @@ type SplitPaneProps = {
   footer?: ReactNode;
   className?: string;
   revealControls?: boolean;
+  initiallyOpen?: boolean;
   controlsRequest?: { open: boolean };
 };
 
-export function SplitPane({ left, right, footer, className = "", revealControls = false, controlsRequest }: SplitPaneProps) {
+export function SplitPane({ left, right, footer, className = "", revealControls = false, initiallyOpen = false, controlsRequest }: SplitPaneProps) {
   const dock = useRef<HTMLDivElement>(null);
   const [rightWidth, setRightWidth] = useState(430);
   const [dragging, setDragging] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const saved = useContext(WorkspaceDrawerState);
+  const [pinned, setPinned] = useState(() => saved?.current ?? initiallyOpen);
+  useLayoutEffect(() => { if (saved) saved.current = pinned; }, [saved, pinned]);
   const [sheet, setSheet] = useState(() => matchMedia("(max-width: 1023px)").matches);
   useEffect(() => {
     const media = matchMedia("(max-width: 1023px)");

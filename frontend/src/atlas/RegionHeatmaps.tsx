@@ -79,8 +79,7 @@ export function RegionHeatmaps({ initialBasemap, initialDark, onWorkspaceChange 
   const activeLayers = useRef(layers);
   activeLayers.current = layers;
   const readyLayers = useMemo(() => layers.filter(layer => layer.status === "ready"), [layers]);
-  const [controlsRequest, setControlsRequest] = useState<{ open: boolean } | undefined>(() =>
-    boundaryPreview || boundaryLive ? {open: !window.matchMedia("(max-width: 1023px)").matches} : undefined);
+  const [controlsRequest, setControlsRequest] = useState<{ open: boolean }>();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [focus, setFocus] = useState<Query>();
   const focusApplied = useRef<{query:Query;map:MapLibreMap}>();
@@ -363,7 +362,8 @@ export function RegionHeatmaps({ initialBasemap, initialDark, onWorkspaceChange 
       onDeletePreset={async g => { await deleteGradient(g.id); setPresets(await getGradientPresets()); }} />
     <GlassSwitch label="Show cells within 300 m of source" checked={showSelf} onChange={setShowSelf} />
   </MapControls>;
-  return <MapWorkspace dark={dark} revealControls={intro} controlsRequest={controlsRequest} sidebar={sidebar} cities={cityConfigs} onWorkspaceChange={onWorkspaceChange}
+  return <MapWorkspace dark={dark} revealControls={intro} controlsRequest={controlsRequest}
+    initiallyOpen={(boundaryPreview || boundaryLive) && !window.matchMedia("(max-width: 1023px)").matches} sidebar={sidebar} cities={cityConfigs} onWorkspaceChange={onWorkspaceChange}
     layers={readyLayers} gradients={gradients} selectedLayerId={selectedId} onSelectLayer={setSelected}
     basemapId={basemap} onBasemapChange={id => { setBasemap(id); localStorage.setItem("semantic-map-basemap-source", "manual"); localStorage.setItem("semantic-map-basemap", id); }} onVisibleCitiesChange={setVisibleCities}
     regionHeatmaps={{ selector: search, focus, radiusMeters: query?.radius_m, description: boundaryPreview ? "Boundary preview · sample data" : query?.category==="live" ? "Custom boundary · GPU match" : undefined, dataProvider: provider, register, selectionAreas: areas }}
