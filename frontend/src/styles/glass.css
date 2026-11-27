@@ -1,7 +1,7 @@
 /* FORM owns every glass recipe and renderer. This file only adapts app layout,
    neutral control states, and the DOM owned by MapLibre / Photo Sphere Viewer. */
-.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; --map-static-glass: rgba(246, 246, 248, .94); --map-static-control: rgba(248, 248, 250, .82); }
-html.theme-dark-root .semantic-glass-app { --map-static-glass: rgba(35, 37, 42, .94); --map-static-control: rgba(57, 59, 65, .86); }
+.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; --map-static-glass: rgba(246, 246, 248, .94); }
+html.theme-dark-root .semantic-glass-app { --map-static-glass: rgba(35, 37, 42, .94); }
 .semantic-glass-app .glass { color: var(--ui-text); }
 .semantic-glass-app .glass-button { gap: 7px; }
 .semantic-glass-app .glass-field { min-width: 0; }
@@ -78,21 +78,18 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
 #root .comparison-mode-select .glass-select { width: 185px; }
 #root .glass-select-trigger .select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #root .glass-select-popover { color: var(--ui-text); }
-/* This single-city view uses the same glass controls without a query drawer. */
-#root .tsne-workspace { position: relative; height: 100dvh; width: 100%; }
-#root .tsne-map { position: absolute; inset: 0; }
-#root .tsne-workspace .tsne-toolbar {
-  display: flex; align-items: center; width: fit-content; bottom: auto; right: auto;
-  top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left));
+.tsne-scale-control { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
+#root .tsne-scale-control > .range-field { flex: 1; min-width: 0; margin: 0; padding: 0; }
+#root .tsne-scale-control .doppler-range input[type=range] { height: 100%; }
+@media (min-width: 701px) {
+  #root .map-toolbar .city-source-selectors { min-width: 222px; }
+  #root .split-pane:has(.sidebar-dock.is-open) .map-summary .tsne-scale-control,
+  #root .split-pane:not(:has(.sidebar-dock.is-open)) .map-summary .tsne-toolbar-status { display: none; }
 }
-#root .tsne-toolbar .tsne-scale { width: 110px; }
-#root .tsne-toolbar .tsne-status { font-size: 12px; white-space: normal; }
 @media (max-width: 700px) {
-  #root .tsne-workspace .tsne-toolbar { gap: 6px; flex-wrap: wrap; padding: 4px; max-width: calc(100% - 24px); }
-  #root .tsne-toolbar .basemap-select { display: block; width: auto; min-width: 0; }
-  #root .tsne-toolbar .glass-select { width: 120px; }
-  #root .tsne-toolbar .basemap-select > span:first-child { display: none; }
+  #root .sidebar-content .tsne-scale-control { display: none; }
 }
+.tsne-scale-control output { min-width: 4ch; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 /* Keep the trigger's visible corner as the menu extends, including pill triggers. */
 #root .glass-select-popover :is(.glass-select-menu, .glass-select-option) {
   --glass-radius: min(var(--select-anchor-radius), calc(var(--select-anchor-height) / 2));
@@ -109,11 +106,6 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
   font-size: 10px; letter-spacing: 0; text-transform: none; white-space: nowrap;
 }
 #root .map-toolbar > .glass-feather-defs { position: absolute; width: 0; height: 0; }
-/* One live surface is enough for the toolbar. Its controls and popovers keep
-   their FORM semantics, with a static fill where they need contrast. */
-#root .map-toolbar [data-glass] > .glass-renderer { display: none; }
-#root .map-toolbar :is(.glass-button, .glass-state-switch, .glass-select-trigger, .glass-field) { background: var(--map-static-control); }
-#root .map-toolbar :is(.saved-search-dropdown, .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
 /* On the mobile layout keep the same glass surface throughout a pan. */
 @media (min-width: 1024px), (prefers-reduced-transparency: reduce) {
   html.is-map-interacting #root :is(.form-glass-ui, .map-shell) .glass-renderer { display: none; }
@@ -309,17 +301,17 @@ html #root .semantic-glass-app [data-glass-material="control"] > .glass-renderer
 html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glass-renderer > .glass-blur-layer:nth-child(-n+5):not(:last-child) {
   display: none;
 }
-#root :is(.sidebar-drawer, .map-toolbar, .street-view-values, .boundary-draw-tools, .exhibit-modal) [data-glass] > .glass-renderer {
+#root :is([data-map-glass-surface], .street-view-values, .boundary-draw-tools, .exhibit-modal) [data-glass] > .glass-renderer {
   display: none;
 }
-#root :is(.sidebar-drawer, .street-view-values, .boundary-draw-tools, .exhibit-modal) :where(.layer-row, .glass-button, .glass-field, .glass-select-trigger) {
+#root :is([data-map-glass-surface], .street-view-values, .boundary-draw-tools, .exhibit-modal) :where(.layer-row, .glass-button, .glass-field, .glass-select-trigger, .mobile-map-search) {
   background-color: var(--inset-glass-tint);
 }
-#root :is(.sidebar-drawer, .street-view-values, .exhibit-modal) [data-glass] :where(.glass-button, .glass-field, .glass-select-trigger) {
+#root :is([data-map-glass-surface], .street-view-values, .exhibit-modal) [data-glass] :where(.glass-button, .glass-field, .glass-select-trigger) {
   background-color: transparent;
 }
 /* Menus cover other controls and require their own legible reading surface. */
-#root .sidebar-drawer :is(.saved-search-dropdown, .glass-select-menu, .preset-menu) { background-color: var(--map-static-glass); }
+#root [data-map-glass-surface] :is(.saved-search-dropdown, .glass-select-menu, .preset-menu) { background-color: var(--map-static-glass); }
 #root .theme-dark .sidebar-content .visibility-button.is-hidden svg { color: #d6d6d6; }
 #root .layer-row .drag-icon { opacity: .85; }
 
@@ -368,7 +360,7 @@ html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glas
   #root .map-toolbar :is(.glass-select-trigger, .map-detail-toggle, .mobile-map-search) { --glass-radius: 18px; border-radius: var(--glass-radius); }
   #root .split-pane .map-toolbar .mobile-map-search {
     display: flex; align-items: center; justify-content: center; gap: 0;
-    min-height: 36px; padding: 0 12px; background: var(--map-static-control);
+    min-height: 36px; padding: 0 12px; background-color: var(--inset-glass-tint);
   }
   #root :is(.mobile-map-search, .map-refresh-overlay, .map-hidden-layers-overlay, .map-max-detail-warning) > .glass-feather-defs { position: absolute; }
   #root .map-toolbar :is(.saved-search-field, .mobile-search-form) { min-height: 36px; padding: 0; gap: 6px; }

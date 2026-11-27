@@ -1,5 +1,6 @@
 import { ThemedSelect } from "./ThemedSelect";
 import { WorkspaceSelect, type Workspace } from "./WorkspaceSelect";
+import { MapGlassSurface } from "./MapGlassSurface";
 import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
 import { attachPointShapeImages, ensurePointImage, getRequestedSemanticSourceData, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
@@ -40,6 +41,7 @@ import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STAT
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export type MapViewProps = {
+  tsne?: { status: string; scaleControl: ReactNode; register: (map: MapLibreMap) => () => void };
   onWorkspaceChange: (workspace: Workspace) => void;
   regionHeatmaps?: {
     selector: ReactNode;
@@ -113,6 +115,7 @@ function isCompactMapViewport(): boolean {
 }
 
 export const MapView = memo(function MapView({
+  tsne,
   regionHeatmaps,
   onWorkspaceChange,
   cities,
@@ -181,14 +184,15 @@ export const MapView = memo(function MapView({
   const sceneCamera = useMemo(() => new MapSceneCamera(sharedGroundScale), [sharedGroundScale]);
   const sceneResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
+  const singleCity = Boolean(tsne);
   const desktopCities = useMemo(
-    () => citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
-    [cities, citySelection]
+    () => singleCity ? cities : citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
+    [cities, citySelection, singleCity]
   );
   const activeCities = useMemo(() => comparisonEnabled && comparisonCity
     ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
-    : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
-  [cities, compactViewport, comparisonCity, comparisonEnabled, desktopCities, differenceEnabled, mobileCityId]);
+    : singleCity ? cities : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
+  [cities, compactViewport, comparisonCity, comparisonEnabled, desktopCities, differenceEnabled, mobileCityId, singleCity]);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
   const semanticLayerOverlayActive = comparison.loading || (!allLayersHidden && activeCities.length > 0 && activeCities.every((city, index) => semanticLayerLoadingByCity[comparisonEnabled ? `${city.id}:${index}` : city.id] === true));
@@ -214,12 +218,12 @@ export const MapView = memo(function MapView({
   }, [cities]);
 
   useEffect(() => {
-    window.localStorage.setItem(CITY_SELECTION_KEY, JSON.stringify(citySelection));
-  }, [citySelection]);
+    if (!singleCity) window.localStorage.setItem(CITY_SELECTION_KEY, JSON.stringify(citySelection));
+  }, [citySelection, singleCity]);
 
   useEffect(() => {
-    window.localStorage.setItem(MOBILE_CITY_KEY, mobileCityId);
-  }, [mobileCityId]);
+    if (!singleCity) window.localStorage.setItem(MOBILE_CITY_KEY, mobileCityId);
+  }, [mobileCityId, singleCity]);
 
   useEffect(() => {
     if (!compactViewport || !onPriorityTileChange) return;
@@ -301,24 +305,26 @@ export const MapView = memo(function MapView({
       }`}
       data-tour-target="map"
     >
-      <Glass className="map-toolbar" fade={["top", "right", "bottom", "left"]}>
-        {regionHeatmaps ? <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule">{regionHeatmaps.selector}</Glass> : <>
+      <MapGlassSurface className="map-toolbar" fade={["top", "right", "bottom", "left"]}>
+        {tsne || regionHeatmaps ? <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule">{tsne?.scaleControl ?? regionHeatmaps?.selector}</Glass> : <>
         {backendConfig?.enabled && backendConfig.mode === "cpu" && onCreatePrompt ?
         <Glass className="mobile-map-search cpu-map-search" fade={[]} shape="capsule"><SavedPromptSearch config={backendConfig} disabled={promptDisabled || !liveSearchAvailable} onCreate={onCreatePrompt} /></Glass> :
         <MobileMapSearch disabled={promptDisabled} liveSearchAvailable={liveSearchAvailable} onCreatePrompt={onCreatePrompt} />}
         </>}
         <div className="map-summary" data-displayed-layer-id={displayedLayer?.id}>
-          <strong title={title}>{title}</strong>
-          <span className="map-agreement">{regionHeatmaps ? regionHeatmaps.description ?? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
+          {tsne ? <>{tsne.scaleControl}<strong className="tsne-toolbar-status">{tsne.status}</strong></> : <>
+            <strong title={title}>{title}</strong>
+            <span className="map-agreement">{regionHeatmaps ? regionHeatmaps.description ?? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
+          </>}
         </div>
         {compactViewport && !comparisonEnabled && <div className="mobile-city-picker">
-          <ThemedSelect label="Map city" value={mobileCityId} onValueChange={setMobileCityId}>
+          <ThemedSelect label="Map city" value={singleCity ? cities[0].id : mobileCityId} onValueChange={setMobileCityId}>
             {cities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
           </ThemedSelect>
         </div>}
-        <WorkspaceSelect value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"}
+        <WorkspaceSelect value={tsne ? "tsne" : regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"}
           comparisons={comparisonCities.length > 0} onChange={mode => {
-            if (mode === "tsne" || mode === "atlas" || (mode === "cities" && regionHeatmaps)) onWorkspaceChange(mode);
+            if (mode === "tsne" || mode === "atlas" || (mode === "cities" && (regionHeatmaps || tsne))) onWorkspaceChange(mode);
             else setComparisonMode(mode);
           }} />
         {comparisonEnabled ? <label className="basemap-select comparison-city-select">
@@ -358,7 +364,7 @@ export const MapView = memo(function MapView({
           label="Max detail" ariaLabel="Max detail"
           checked={forceMaxDetail} onChange={handleForceMaxDetailChange}
         />
-      </Glass>
+      </MapGlassSurface>
 
       <div
         className={`city-map-layout${activeCities.length === 2 ? " has-two-cities" : ""}`}
@@ -370,7 +376,7 @@ export const MapView = memo(function MapView({
             city={city}
             dataProvider={regionHeatmaps?.dataProvider}
             selectionArea={regionHeatmaps?.selectionAreas[city.id]}
-            onMapReady={regionHeatmaps && (map => regionHeatmaps.register(city.id, map))}
+            onMapReady={tsne?.register ?? (regionHeatmaps && (map => regionHeatmaps.register(city.id, map)))}
             popupLabels={regionHeatmaps && { score: "Window similarity", zscore: "Four-city z" }}
             layers={comparisonEnabled ? comparison.paneLayers[differenceEnabled ? 2 : index] : layers}
             gradients={gradients}
@@ -394,6 +400,7 @@ export const MapView = memo(function MapView({
             onSemanticLayerLoadingChange={handleSemanticLayerLoadingChange}
             splitIndex={index}
             compactControls={compactViewport}
+            enforceDetailZoom={compactViewport || singleCity}
             resizing={draggingCitySplit}
           />
         ))}
@@ -472,6 +479,7 @@ type CityMapPaneProps = {
   onSemanticLayerLoadingChange: (cityId: CityId, loading: boolean) => void;
   splitIndex: number;
   compactControls: boolean;
+  enforceDetailZoom?: boolean;
   resizing: boolean;
 };
 
@@ -580,6 +588,7 @@ export const CityMapPane = memo(function CityMapPane({
   onSemanticLayerLoadingChange,
   splitIndex,
   compactControls,
+  enforceDetailZoom = compactControls,
   resizing
 }: CityMapPaneProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -917,7 +926,7 @@ export const CityMapPane = memo(function CityMapPane({
     forceMaxDetailRef.current = forceMaxDetail;
     const map = mapRef.current;
     if (!map) return;
-    if (compactControls && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
+    if (enforceDetailZoom && forceMaxDetail && zoomToScaleBarIfNeeded(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
       publishRemoteTileZoom(map, forceMaxDetail);
       reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
       return;
@@ -925,7 +934,7 @@ export const CityMapPane = memo(function CityMapPane({
     publishRemoteTileZoom(map, forceMaxDetail);
     reportPriorityTile(map, city, remoteTileZoomRef.current, priorityTileChangeRef.current);
     requestSemanticRedraw(styleGenerationRef.current);
-  }, [city.datasetId, compactControls, forceMaxDetail]);
+  }, [city.datasetId, compactControls, enforceDetailZoom, forceMaxDetail]);
 
   useEffect(() => {
     forceMaxDetailChangeRef.current = onForceMaxDetailChange;
@@ -1042,7 +1051,7 @@ export const CityMapPane = memo(function CityMapPane({
         scheduleSemanticRedraw(styleGenerationRef.current);
         return;
       }
-      if (compactControls && forceMaxDetailRef.current && isScaleBarPastLimit(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
+      if (enforceDetailZoom && forceMaxDetailRef.current && isScaleBarPastLimit(map, MAX_DETAIL_MIN_SCALE_BAR_METERS)) {
         forceMaxDetailChangeRef.current(false, "scale_limit");
         return;
       }
@@ -1059,7 +1068,7 @@ export const CityMapPane = memo(function CityMapPane({
     return () => {
       map.off("moveend", onViewportSettled);
     };
-  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, onSharedGroundScaleChange]);
+  }, [city.center[0], city.center[1], city.datasetId, city.id, city.name, compactControls, enforceDetailZoom, onSharedGroundScaleChange]);
 
   useEffect(() => {
     const map = mapRef.current;

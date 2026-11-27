@@ -16,6 +16,8 @@ operation records describe their respective historical sessions.
 
 ### Shared glass pipeline
 
+The map toolbar and Controls use the same MapGlassSurface and inset tint. The local FORM Glass 0.3.1-semantic.1 package routes select popovers through its existing immediate reveal path. It retains the upstream markup, geometry, keyboard interaction and focus handling.
+
 Load order in `frontend/src/main.tsx` is `app.css`, `minimal.css`, then `glass.css`.
 `app.css` retains the base layout; `minimal.css` defines current layout and neutral
 chrome; `glass.css` is the sole source of material recipes and backdrop effects.

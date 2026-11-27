@@ -1,5 +1,6 @@
 import { GlassScrollArea } from "@form-glass/react";
-import { GlassSwitch, Glass } from "@form-glass/react";
+import { GlassSwitch } from "@form-glass/react";
+import { MapGlassSurface } from "./MapGlassSurface";
 import { type CSSProperties, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 
 type SplitPaneProps = {
@@ -82,7 +83,7 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
         <GlassSwitch className="controls-launcher controls-state-switch" label="Controls"
           ariaLabel="Map controls" checked={open}
           onChange={(next) => { if (next) setPinned(true); else closeControls(); }} />
-        <Glass className="sidebar-drawer" fade={[sheet ? "top" : "left"]} shape="flush" aria-hidden={!open}>
+        <MapGlassSurface className="sidebar-drawer" fade={[sheet ? "top" : "left"]} shape="flush" aria-hidden={!open}>
           <div className="split-resizer" onPointerDown={startDrag} title="Resize controls" />
           <aside id="map-controls" className="split-side" aria-label="Map controls">
             <GlassScrollArea className="control-scroll" viewportClassName="control-scroll-viewport" label="Scroll map controls" height="100%">
@@ -90,7 +91,7 @@ export function SplitPane({ left, right, footer, className = "", revealControls 
               {footer && <footer className="sidebar-footer">{footer}</footer>}
             </GlassScrollArea>
           </aside>
-        </Glass>
+        </MapGlassSurface>
       </div>
     </div>
   );

@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
-import { GlassPanel as Glass, GlassButton } from "@form-glass/react";
-import { Map as LibreMap, ScaleControl, AttributionControl, type LngLatBoundsLike } from "maplibre-gl";
-import { WorkspaceSelect, type Workspace } from "../components/WorkspaceSelect";
-import { ThemedSelect } from "../components/ThemedSelect";
-import { SemanticGlassProvider } from "../styles/SemanticGlassProvider";
-import { installBasemapTransport, sceneTileRequest } from "../state/basemapTransport";
+import { useCallback, useRef, useState } from "react";
+import { DopplerRange, GlassButton } from "@form-glass/react";
+import type { Map as LibreMap, LngLatBoundsLike } from "maplibre-gl";
+import type { Workspace } from "../components/WorkspaceSelect";
+import { MapWorkspace } from "../components/MapWorkspace";
+import { MapControls } from "../components/MapControls";
+import { ExhibitIntroModal } from "../components/ExhibitIntroModal";
+import { DEFAULT_CITY_CONFIGS } from "../state/cities";
+import type { BasemapId } from "../state/basemaps";
 import { scaleOpacities } from "../../../frontend_pcatsne/src/atlas-adapter";
 import { TsnePointCloud } from "./pointCloud";
 import london from "./data/manifest.json";
@@ -21,45 +23,27 @@ function visibleScales(map: LibreMap, scale: Scale): [number, number][] {
   return london.scales.flatMap(({km}, i) => weights[i] > 0.001 ? [[km,weights[i]] as [number,number]] : []);
 }
 
-export function TsneWorkspace({dark, onWorkspaceChange}: {dark: boolean; onWorkspaceChange: (next: Workspace) => void}) {
-  const container = useRef<HTMLDivElement>(null);
+const cities = DEFAULT_CITY_CONFIGS.filter(city => city.id === "london");
+const scales: Scale[] = ["auto", ...london.scales.map(s => s.km)];
+const tour = [{ eyebrow: "Map", target: null, title: "London at five scales", body: "Drag the scale slider to compare the same panoramas at 2, 4, 8, 16 and 32 km. At the left end, Auto follows map zoom.", items: [] }];
+const noop = () => {};
+
+export function TsneWorkspace({ initialDark, initialBasemap, onWorkspaceChange }: {
+  initialDark: boolean; initialBasemap: BasemapId; onWorkspaceChange: (next: Workspace) => void;
+}) {
+  const [dark, setDark] = useState(initialDark);
+  const [basemap, setBasemap] = useState(initialBasemap);
+  const [intro, setIntro] = useState(false);
   const scale = useRef<Scale>(32);
   const [selected, setSelected] = useState<Scale>(32);
   const [status, setStatus] = useState("Loading London…");
   const [error, setError] = useState("");
   const refresh = useRef<() => void>();
-  useEffect(() => {
-    if (!container.current) return;
+  const register = useCallback((map: LibreMap) => {
     const controller = new AbortController();
     const cloud = new TsnePointCloud();
     const pending = new Map<number,Promise<void>>();
-    installBasemapTransport();
-    const map = new LibreMap({
-      container: container.current, bounds: london.bounds as LngLatBoundsLike,
-      fitBoundsOptions: {padding: {top:85,left:20,right:20,bottom:35}},
-      minZoom: 8, maxZoom: 18, maxPitch: 0, dragRotate: false,
-      transformRequest: sceneTileRequest, attributionControl:false,
-      style: {
-        version: 8,
-        sources: {
-          streets: {
-            type: "raster", tileSize: 256, maxzoom: 19,
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>'
-          }
-        },
-        layers: [
-          { id: "background", type: "background", paint: {"background-color": dark ? "#101418" : "#efefed"} },
-          { id: "streets", type: "raster", source: "streets", paint: {
-            "raster-saturation": -1, "raster-opacity": dark ? 0.45 : 0.42, "raster-brightness-max": dark ? 0.36 : 1
-          }}
-        ]
-      }
-    });
-    map.addControl(new ScaleControl({unit:"metric"}),"bottom-left");
-    map.addControl(new AttributionControl({compact:true}),"bottom-right");
-    const sizeObserver = new ResizeObserver(()=>map.resize());
-    sizeObserver.observe(container.current);
+    map.fitBounds(london.bounds as LngLatBoundsLike, {padding: {top:85,left:20,right:20,bottom:35}, duration:0});
     function load(km: number) {
       if (cloud.records.has(km)) return;
       if (pending.has(km)) return pending.get(km);
@@ -93,29 +77,55 @@ export function TsneWorkspace({dark, onWorkspaceChange}: {dark: boolean; onWorks
       }
     }
     refresh.current = draw;
-    map.on("style.load",()=>{ if (!map.getLayer(cloud.id)) map.addLayer(cloud); void draw(); });
+    const attach = () => {
+      if (!map.getLayer(cloud.id)) map.addLayer(cloud);
+      void draw();
+    };
+    map.on("style.load", attach);
+    if (map.isStyleLoaded()) attach();
     const updateAuto = () => { if (scale.current === "auto") void draw(); };
     map.on("zoom",updateAuto);
     map.on("resize",updateAuto);
-    return () => { refresh.current=undefined; controller.abort(); sizeObserver.disconnect(); map.remove(); };
-  },[dark]);
-  return <SemanticGlassProvider dark={dark}>
-    <main className={`split-pane tsne-workspace${dark ? " theme-dark" : ""}`}>
-      <div ref={container} className="tsne-map" aria-label="London t-SNE map" />
-      <Glass className="map-toolbar tsne-toolbar" fade={["top","right","bottom","left"]}>
-        <WorkspaceSelect value="tsne" onChange={v=>{if(v==="atlas"||v==="cities")onWorkspaceChange(v);}} />
-        <label className="basemap-select tsne-scale"><span>Scale</span>
-          <ThemedSelect label="London t-SNE scale" value={selected} onValueChange={v=>{
-            scale.current = v === "auto" ? "auto" : Number(v);
-            setSelected(scale.current); refresh.current?.();
-          }}>
-            <option value="auto">Auto (zoom)</option>
-            {london.scales.map(s=><option key={s.km} value={s.km}>{s.km + " km"}</option>)}
-          </ThemedSelect>
-        </label>
-        <small role="status" className="tsne-status">{error || status}</small>
-        {error && <GlassButton onClick={()=>refresh.current?.()}>Retry</GlassButton>}
-      </Glass>
-    </main>
-  </SemanticGlassProvider>;
+    return () => {
+      refresh.current = undefined;
+      controller.abort();
+      map.off("style.load",attach);
+      map.off("zoom",updateAuto);
+      map.off("resize",updateAuto);
+    };
+  }, []);
+  function changeBasemap(id: BasemapId) {
+    setBasemap(id);
+    localStorage.setItem("semantic-map-basemap-source","manual");
+    localStorage.setItem("semantic-map-basemap",id);
+  }
+  const scaleControl = <div className="tsne-scale-control">
+    <span>Scale</span>
+    <DopplerRange label="London t-SNE scale" min={0} max={scales.length - 1} step={1}
+      value={scales.indexOf(selected)} onChange={index => {
+        scale.current = scales[index];
+        setSelected(scale.current);
+        refresh.current?.();
+      }}/>
+    <output>{selected === "auto" ? "Auto" : selected + " km"}</output>
+  </div>;
+  const sidebar = <MapControls dark={dark} onIntro={() => setIntro(true)} logs={[]} onClearLogs={noop}
+    error={error} onDarkChange={enabled => {
+      setDark(enabled);
+      localStorage.setItem("semantic-map-theme-source","manual");
+      localStorage.setItem("semantic-map-theme",enabled ? "dark" : "light");
+      changeBasemap(enabled ? "openfreemap_dark" : "osm");
+    }}>
+    {scaleControl}
+    <div className="section-heading tsne-status" role="status">{status}</div>
+    {error && <GlassButton onClick={() => refresh.current?.()}>Retry</GlassButton>}
+  </MapControls>;
+  return <MapWorkspace dark={dark} sidebar={sidebar} revealControls={intro} cities={cities}
+    tsne={{status, scaleControl, register}} onWorkspaceChange={onWorkspaceChange}
+    basemapId={basemap} onBasemapChange={changeBasemap}
+    layers={[]} gradients={[]} selectedLayerId={null} onSelectLayer={noop}
+    markedPanos={[]} selectedPanoKey={null} onMarkPano={noop} onSelectPano={noop} onRemovePano={noop}
+    scoreField="zscore" progressEntries={[]}>
+    <ExhibitIntroModal open={intro} version={0} onClose={()=>setIntro(false)} pages={tour} />
+  </MapWorkspace>;
 }

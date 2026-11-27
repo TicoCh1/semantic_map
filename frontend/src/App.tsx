@@ -156,7 +156,7 @@ export function App() {
     history.pushState(null, "", url);
     setWorkspace(next);
   }
-  if (workspace === "tsne") return <TsneWorkspace dark={loadInitialDarkMode()} onWorkspaceChange={switchWorkspace} />;
+  if (workspace === "tsne") return <TsneWorkspace initialDark={loadInitialDarkMode()} initialBasemap={loadInitialBasemapId()} onWorkspaceChange={switchWorkspace} />;
   return workspace === "atlas"
     ? <RegionHeatmaps onWorkspaceChange={switchWorkspace} initialBasemap={loadInitialBasemapId()} initialDark={loadInitialDarkMode()} />
     : <PromptWorkspace onWorkspaceChange={switchWorkspace} />;

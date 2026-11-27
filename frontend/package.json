@@ -14,7 +14,7 @@
     "test:map": "node --test scripts/semantic-layer-renderer.test.mjs scripts/map-resize.test.mjs scripts/remote-tile-cache.test.mjs scripts/map-scene.test.mjs scripts/atlas-workspace.test.mjs"
   },
   "dependencies": {
-    "@form-glass/react": "file:vendor/form-glass-react-0.3.1.tgz",
+    "@form-glass/react": "file:vendor/form-glass-react-0.3.1-semantic.1.tgz",
     "@photo-sphere-viewer/core": "^5.14.1",
     "lucide-react": "^0.468.0",
     "maplibre-gl": "^6.4.1",
