@@ -78,6 +78,13 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
 #root .comparison-mode-select .glass-select { width: 185px; }
 #root .glass-select-trigger .select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #root .glass-select-popover { color: var(--ui-text); }
+/* A multi-row menu uses the panel radius, independently of its trigger. */
+#root .glass-select-popover .glass-select-menu {
+  --glass-radius: var(--ui-radius); border-radius: var(--ui-radius);
+}
+#root .glass-select-popover .glass-select-option {
+  --glass-radius: min(8px, var(--ui-radius)); border-radius: var(--glass-radius);
+}
 #root .histogram-property-select .glass-select { flex: 0 0 90px; width: 90px; min-width: 0; }
 #root .map-toolbar .map-summary { width: 192px; max-width: 192px; flex: 0 1 192px; gap: 3px; }
 #root .map-toolbar .map-summary strong {
@@ -345,13 +352,23 @@ html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glas
   #root .map-toolbar :is(.mobile-city-picker, .basemap-select) .glass-select { width: 100%; min-width: 0; }
   #root .split-pane .map-toolbar .map-detail-toggle { grid-area: 2 / 3; align-self: center; min-height: 36px; margin: 0; padding-inline: 10px; }
   #root .map-toolbar .glass-select-trigger { width: 100%; min-height: 36px; }
-  #root .map-toolbar :is(.glass-select-trigger, .map-detail-toggle, .mobile-map-search) { --glass-radius: 999px; border-radius: var(--glass-radius); }
+  #root .map-toolbar :is(.glass-select-trigger, .map-detail-toggle, .mobile-map-search) { --glass-radius: 18px; border-radius: var(--glass-radius); }
   #root .split-pane .map-toolbar .mobile-map-search {
+    display: flex; align-items: center; justify-content: center; gap: 0;
     min-height: 36px; padding: 0 12px; background: var(--map-static-control);
   }
+  #root :is(.mobile-map-search, .map-refresh-overlay, .map-hidden-layers-overlay, .map-max-detail-warning) > .glass-feather-defs { position: absolute; }
   #root .map-toolbar :is(.saved-search-field, .mobile-search-form) { min-height: 36px; padding: 0; gap: 6px; }
+  #root .map-toolbar .saved-search-field { display: grid; grid-template-columns: 17px minmax(0,1fr) 17px; }
   #root .map-toolbar .mobile-map-search .glass-field { padding: 0; min-height: 0; background: transparent; }
-  #root .map-toolbar .mobile-map-search input { height: 36px; min-height: 0; padding: 0; font-size: 16px; }
+  #root .map-toolbar .mobile-map-search input { height: 36px; min-height: 0; padding: 0; font-size: 16px; text-align: center; }
+  #root .map-toolbar .mobile-search-form { display: grid; grid-template-columns: 36px minmax(0,1fr) 36px; justify-items: center; }
+  #root .mobile-search-form .form-glass-input { width: 100%; }
+  #root .map-toolbar .mobile-search-form button { width: 36px; height: 36px; }
+  #root .map-toolbar .mobile-map-search input:focus { text-align: start; }
+  #root .split-pane :is(.map-refresh-overlay, .map-hidden-layers-overlay, .map-max-detail-warning) {
+    display: flex; align-items: center; justify-content: center; text-align: center;
+  }
   #root .map-toolbar .saved-search-badge, #root .sidebar-content .prompt-bar > :not(.backend-config-row) { display: none; }
   #root .sidebar-content .prompt-bar:not(:has(.backend-config-row)) { display: none; }
 }

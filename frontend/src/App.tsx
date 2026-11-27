@@ -1,5 +1,5 @@
 import { SemanticGlassProvider } from "./styles/SemanticGlassProvider";
-import { GlassButton, GlassLink, Glass } from "@form-glass/react";
+import { GlassButton, Glass } from "@form-glass/react";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonitorPlay, RefreshCw, X } from "lucide-react";
 import {
@@ -135,12 +135,27 @@ function loadInitialBasemapId(): BasemapId {
 }
 
 export function App() {
-  return new URLSearchParams(window.location.search).get("view") === "atlas"
-    ? <RegionHeatmaps initialBasemap={loadInitialBasemapId()} initialDark={loadInitialDarkMode()} />
-    : <PromptWorkspace />;
+  const readAtlas = () => new URLSearchParams(window.location.search).get("view") === "atlas";
+  const [atlas, setAtlas] = useState(readAtlas);
+  useEffect(() => {
+    const restore = () => setAtlas(readAtlas());
+    window.addEventListener("popstate", restore);
+    return () => window.removeEventListener("popstate", restore);
+  }, []);
+  function switchWorkspace(next: boolean) {
+    if (next === atlas) return;
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("view", "atlas");
+    else { url.searchParams.delete("view"); url.searchParams.delete("query"); }
+    history.pushState(null, "", url);
+    setAtlas(next);
+  }
+  return atlas
+    ? <RegionHeatmaps onWorkspaceChange={switchWorkspace} initialBasemap={loadInitialBasemapId()} initialDark={loadInitialDarkMode()} />
+    : <PromptWorkspace onWorkspaceChange={switchWorkspace} />;
 }
 
-function PromptWorkspace() {
+function PromptWorkspace({ onWorkspaceChange }: { onWorkspaceChange: (atlas: boolean) => void }) {
   const [data, setData] = useState<AppStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -208,6 +223,7 @@ function PromptWorkspace() {
   useEffect(() => {
     void getRemoteBackendConfig().then(async (config) => {
       try {
+        if (config.mode === "cpu") setBackendConfig(config);
         config = await refreshRemoteBackendCapabilities(config);
       } catch {
         // Keep the configured fallback while the remote backend starts.
@@ -873,7 +889,7 @@ function PromptWorkspace() {
             <RefreshCw size={16} />
             Reload
           </GlassButton>
-          <GlassLink href="?view=atlas">Region heatmaps</GlassLink>
+          <GlassButton onClick={() => onWorkspaceChange(true)}>Region heatmaps</GlassButton>
         </div>
       </div></SemanticGlassProvider>
     );
@@ -932,7 +948,7 @@ function PromptWorkspace() {
   );
 
   return (
-    <MapWorkspace dark={darkMode} revealControls={showExhibitIntro} sidebar={sidebar}
+    <MapWorkspace dark={darkMode} revealControls={showExhibitIntro} sidebar={sidebar} onWorkspaceChange={onWorkspaceChange}
       cities={mapCities}
       layers={data.state.layers}
       gradients={data.gradients}

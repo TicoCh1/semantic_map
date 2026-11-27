@@ -39,6 +39,7 @@ import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STAT
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export type MapViewProps = {
+  onWorkspaceChange: (atlas: boolean) => void;
   regionHeatmaps?: {
     selector: ReactNode;
     radiusMeters?: number;
@@ -112,6 +113,7 @@ function isCompactMapViewport(): boolean {
 
 export const MapView = memo(function MapView({
   regionHeatmaps,
+  onWorkspaceChange,
   cities,
   layers,
   gradients,
@@ -317,10 +319,7 @@ export const MapView = memo(function MapView({
           <span>View</span>
           <ThemedSelect label="Map comparison mode" value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"} onValueChange={mode => {
             if (mode === "atlas" || regionHeatmaps) {
-              const url = new URL(window.location.href);
-              if (mode === "atlas") url.searchParams.set("view", "atlas");
-              else { url.searchParams.delete("view"); url.searchParams.delete("query"); }
-              window.location.assign(url);
+              onWorkspaceChange(mode === "atlas");
             } else setComparisonMode(mode as typeof comparisonMode);
           }}>
             <option value="cities">Compare cities</option>

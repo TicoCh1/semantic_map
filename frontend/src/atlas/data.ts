@@ -1,4 +1,4 @@
-import { apiFetch } from "../api/client";
+import { apiFetch, getRemoteBackendConfig } from "../api/client";
 export const cities = ["london", "rome", "new_york", "shanghai"] as const;
 export type City = typeof cities[number];
 export const names: Record<City, string> = { london: "London", rome: "Rome", new_york: "New York", shanghai: "Shanghai" };
@@ -36,8 +36,12 @@ export async function atlasResource(path: string, init?: RequestInit) {
   }
   return response;
 }
-export async function loadAtlas(signal: AbortSignal): Promise<Atlas> {
-  const index: Index = await (await atlasResource("index", {signal})).json();
+let cachedGeography: { key: string; geography: Atlas["geography"] } | undefined;
+
+export async function loadGeography(index: Index, signal: AbortSignal): Promise<Atlas["geography"]> {
+  const config = await getRemoteBackendConfig();
+  const key = JSON.stringify([config.baseUrl, config.token, config.enabled, index.version, index.cities]);
+  if (cachedGeography?.key === key) return cachedGeography.geography;
   const geography = {} as Atlas["geography"];
   await Promise.all(cities.map(async city => {
     const bytes = new DataView(await (await atlasResource("city/" + city, {signal})).arrayBuffer());
@@ -45,7 +49,8 @@ export async function loadAtlas(signal: AbortSignal): Promise<Atlas> {
     const points: Coord[] = Array.from({length: index.cities[city]}, (_, i) => [bytes.getInt32(i * 8,true)/1e5, bytes.getInt32(i * 8+4,true)/1e5]);
     geography[city] = {points};
   }));
-  return {index, geography};
+  if (!signal.aborted) cachedGeography = { key, geography };
+  return geography;
 }
 export async function loadQuery(id: string, index: Index, signal: AbortSignal) {
   const query = index.queries.find(q => q.id === id);

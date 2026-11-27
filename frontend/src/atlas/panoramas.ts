@@ -1,16 +1,15 @@
 import type { FeatureCollection } from "../api/types";
-import { atlasResource, type Cell, type City } from "./data";
+import { atlasResource, type Cell, type City, type Geography } from "./data";
 
 type Bounds = [number, number, number, number];
 const rowWords = 5;
 const representative = 1 << 30;
 type CityRows = { rows: Int32Array; overview: number[] };
-const assets = new Map<City, Promise<CityRows>>();
+const assets = new WeakMap<Geography, Promise<CityRows>>();
 
-export function clearPanoramaCache() { assets.clear(); }
-
-function loadRows(city: City, count: number) {
-  const cached = assets.get(city);
+function loadRows(city: City, geography: Geography) {
+  const count = geography.points.length;
+  const cached = assets.get(geography);
   if (cached) return cached;
   const request = (async () => {
     const response = await atlasResource("panoramas/" + city);
@@ -26,8 +25,8 @@ function loadRows(city: City, count: number) {
     if (overview.includes(-1)) throw new Error("Missing panorama for a region center");
     return { rows, overview };
   })();
-  assets.set(city, request);
-  request.catch(() => { if (assets.get(city) === request) assets.delete(city); });
+  assets.set(geography, request);
+  request.catch(() => { if (assets.get(geography) === request) assets.delete(geography); });
   return request;
 }
 
@@ -35,8 +34,8 @@ function loadRows(city: City, count: number) {
 // always uses windows, so a denser street has no extra weight in its distribution.
 const cache = new WeakMap<Cell[], Map<string, { key: string; data: FeatureCollection }>>();
 
-export async function panoramaFeatures(city: City, scores: Cell[], showSelf: boolean, bounds?: Bounds) {
-  const { rows, overview } = await loadRows(city, scores.length);
+export async function panoramaFeatures(city: City, geography: Geography, scores: Cell[], showSelf: boolean, bounds?: Bounds) {
+  const { rows, overview } = await loadRows(city, geography);
   const bucket = bounds?.map((n, i) => (i < 2 ? Math.floor(n * 100) : Math.ceil(n * 100)) / 100);
   const slot = bounds ? "detail" : "overview";
   const key = [showSelf, ...(bucket ?? [])].join(",");
