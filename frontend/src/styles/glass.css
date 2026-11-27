@@ -94,10 +94,13 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
 #root .map-toolbar [data-glass] > .glass-renderer { display: none; }
 #root .map-toolbar :is(.glass-button, .glass-state-switch, .glass-select-trigger, .glass-field) { background: var(--map-static-control); }
 #root .map-toolbar :is(.saved-search-dropdown, .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
-html.is-map-interacting #root :is(.form-glass-ui, .map-shell) .glass-renderer { display: none; }
-html.is-map-interacting #root :is(.map-toolbar, .sidebar-drawer, .controls-launcher, .map-refresh-overlay, .map-hidden-layers-overlay,
-  .map-progress-overlay, .map-max-detail-warning, .embedding-pane-label, .embedding-comparison-note, .street-view-panel,
-  .street-view-values, [data-vendor-glass], .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
+/* On the mobile layout keep the same glass surface throughout a pan. */
+@media (min-width: 1024px), (prefers-reduced-transparency: reduce) {
+  html.is-map-interacting #root :is(.form-glass-ui, .map-shell) .glass-renderer { display: none; }
+  html.is-map-interacting #root :is(.map-toolbar, .sidebar-drawer, .controls-launcher, .map-refresh-overlay, .map-hidden-layers-overlay,
+    .map-progress-overlay, .map-max-detail-warning, .embedding-pane-label, .embedding-comparison-note, .street-view-panel,
+    .street-view-values, [data-vendor-glass], .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
+}
 .mobile-search-form { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 #root .mobile-map-search > .mobile-search-form { grid-column: 1 / -1; }
 .mobile-search-form > input { flex: 1; min-width: 0; }
