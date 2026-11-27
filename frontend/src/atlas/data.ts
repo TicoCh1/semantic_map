@@ -10,8 +10,26 @@ export type Index = {version: string; cities: Record<City, number>; queries: Que
 export type Geography = {points: Coord[]};
 export type Atlas = {index: Index; geography: Record<City, Geography>};
 export type Cell = {z: number; raw: number; pct: number; self: boolean};
+const params = new URLSearchParams(location.search);
+const pod = params.get("gpu");
+const gpuOrigin = pod && /^[a-z0-9]{14}$/.test(pod) ? `https://${pod}-18771.proxy.runpod.net` : null;
+export const boundaryPreview = import.meta.env.DEV && params.get("preview") === "boundary";
+export const boundaryLive = !boundaryPreview && (Boolean(gpuOrigin) || (import.meta.env.DEV && !params.has("backend")));
+
+function publicAtlasResource(path: string, init?: RequestInit) {
+  const route = path.split("?")[0];
+  if (["ready","analyze","search"].includes(route) || /^query\/live_[a-f0-9]{32}$/.test(route)) {
+    return fetch(gpuOrigin + "/" + route, {...init, credentials:"omit", cache:"no-store"});
+  }
+  // Fixed searches and panorama coordinates remain available when the GPU stops.
+  const fixed = route === "index" ? "query/geocheck_v3_index" : route.replace(/^query\//,"query/geocheck_v3_");
+  return apiFetch("/api/region-atlas/" + fixed, init);
+}
 export async function atlasResource(path: string, init?: RequestInit) {
-  const response = await apiFetch("/api/region-atlas/" + path, init);
+  let response: Response;
+  if (gpuOrigin && !boundaryPreview) response = await publicAtlasResource(path, init);
+  else if (boundaryPreview || boundaryLive) response = await fetch((boundaryLive ? "/__area-live/" : "/__area-preview/") + path, init);
+  else response = await apiFetch("/api/region-atlas/" + path, init);
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
     throw new Error(typeof error.detail === "string" ? error.detail : `Could not load region atlas (HTTP ${response.status})`);
@@ -32,7 +50,8 @@ export async function loadAtlas(signal: AbortSignal): Promise<Atlas> {
 export async function loadQuery(id: string, index: Index, signal: AbortSignal) {
   const query = index.queries.find(q => q.id === id);
   if (!query) throw new Error("Unknown reference region");
-  const buffer = await (await atlasResource("query/" + encodeURIComponent(id), {signal})).arrayBuffer();
+  const version = boundaryLive ? "?version=" + encodeURIComponent(index.version) : "";
+  const buffer = await (await atlasResource("query/" + encodeURIComponent(id) + version, {signal})).arrayBuffer();
   if (buffer.byteLength !== cities.reduce((n, c) => n + index.cities[c] * 6, 0)) throw new Error("Incomplete score data for " + id);
   const scores = {} as Record<City, Cell[]>;
   const view = new DataView(buffer);

@@ -22,7 +22,8 @@ import { panoPointKey } from "../state/panoDatasets";
 import { colorRangeForLayer } from "../state/mapStyle";
 import { exhibitConfig } from "../state/exhibitConfig";
 import type { TutorialPage } from "../state/tutorialContent";
-import { cities, loadAtlas, loadQuery, names, ramp, stops, type Atlas, type City, type Query } from "./data";
+import { atlasResource, boundaryLive, boundaryPreview, cities, loadAtlas, loadQuery, names, ramp, stops, type Atlas, type City, type Query } from "./data";
+import { BoundarySearch, type Boundary } from "./BoundarySearch";
 import { defaultRange, restoreWorkspace, saveWorkspace } from "./workspace";
 import { clearPanoramaCache, panoramaFeatures } from "./panoramas";
 import { AreaInspector } from "./AreaInspector";
@@ -49,7 +50,7 @@ const tour: TutorialPage[] = [
 function createLayer(q: Query) {
   const limits = defaultRange(q, "zscore");
   const layer = makeLayer(q.id, q.name, newSemanticLayerStyle(gradient, limits.lower, limits.upper), q.id, "zscore");
-  layer.prompt = `${names[q.city]} · ${q.radius_m} m · ${q.nodes.toLocaleString()} source panoramas`;
+  layer.prompt = q.category === "preview" || q.category === "live" ? `${names[q.city]} · ${q.nodes} boundary samples` : `${names[q.city]} · ${q.radius_m} m · ${q.nodes.toLocaleString()} source panoramas`;
   layer.color_range_default = limits;
   return layer;
 }
@@ -77,21 +78,53 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
   const activeLayers = useRef(layers);
   activeLayers.current = layers;
   const readyLayers = useMemo(() => layers.filter(layer => layer.status === "ready"), [layers]);
-  const [controlsRequest, setControlsRequest] = useState<{ open: boolean }>();
+  const [controlsRequest, setControlsRequest] = useState<{ open: boolean } | undefined>(() =>
+    boundaryPreview || boundaryLive ? {open: !window.matchMedia("(max-width: 1023px)").matches} : undefined);
+  const [available, setAvailable] = useState<boolean | null>(null);
+  const [focus, setFocus] = useState<Query>();
+  const focusApplied = useRef<{query:Query;map:MapLibreMap}>();
+  const [resetDraft, setResetDraft] = useState(0);
+  const offlineHandled = useRef(false);
+  const lastFixed = useRef<string>();
+  useEffect(() => {
+    if (!boundaryLive) return;
+    let current = true;
+    let misses = 0;
+    const probe = async () => {
+      let online = false;
+      try { online = (await (await atlasResource("ready", {signal:AbortSignal.timeout(4000)})).json()).online === true; } catch { /* unavailable */ }
+      misses = online ? 0 : misses + 1;
+      if(current) setAvailable(last => online || (last===true && misses<2));
+    };
+    void probe();const timer = window.setInterval(probe, 5000);
+    return () => {current=false;window.clearInterval(timer);};
+  }, []);
+  useEffect(() => {
+    if (!focus) return;
+    const map=maps.get(focus.city);
+    if (!map || (focusApplied.current?.query===focus && focusApplied.current.map===map)) return;
+    map.jumpTo({center:focus.coordinates,zoom:15});
+    focusApplied.current={query:focus,map};
+  }, [focus,maps]);
+  const [polygon, setPolygon] = useState<Boundary | null>(null);
+  const [classSamples, setClassSamples] = useState<FeatureCollection["features"]>([]);
   const [circle, setCircle] = useState<Circle | null>(null);
   const displayedId = readyLayers.find(layer => layer.visible)?.id;
   const query = atlas?.index.queries.find(q => q.id === displayedId);
   const selected = layers.find(l => l.id === selectedId) ?? null;
   const gradients = useMemo(() => [gradient, ...presets], [presets]);
   const activeGradient = useMemo(() => layerGradient(selected, gradients), [selected, gradients]);
-  const options = useMemo(() => atlas?.index.queries.map(label) ?? [], [atlas]);
+  const options = useMemo(() => atlas?.index.queries.filter(q=>q.category!=="live").map(label) ?? [], [atlas]);
 
   useEffect(() => {
     const controller = new AbortController();
     setError("");
     void loadAtlas(controller.signal).then(async value => {
       if (controller.signal.aborted) return;
-      const restored = restoreWorkspace(value.index.queries, new URLSearchParams(location.search).get("query"), createLayer);
+      const linked = new URLSearchParams(location.search).get("query");
+      const initial = value.index.queries.find(q => q.id === linked) ?? value.index.queries[0];
+      const restored = boundaryPreview || boundaryLive ? {layers:[createLayer(initial)],selectedId:initial.id,showSelf:true}
+        : restoreWorkspace(value.index.queries, linked, createLayer);
       const data: Record<string, Scores> = {};
       const errors: string[] = [];
       await Promise.all(restored.layers.map(async layer => {
@@ -100,6 +133,10 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
       }));
       if (controller.signal.aborted) return;
       setScores(data); setLayers(restored.layers); setSelected(restored.selectedId); setShowSelf(restored.showSelf); setAtlas(value);
+      if (boundaryLive) {
+        lastFixed.current = initial.id;
+        setFocus(initial);
+      }
       setError(errors.join(" · "));
     }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); });
     return () => { controller.abort(); pending.current?.abort(); refreshRequest.current?.abort(); };
@@ -113,7 +150,7 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
   }, []);
   useEffect(() => {
     if (!atlas) return;
-    saveWorkspace(layers, selectedId, showSelf);
+    if (!boundaryPreview && !boundaryLive) saveWorkspace(layers, selectedId, showSelf);
     const url = new URL(location.href);
     if (selectedId) url.searchParams.set("query", selectedId); else url.searchParams.delete("query");
     history.replaceState(null, "", url);
@@ -135,10 +172,25 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
         return [{ ...layer, status: "ready", visible: true }, ...previous.filter(l => l.id !== q.id)];
       });
       setSelected(q.id);
+      if (q.category !== "live") lastFixed.current=q.id;
+      if (!boundaryPreview) {
+        setPolygon(null);setClassSamples([]);setCircle(null);setResetDraft(i=>i+1);setFocus({...q});
+      }
     } catch (reason) {
       if (!controller.signal.aborted) { setError(String(reason)); throw reason; }
     }
   }
+  useEffect(() => {
+    if (!boundaryLive || !atlas) return;
+    if (available !== false) { offlineHandled.current=false; return; }
+    if (offlineHandled.current) return;
+    offlineHandled.current=true;
+    setPolygon(null);setClassSamples([]);setResetDraft(i=>i+1);
+    if (query?.category === "live") {
+      const fixed=atlas.index.queries.find(q=>q.id===lastFixed.current) ?? atlas.index.queries[0];
+      void choose(fixed.id).catch(reason=>setError(String(reason)));
+    }
+  }, [available,atlas,query]);
   async function refresh() {
     if (!atlas) { setRevision(n => n + 1); return; }
     refreshRequest.current?.abort();
@@ -164,6 +216,17 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
     } finally {
       if (!controller.signal.aborted) setRefreshing(false);
     }
+  }
+  async function addBoundaryResult(q: Query, signal: AbortSignal) {
+    if (!atlas) throw new Error("The map is still loading.");
+    const index = {...atlas.index, queries:[...atlas.index.queries, q]};
+    const data = await loadQuery(q.id, index, signal);
+    if (signal.aborted) return;
+    pending.current?.abort();
+    setAtlas({...atlas,index});
+    setScores(prev => ({...prev,[q.id]:data}));
+    setLayers(prev => [createLayer(q), ...prev]);
+    setSelected(q.id);
   }
   function patch(layer: SemanticLayer, update: Partial<SemanticLayer>) {
     setLayers(previous => previous.map(l => l.id === layer.id ? { ...l, ...update } : l));
@@ -191,11 +254,20 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
       properties: { score: cell.raw, zscore: cell.z }
     }]) };
   }, [atlas, scores, selectedId, histogramCity, showSelf]);
-  const areas = useMemo(() => Object.fromEntries(cities.map(city => [city,
-    (circle ? circle.city === city : query?.city === city) ? { type: "FeatureCollection", features: [
-      { type: "Feature", geometry: { type: "Polygon", coordinates: circle ? boundary(circle) : query!.area }, properties: {} }
-    ] } as FeatureCollection : empty
-  ])), [query, circle]);
+  const areas = useMemo(() => {
+    const sourceCity = polygon?.city ?? circle?.city ?? query?.city;
+    const points = polygon?.points;
+    let area = empty;
+    if (points && points.length === 2) {
+      area = {type:"FeatureCollection", features:[{type:"Feature", properties:{}, geometry:{type:"LineString", coordinates:points}}]};
+    } else {
+      const rings = points ? (points.length >= 3 ? [[...points, points[0]]] : null)
+        : circle ? boundary(circle) : query?.area;
+      if (rings) area = {type:"FeatureCollection", features:[{type:"Feature", properties:{}, geometry:{type:"Polygon", coordinates:rings}}]};
+    }
+    if (polygon && classSamples.length) area = {...area,features:[...area.features,...classSamples]};
+    return Object.fromEntries(cities.map(city => [city, city === sourceCity ? area : empty]));
+  }, [query, circle, polygon, classSamples]);
   const register = useCallback((city: string, map: MapLibreMap) => {
     setMaps(previous => new Map(previous).set(city, map));
     return () => setMaps(previous => {
@@ -217,6 +289,7 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
         el.onclick = async event => {
           event.stopPropagation();
           map.easeTo({ center: hit.coordinates, zoom: 14, duration: 350 });
+          if (boundaryPreview) return;
           const cell = atlas.geography[city].points.findIndex(([x,y]) => x === hit.coordinates[0] && y === hit.coordinates[1]);
           let fc: FeatureCollection;
           try { fc = await panoramaFeatures(city, scores[query.id][city], true); }
@@ -256,13 +329,15 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
         const next = enabled ? "openfreemap_dark" : "osm";
         setBasemap(next); localStorage.setItem("semantic-map-basemap", next);
       }}>
-    <PromptBar searchSlot={search} backendConfig={backend} remoteConfigLocked={exhibitConfig.lockRunpodUrl} onConfigChange={config => {
+    {atlas && (boundaryPreview || (boundaryLive && available)) && <BoundarySearch key={resetDraft} maps={maps} value={polygon} onChange={setPolygon} onSamples={setClassSamples} onResult={addBoundaryResult} requestControls={setControlsRequest}/>}
+    {boundaryLive && available === false && <small role="status">GPU offline · Choose a saved landmark below.</small>}
+    {!boundaryPreview && <PromptBar searchSlot={search} backendConfig={backend} remoteConfigLocked={exhibitConfig.lockRunpodUrl} onConfigChange={config => {
       if (config.baseUrl !== backend?.baseUrl || config.token !== backend?.token || config.enabled !== backend?.enabled) {
         clearPanoramaCache(); setAtlas(undefined); setLayers([]); setScores({}); setCircle(null); panos.clear(); setRevision(v => v+1);
       }
       setBackend(config);
-    }} onCreate={choose} />
-    <AreaInspector atlas={atlas} maps={maps} circle={circle} onCircle={setCircle} onChoose={choose} requestControls={setControlsRequest} />
+    }} onCreate={choose} />}
+    {!boundaryPreview && !boundaryLive && <AreaInspector atlas={atlas} maps={maps} circle={circle} onCircle={setCircle} onChoose={choose} requestControls={setControlsRequest} />}
     <LayerPanel layers={layers} gradients={gradients} selectedLayerId={selectedId} onSelect={setSelected}
       onToggle={l => patch(l, { visible: !l.visible })} onDelete={removeLayer} onRefreshAll={refresh} refreshingAll={refreshing}
       onReorder={ids => setLayers(ids.map(id => layers.find(l => l.id === id)!))}
@@ -289,8 +364,8 @@ export function RegionHeatmaps({ initialBasemap, initialDark }: { initialBasemap
   return <MapWorkspace dark={dark} revealControls={intro} controlsRequest={controlsRequest} sidebar={sidebar} cities={cityConfigs}
     layers={readyLayers} gradients={gradients} selectedLayerId={selectedId} onSelectLayer={setSelected}
     basemapId={basemap} onBasemapChange={id => { setBasemap(id); localStorage.setItem("semantic-map-basemap-source", "manual"); localStorage.setItem("semantic-map-basemap", id); }} onVisibleCitiesChange={setVisibleCities}
-    regionHeatmaps={{ selector: search, radiusMeters: query?.radius_m, dataProvider: provider, register, selectionAreas: areas }}
-    markedPanos={inspectedPanos} selectedPanoKey={panos.selectedKey} onMarkPano={panos.mark}
+    regionHeatmaps={{ selector: search, focus, radiusMeters: query?.radius_m, description: boundaryPreview ? "Boundary preview · sample data" : query?.category==="live" ? "Custom boundary · GPU match" : undefined, dataProvider: provider, register, selectionAreas: areas }}
+    markedPanos={inspectedPanos} selectedPanoKey={panos.selectedKey} onMarkPano={boundaryPreview ? () => {} : panos.mark}
     onSelectPano={panos.select} onRemovePano={panos.remove}
     scoreField={selected?.score_property === "score" ? "score" : "zscore"} progressEntries={[]}>
     <ExhibitIntroModal open={intro} version={0} onClose={() => setIntro(false)} pages={tour} />

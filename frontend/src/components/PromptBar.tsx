@@ -90,7 +90,7 @@ export function PromptBar({ searchSlot, disabled, liveSearchAvailable = true, ba
 
       {backendConfig && !remoteConfigLocked ? (
         <div className="backend-config-row">
-          <GlassSwitch label="RunPod" checked={backendConfig.enabled} onChange={enabled => void updateConfig({ enabled })} />
+          <GlassSwitch className="backend-state-switch" label="RunPod" checked={backendConfig.enabled} onChange={enabled => void updateConfig({ enabled })} />
           <GlassInput label="Backend URL"
             className="backend-url-field"
             aria-label="Backend URL"

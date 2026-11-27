@@ -9,6 +9,9 @@ const values: Partial<GlassValues> = {
   "brightness-fade-distance": 32,
   "contrast-fade-distance": 32
 };
+// Bound the glass core on white panoramas (dark UI) and black maps (light UI).
+const darkValues = { ...values, brightness: -64, contrast: 1 };
+const lightValues = { ...values, brightness: 85, contrast: .16 };
 function VendorGlassSurfaces() {
   const surfaces = useSyncExternalStore(subscribeVendorGlass, getVendorGlass);
   return <>{surfaces.map(surface => createPortal(
@@ -17,7 +20,7 @@ function VendorGlassSurfaces() {
   ))}</>;
 }
 export function SemanticGlassProvider({ dark, children }: { dark: boolean; children: ReactNode }) {
-  return <GlassProvider theme={dark ? "dark" : "light"} values={values} fadeContents={false} diagnostics={import.meta.env.DEV}
+  return <GlassProvider theme={dark ? "dark" : "light"} values={dark ? darkValues : lightValues} fadeContents={false} diagnostics={import.meta.env.DEV}
     refractionEnabled={false} className="semantic-glass-app">
     {children}
     <VendorGlassSurfaces />

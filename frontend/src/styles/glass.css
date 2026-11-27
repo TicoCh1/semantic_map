@@ -46,14 +46,16 @@ html.theme-dark-root #root .glass-state-switch[aria-checked=true] > .glass-switc
 #root .glass-state-switch { font-size: 12px; }
 #root .glass-switch-label::before { content: "○"; display: inline-block; width: 16px; margin-right: 4px; }
 #root .glass-state-switch[aria-checked=true] .glass-switch-label::before { content: "✓"; }
-/* The panel's explicit yellow/green state is the exception to neutral controls. */
-html #root .glass-state-switch.controls-state-switch > .glass-switch-light { --switch-source-color: #ecc94b; --switch-source-power: .9; }
-html #root .glass-state-switch.controls-state-switch[aria-checked=true] > .glass-switch-light { --switch-source-color: #20d99a; --switch-source-power: 1; }
+/* State switches share the Controls light. Available actions use its red variant. */
+html #root .glass-state-switch:is(.controls-state-switch,.theme-toggle,.backend-state-switch,.detail-state-switch) > .glass-switch-light { --switch-source-color: #ecc94b; --switch-source-power: .9; }
+html #root .glass-state-switch:is(.controls-state-switch,.theme-toggle,.backend-state-switch,.detail-state-switch)[aria-checked=true] > .glass-switch-light { --switch-source-color: #20d99a; --switch-source-power: 1; }
+html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-color: #ef6860; --switch-source-power: .9; }
+#root .map-action-capsule .glass-switch-label::before { content: none; }
+#root .map-action-capsule, #root .controls-launcher { width:100px; height:34px; min-height:34px; padding:6px 14px; }
 #root .controls-state-switch[aria-checked] .glass-switch-label::before { content: none; }
 /* The launcher is a sibling of the animated drawer, so it never moves with it. */
 #root .controls-launcher {
   position: absolute; z-index: 3; top: 80px; right: 24px;
-  width: 100px; height: 34px; min-height: 34px; padding: 6px 14px;
   pointer-events: auto; border-radius: 999px; --glass-radius: 999px;
 }
 #root .controls-launcher > .glass-switch-label {
@@ -160,7 +162,8 @@ html.is-map-interacting #root :is(.map-toolbar, .sidebar-drawer, .controls-launc
   #root .split-pane .sidebar-dock { height: min(80dvh, 680px); pointer-events: none; }
   #root .split-pane .sidebar-dock.is-open { pointer-events: none; }
   #root .split-pane .sidebar-dock.is-open .sidebar-drawer { pointer-events: auto; }
-  #root .controls-launcher { position: fixed; top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); height: 44px; }
+  #root .controls-launcher { position: fixed; top: auto; bottom: calc(12px + env(safe-area-inset-bottom)); right: max(12px, env(safe-area-inset-right)); }
+  #root :is(.controls-launcher,.map-action-capsule) { height:44px; }
   #root .layer-row { grid-template-columns: 36px 18px minmax(0, 1fr) 36px 36px; gap: 4px; padding: 10px 8px; }
   #root .layer-row .icon-button { width: 36px; min-width: 36px; }
   #root .layer-style-chip { width: 36px; }
@@ -266,3 +269,76 @@ html #root .glass-state-switch.detail-state-switch[aria-checked=true] > .glass-s
 }
 
 #root .region-rank-marker { color: white; font: 600 12px/18px system-ui, sans-serif; }
+
+/* A panel samples the scene once. Its rows use a flat tint; controls inside
+   those rows inherit the surface. Standalone controls over imagery use the
+   panel's bounded tone rather than the vendor's nested brightness boost. */
+.semantic-glass-app { --inset-glass-tint: rgba(45, 48, 52, .045); }
+html:not(.theme-dark-root) .semantic-glass-app,
+html:not(.theme-dark-root) .semantic-glass-app .split-pane { --ui-muted: #484848; }
+html.theme-dark-root .semantic-glass-app { --inset-glass-tint: rgba(255, 255, 255, .075); }
+html #root .semantic-glass-app [data-glass-material="control"] > .glass-renderer {
+  --glass-brightness: var(--glass-debug-brightness);
+  --glass-contrast: var(--glass-debug-contrast);
+}
+/* FORM's final blur sample carries the feather mask. Skip intermediate blur
+   samples; independently masked brightness/contrast channels may still paint. */
+html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glass-renderer > .glass-blur-layer:nth-child(-n+5):not(:last-child) {
+  display: none;
+}
+#root :is(.sidebar-drawer, .map-toolbar, .street-view-values, .boundary-draw-tools, .exhibit-modal) [data-glass] > .glass-renderer {
+  display: none;
+}
+#root :is(.sidebar-drawer, .street-view-values, .boundary-draw-tools, .exhibit-modal) :where(.layer-row, .glass-button, .glass-field, .glass-select-trigger) {
+  background-color: var(--inset-glass-tint);
+}
+#root :is(.sidebar-drawer, .street-view-values, .exhibit-modal) [data-glass] :where(.glass-button, .glass-field, .glass-select-trigger) {
+  background-color: transparent;
+}
+/* Menus cover other controls and require their own legible reading surface. */
+#root .sidebar-drawer :is(.saved-search-dropdown, .glass-select-menu, .preset-menu) { background-color: var(--map-static-glass); }
+#root .theme-dark .sidebar-content .visibility-button.is-hidden svg { color: #d6d6d6; }
+#root .layer-row .drag-icon { opacity: .85; }
+
+.mobile-boundary-launch { display: none; }
+@media (max-width: 1023px) {
+  #root .split-pane .sidebar-dock { --sheet-height: min(37dvh, 330px); height: 0; }
+  #root .split-pane .sidebar-dock.is-open { height: var(--sheet-height); }
+  #root .split-pane .sidebar-drawer { padding-top: 0; }
+  #root .split-pane .control-scroll-viewport { padding: 10px 16px 20px; }
+  #root .split-pane .sidebar-top-bar { margin-bottom: 4px; }
+  #root .split-pane .sidebar-dock.is-open .controls-launcher { bottom: calc(var(--sheet-height) + 4px); }
+  #root .sidebar-dock .sidebar-footer { padding: 3px 16px max(3px, env(safe-area-inset-bottom)); }
+  #root .sidebar-dock .panel-section { padding-block: 10px; }
+  #root .sidebar-content:has(.boundary-options) { display: flex; flex-direction: column; }
+  #root .sidebar-content:has(.boundary-options) .boundary-search {
+    order: -1; grid-template-columns: minmax(0,1fr) auto; gap: 4px 8px;
+  }
+  #root .boundary-search:has(.boundary-options) > :not(.area-actions, .map-action-capsule) { grid-column: 1 / -1; }
+  #root .boundary-search:has(.boundary-options) > .area-actions { grid-area: 3 / 1; }
+  #root .boundary-search:has(.boundary-options) > .map-action-capsule { grid-area: 3 / 2; width: auto; }
+  #root .boundary-search .boundary-options { margin-top: 4px; }
+  #root .mobile-boundary-launch {
+    display: block; position: absolute; z-index: 8; left: max(12px, env(safe-area-inset-left));
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+  #root .mobile-boundary-launch .map-action-capsule { width: auto; min-width: 108px; }
+  #root .split-pane:has(.sidebar-dock.is-open) .mobile-boundary-launch,
+  #root .split-pane:has(.boundary-draw-tools) .controls-launcher { display: none; }
+  #root .boundary-draw-position { bottom: calc(10px + env(safe-area-inset-bottom)); }
+  #root .map-shell:has(.boundary-draw-position) .map-toolbar { visibility: hidden; pointer-events: none; }
+  #root .split-pane:has(.mobile-boundary-launch) .maplibregl-ctrl-bottom-right { bottom: calc(61px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 700px) {
+  #root .split-pane .map-toolbar {
+    top: max(6px, env(safe-area-inset-top)); left: max(8px, env(safe-area-inset-left));
+    right: max(8px, env(safe-area-inset-right)); max-width: none; padding: 5px 8px;
+    grid-template-columns: minmax(0,1fr) auto; gap: 2px 6px;
+  }
+  #root .map-toolbar .comparison-mode-select { grid-column: 1; grid-row: 3; width: auto; min-width: 0; }
+  #root .map-toolbar .map-detail-toggle { grid-column: 2; grid-row: 3; }
+  #root .split-pane .is-embedding-comparison .map-toolbar .map-detail-toggle { grid-row: 3; }
+  #root .map-toolbar .comparison-mode-select .glass-select { max-width: 100%; }
+  #root .map-toolbar .mobile-city-switch { min-height: 38px; }
+  #root .map-toolbar .mobile-city-switch button { height: 38px; }
+}

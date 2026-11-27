@@ -42,6 +42,8 @@ export type MapViewProps = {
   regionHeatmaps?: {
     selector: ReactNode;
     radiusMeters?: number;
+    focus?: {city: CityId};
+    description?: string;
     dataProvider: LayerDataProvider;
     selectionAreas: Record<string, FeatureCollection>;
     register: (cityId: string, map: MapLibreMap) => () => void;
@@ -158,6 +160,13 @@ export const MapView = memo(function MapView({
   }, []);
 
   const [mobileCityId, setMobileCityId] = useState<CityId>(loadMobileCityId);
+  const focus = regionHeatmaps?.focus;
+  useEffect(() => {
+    if (!focus) return;
+    setCitySelection(current => current[0] === focus.city ? current :
+      [focus.city, current.includes(focus.city) ? current[0] : current[1]].filter(Boolean));
+    setMobileCityId(focus.city);
+  }, [focus]);
   const [citySplit, setCitySplit] = useState(loadCitySplit);
   const [draggingCitySplit, setDraggingCitySplit] = useState(false);
   const [compactViewport, setCompactViewport] = useState(isCompactMapViewport);
@@ -297,7 +306,7 @@ export const MapView = memo(function MapView({
         </>}
         <div className="map-summary" data-displayed-layer-id={displayedLayer?.id}>
           <strong title={title}>{title}</strong>
-          <span className="map-agreement">{regionHeatmaps ? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
+          <span className="map-agreement">{regionHeatmaps ? regionHeatmaps.description ?? `${regionHeatmaps.radiusMeters ?? 150} m region similarity` : `Scoring agreement ${agreement == null ? "N/A" : `${agreement.toFixed(1)}%`}`}</span>
         </div>
         <div className="mobile-city-switch" aria-label="Available cities" role="group" hidden={comparisonEnabled}>
           {cities.map((city) => (
@@ -1118,6 +1127,15 @@ export const CityMapPane = memo(function CityMapPane({
           updateSemanticSource(currentMap, "reference-selection", area);
           if (!currentMap.getLayer("reference-selection-fill")) currentMap.addLayer({ id: "reference-selection-fill", type: "fill", source: "reference-selection", paint: { "fill-color": "#2c7bb6", "fill-opacity": 0.08 } });
           if (!currentMap.getLayer("reference-selection-outline")) currentMap.addLayer({ id: "reference-selection-outline", type: "line", source: "reference-selection", paint: { "line-color": "#2c7bb6", "line-width": 2, "line-dasharray": [3, 2] } });
+          if (!currentMap.getLayer("boundary-classes") && area.features.some(f => f.properties.categoryColor)) {
+            currentMap.addLayer({ id:"boundary-classes", type:"circle", source:"reference-selection",
+              filter:["has","categoryColor"], paint:{
+                "circle-color":["get","categoryColor"],
+                "circle-radius":["case",["get","highlighted"],5,3],
+                "circle-opacity":["case",["get","highlighted"],1,.45],
+                "circle-stroke-color":"#303338", "circle-stroke-width":1
+              } });
+          }
         }
         if (!visibleTopToBottom.length) {
           removeSemanticLayers(currentMap, () => true);
@@ -1243,6 +1261,7 @@ export const CityMapPane = memo(function CityMapPane({
         if (missingLayer) {
           throw new Error("Semantic layers were not attached");
         }
+        if (currentMap.getLayer("boundary-classes")) orderedIds.push("boundary-classes");
         syncSemanticLayerOrder(currentMap, orderedIds);
 
         if (!cancelled && generation === styleGenerationRef.current) {

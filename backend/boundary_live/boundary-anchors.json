@@ -1,0 +1,322 @@
+{
+  "st_pauls": {
+    "anchor": "St Paul's Cathedral",
+    "url": "https://en.wikipedia.org/wiki/St_Paul%27s_Cathedral",
+    "xy": [
+      -0.0983,
+      51.5138
+    ]
+  },
+  "tower_bridge": {
+    "anchor": "Tower Bridge",
+    "url": "https://en.wikipedia.org/wiki/Tower_Bridge",
+    "xy": [
+      -0.0753,
+      51.5056
+    ]
+  },
+  "canary_wharf": {
+    "anchor": "One Canada Square",
+    "url": "https://en.wikipedia.org/wiki/One_Canada_Square",
+    "xy": [
+      -0.01961111,
+      51.505
+    ]
+  },
+  "westminster": {
+    "anchor": "Big Ben",
+    "url": "https://en.wikipedia.org/wiki/Big_Ben",
+    "xy": [
+      -0.1245,
+      51.5007
+    ]
+  },
+  "trafalgar_sq": {
+    "anchor": "Nelson's Column",
+    "url": "https://en.wikipedia.org/wiki/Nelson%27s_Column",
+    "xy": [
+      -0.12797222,
+      51.50772222
+    ]
+  },
+  "hyde_park_edge": {
+    "anchor": "Serpentine Bridge",
+    "url": "https://historicengland.org.uk/listing/the-list/list-entry/1217600",
+    "xy": [
+      -0.17262938,
+      51.50624475
+    ]
+  },
+  "regents_park": {
+    "anchor": "York Gate, Regent's Park",
+    "xy": [
+      -0.15278,
+      51.523532
+    ],
+    "url": "https://commons.wikimedia.org/wiki/File:York_Gate,_Regent%27s_Park_-_geograph.org.uk_-_7216176.jpg"
+  },
+  "camden_market": {
+    "anchor": "Camden Lock",
+    "url": "https://en.wikipedia.org/wiki/Camden_Lock",
+    "xy": [
+      -0.1457,
+      51.5411
+    ]
+  },
+  "shoreditch": {
+    "anchor": "Brick Lane Mosque",
+    "url": "https://en.wikipedia.org/wiki/Brick_Lane_Mosque",
+    "xy": [
+      -0.07222222,
+      51.51933333
+    ]
+  },
+  "notting_hill": {
+    "anchor": "Electric Cinema, Notting Hill",
+    "url": "https://en.wikipedia.org/wiki/Electric_Cinema,_Notting_Hill",
+    "xy": [
+      -0.205,
+      51.5155
+    ]
+  },
+  "st_peters": {
+    "anchor": "St. Peter's Square",
+    "url": "https://en.wikipedia.org/wiki/St._Peter%27s_Square",
+    "xy": [
+      12.4572,
+      41.9022
+    ]
+  },
+  "colosseum": {
+    "anchor": "Colosseum",
+    "url": "https://en.wikipedia.org/wiki/Colosseum",
+    "xy": [
+      12.4922,
+      41.8903
+    ]
+  },
+  "pantheon_navona": {
+    "anchor": "Pantheon, Rome",
+    "url": "https://en.wikipedia.org/wiki/Pantheon,_Rome",
+    "xy": [
+      12.4768,
+      41.8986
+    ]
+  },
+  "ponte_sant_angelo": {
+    "anchor": "Ponte Sant'Angelo",
+    "url": "https://en.wikipedia.org/wiki/Ponte_Sant%27Angelo",
+    "xy": [
+      12.46645,
+      41.90192
+    ]
+  },
+  "eur_palazzo": {
+    "anchor": "Palazzo della Civilt\u00e0 Italiana",
+    "url": "https://en.wikipedia.org/wiki/Palazzo_della_Civilt%C3%A0_Italiana",
+    "xy": [
+      12.46530833,
+      41.83668333
+    ]
+  },
+  "trastevere": {
+    "anchor": "Santa Maria in Trastevere",
+    "url": "https://en.wikipedia.org/wiki/Santa_Maria_in_Trastevere",
+    "xy": [
+      12.46972222,
+      41.88944444
+    ]
+  },
+  "villa_borghese": {
+    "anchor": "Porta Pinciana",
+    "url": "https://en.wikipedia.org/wiki/Porta_Pinciana",
+    "xy": [
+      12.48833333,
+      41.90944444
+    ]
+  },
+  "testaccio_ostiense": {
+    "anchor": "Porta San Paolo",
+    "url": "https://en.wikipedia.org/wiki/Porta_San_Paolo",
+    "xy": [
+      12.48138889,
+      41.87666667
+    ]
+  },
+  "monti_cavour": {
+    "anchor": "Cavour (Rome Metro)",
+    "url": "https://en.wikipedia.org/wiki/Cavour_(Rome_Metro)",
+    "xy": [
+      12.49361111,
+      41.895
+    ]
+  },
+  "parioli_flaminio": {
+    "anchor": "Parco della Musica",
+    "url": "https://en.wikipedia.org/wiki/Parco_della_Musica",
+    "xy": [
+      12.474557,
+      41.929075
+    ]
+  },
+  "fidi_wall_st": {
+    "anchor": "Federal Hall",
+    "url": "https://en.wikipedia.org/wiki/Federal_Hall",
+    "xy": [
+      -74.01027778,
+      40.70722222
+    ]
+  },
+  "central_park_edge": {
+    "anchor": "Grand Army Plaza (Manhattan)",
+    "url": "https://en.wikipedia.org/wiki/Grand_Army_Plaza_(Manhattan)",
+    "xy": [
+      -73.97333333,
+      40.76444444
+    ]
+  },
+  "hudson_yards": {
+    "anchor": "Vessel (structure)",
+    "url": "https://en.wikipedia.org/wiki/Vessel_(structure)",
+    "xy": [
+      -74.0022,
+      40.7538
+    ]
+  },
+  "dumbo_bridges": {
+    "anchor": "Jane's Carousel",
+    "url": "https://en.wikipedia.org/wiki/Jane%27s_Carousel",
+    "xy": [
+      -73.99238,
+      40.70442
+    ]
+  },
+  "midtown_grand_central": {
+    "anchor": "Grand Central Terminal",
+    "url": "https://en.wikipedia.org/wiki/Grand_Central_Terminal",
+    "xy": [
+      -73.9772,
+      40.7528
+    ]
+  },
+  "soho_cast_iron": {
+    "anchor": "E. V. Haughwout Building",
+    "url": "https://en.wikipedia.org/wiki/E._V._Haughwout_Building",
+    "xy": [
+      -73.9995,
+      40.7218
+    ]
+  },
+  "west_village": {
+    "anchor": "Stonewall Inn",
+    "url": "https://en.wikipedia.org/wiki/Stonewall_Inn",
+    "xy": [
+      -74.00222222,
+      40.73388889
+    ]
+  },
+  "williamsburg": {
+    "anchor": "McCarren Park",
+    "url": "https://en.wikipedia.org/wiki/McCarren_Park",
+    "xy": [
+      -73.952,
+      40.721
+    ]
+  },
+  "chinatown_les": {
+    "anchor": "Eldridge Street Synagogue",
+    "url": "https://en.wikipedia.org/wiki/Eldridge_Street_Synagogue",
+    "xy": [
+      -73.99361111,
+      40.71472222
+    ]
+  },
+  "ues_museum_mile": {
+    "anchor": "Neue Galerie New York",
+    "url": "https://en.wikipedia.org/wiki/Neue_Galerie_New_York",
+    "xy": [
+      -73.9603,
+      40.7813
+    ]
+  },
+  "lujiazui_ifc": {
+    "anchor": "Shanghai IFC",
+    "url": "https://en.wikipedia.org/wiki/Shanghai_IFC",
+    "xy": [
+      121.497,
+      31.2385
+    ]
+  },
+  "the_bund": {
+    "anchor": "Waibaidu Bridge",
+    "url": "https://en.wikipedia.org/wiki/Waibaidu_Bridge",
+    "xy": [
+      121.49,
+      31.24305556
+    ]
+  },
+  "yangpu_bridge": {
+    "anchor": "Yangpu Bridge",
+    "url": "https://www.openstreetmap.org/way/729895039",
+    "xy": [
+      121.5414,
+      31.25714
+    ]
+  },
+  "peoples_square": {
+    "anchor": "Shanghai Museum, People's Square",
+    "url": "https://en.wikipedia.org/wiki/Shanghai_Museum",
+    "xy": [
+      121.470556,
+      31.230278
+    ]
+  },
+  "yu_garden": {
+    "anchor": "Yu Garden",
+    "url": "https://en.wikipedia.org/wiki/Yu_Garden",
+    "xy": [
+      121.4875,
+      31.22916667
+    ]
+  },
+  "french_concession": {
+    "anchor": "Wukang Mansion",
+    "url": "https://en.wikipedia.org/wiki/Wukang_Mansion",
+    "xy": [
+      121.4383,
+      31.2045
+    ]
+  },
+  "tianzifang": {
+    "anchor": "Tianzifang",
+    "url": "https://en.wikipedia.org/wiki/Tianzifang",
+    "xy": [
+      121.464668,
+      31.210011
+    ]
+  },
+  "century_park": {
+    "anchor": "Century Park station (Shanghai Metro)",
+    "url": "https://en.wikipedia.org/wiki/Century_Park_station_(Shanghai_Metro)",
+    "xy": [
+      121.551341,
+      31.208893
+    ]
+  },
+  "suzhou_creek_m50": {
+    "anchor": "50 Moganshan Road",
+    "url": "https://en.wikipedia.org/wiki/50_Moganshan_Road",
+    "xy": [
+      121.44861111,
+      31.2475
+    ]
+  },
+  "xujiahui": {
+    "anchor": "Xujiahui station",
+    "url": "https://en.wikipedia.org/wiki/Xujiahui_station",
+    "xy": [
+      121.4379,
+      31.19454
+    ]
+  }
+}
