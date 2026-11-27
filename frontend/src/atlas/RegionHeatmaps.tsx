@@ -25,6 +25,7 @@ import type { TutorialPage } from "../state/tutorialContent";
 import { atlasResource, boundaryLive, boundaryPreview, cities, loadGeography, loadQuery, names, ramp, stops, type Atlas, type City, type Index, type Query } from "./data";
 import { BoundarySearch, type Boundary } from "./BoundarySearch";
 import { defaultRange, restoreWorkspace, saveWorkspace } from "./workspace";
+import type { Workspace } from "../components/WorkspaceSelect";
 import { panoramaFeatures } from "./panoramas";
 import { AreaInspector } from "./AreaInspector";
 import { boundary, type Circle } from "./areaSearch";
@@ -55,7 +56,7 @@ function createLayer(q: Query) {
   return layer;
 }
 
-export function RegionHeatmaps({ initialBasemap, initialDark, onWorkspaceChange }: { initialBasemap: BasemapId; initialDark: boolean; onWorkspaceChange: (atlas: boolean) => void }) {
+export function RegionHeatmaps({ initialBasemap, initialDark, onWorkspaceChange }: { initialBasemap: BasemapId; initialDark: boolean; onWorkspaceChange: (workspace: Workspace) => void }) {
   const [basemap, setBasemap] = useState(initialBasemap);
   const [dark, setDark] = useState(initialDark);
   const [atlas, setAtlas] = useState<Atlas>();

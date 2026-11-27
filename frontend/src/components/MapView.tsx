@@ -1,4 +1,5 @@
 import { ThemedSelect } from "./ThemedSelect";
+import { WorkspaceSelect, type Workspace } from "./WorkspaceSelect";
 import { GlassPanel as Glass, GlassButton, GlassInput, GlassSwitch } from "@form-glass/react";
 import { applyGlassSurface, observeMapGlass } from "../styles/glass";
 import { attachPointShapeImages, ensurePointImage, getRequestedSemanticSourceData, normalizePointShape, POINT_ICON_HALF_SIZE, syncSemanticLayerOrder, updateSemanticLayer, updateSemanticSource } from "../state/semanticLayerRenderer";
@@ -39,7 +40,7 @@ import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STAT
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export type MapViewProps = {
-  onWorkspaceChange: (atlas: boolean) => void;
+  onWorkspaceChange: (workspace: Workspace) => void;
   regionHeatmaps?: {
     selector: ReactNode;
     radiusMeters?: number;
@@ -315,19 +316,11 @@ export const MapView = memo(function MapView({
             {cities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
           </ThemedSelect>
         </div>}
-        <label className="basemap-select comparison-mode-select">
-          <span>View</span>
-          <ThemedSelect label="Map comparison mode" value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"} onValueChange={mode => {
-            if (mode === "atlas" || regionHeatmaps) {
-              onWorkspaceChange(mode === "atlas");
-            } else setComparisonMode(mode as typeof comparisonMode);
-          }}>
-            <option value="cities">Compare cities</option>
-            <option value="atlas">Region heatmaps</option>
-            {comparisonCities.length > 0 && <option value="embeddings">Old vs new embedding</option>}
-            {comparisonCities.length > 0 && <option value="difference">Difference mode</option>}
-          </ThemedSelect>
-        </label>
+        <WorkspaceSelect value={regionHeatmaps ? "atlas" : comparisonEnabled ? comparisonMode : "cities"}
+          comparisons={comparisonCities.length > 0} onChange={mode => {
+            if (mode === "tsne" || mode === "atlas" || (mode === "cities" && regionHeatmaps)) onWorkspaceChange(mode);
+            else setComparisonMode(mode);
+          }} />
         {comparisonEnabled ? <label className="basemap-select comparison-city-select">
           <span>City</span>
           <ThemedSelect label="Embedding comparison city" value={comparisonCity?.id} onValueChange={e => setComparisonCityId(e)}>

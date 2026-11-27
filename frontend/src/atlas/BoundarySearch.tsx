@@ -118,8 +118,8 @@ export function BoundarySearch({maps, value, onChange, requestControls, onResult
     <GlassButton className="secondary-button" onClick={()=>stop(true)}>Cancel</GlassButton>
     {analyzeButton}
   </>;
-  return <section className="panel-section area-inspector boundary-search" aria-label="Boundary search">
-    <div className="section-heading"><strong>Boundary search</strong><small>{boundaryLive ? "Live GPU · street panoramas" : "Local preview · sample data"}</small></div>
+  return <section className="panel-section area-inspector boundary-search" aria-label="Boundary query">
+    <div className="section-heading"><strong>Boundary query</strong><small>{boundaryLive ? "Live GPU · street panoramas" : "Local preview · sample data"}</small></div>
     {!drawing && !value && host && createPortal(<div className="mobile-boundary-launch"><GlassAction onClick={start}>Draw boundary</GlassAction></div>,host)}
     {drawing && <div className="area-actions">{analyzeButton}</div>}
     {drawing && host && createPortal(<div className="boundary-draw-position"><Glass className="boundary-draw-tools" material="control">

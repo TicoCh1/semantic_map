@@ -1,0 +1,41 @@
+{
+  "city": "London",
+  "embedding": "SABER128B0",
+  "bounds": [
+    [
+      -0.292793107477051,
+      51.4393390836898
+    ],
+    [
+      0.0733198189598506,
+      51.6165909910687
+    ]
+  ],
+  "scales": [
+    {
+      "km": 2,
+      "count": 156636,
+      "boundaryMeters": 3600
+    },
+    {
+      "km": 4,
+      "count": 156700,
+      "boundaryMeters": 7200
+    },
+    {
+      "km": 8,
+      "count": 156880,
+      "boundaryMeters": 14400
+    },
+    {
+      "km": 16,
+      "count": 156880,
+      "boundaryMeters": 28800
+    },
+    {
+      "km": 32,
+      "count": 156880,
+      "boundaryMeters": 57600
+    }
+  ]
+}

@@ -78,6 +78,21 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
 #root .comparison-mode-select .glass-select { width: 185px; }
 #root .glass-select-trigger .select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #root .glass-select-popover { color: var(--ui-text); }
+/* This single-city view uses the same glass controls without a query drawer. */
+#root .tsne-workspace { position: relative; height: 100dvh; width: 100%; }
+#root .tsne-map { position: absolute; inset: 0; }
+#root .tsne-workspace .tsne-toolbar {
+  display: flex; align-items: center; width: fit-content; bottom: auto; right: auto;
+  top: max(12px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left));
+}
+#root .tsne-toolbar .tsne-scale { width: 110px; }
+#root .tsne-toolbar .tsne-status { font-size: 12px; white-space: normal; }
+@media (max-width: 700px) {
+  #root .tsne-workspace .tsne-toolbar { gap: 6px; flex-wrap: wrap; padding: 4px; max-width: calc(100% - 24px); }
+  #root .tsne-toolbar .basemap-select { display: block; width: auto; min-width: 0; }
+  #root .tsne-toolbar .glass-select { width: 120px; }
+  #root .tsne-toolbar .basemap-select > span:first-child { display: none; }
+}
 /* Keep the trigger's visible corner as the menu extends, including pill triggers. */
 #root .glass-select-popover :is(.glass-select-menu, .glass-select-option) {
   --glass-radius: min(var(--select-anchor-radius), calc(var(--select-anchor-height) / 2));

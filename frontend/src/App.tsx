@@ -1,4 +1,6 @@
 import { SemanticGlassProvider } from "./styles/SemanticGlassProvider";
+import { WorkspaceSelect, type Workspace } from "./components/WorkspaceSelect";
+import { TsneWorkspace } from "./tsne/TsneWorkspace";
 import { GlassButton, Glass } from "@form-glass/react";
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { MonitorPlay, RefreshCw, X } from "lucide-react";
@@ -135,27 +137,32 @@ function loadInitialBasemapId(): BasemapId {
 }
 
 export function App() {
-  const readAtlas = () => new URLSearchParams(window.location.search).get("view") === "atlas";
-  const [atlas, setAtlas] = useState(readAtlas);
+  const readWorkspace = (): Workspace => {
+    const view = new URLSearchParams(window.location.search).get("view");
+    return view === "atlas" || view === "tsne" ? view : "cities";
+  };
+  const [workspace, setWorkspace] = useState(readWorkspace);
   useEffect(() => {
-    const restore = () => setAtlas(readAtlas());
+    const restore = () => setWorkspace(readWorkspace());
     window.addEventListener("popstate", restore);
     return () => window.removeEventListener("popstate", restore);
   }, []);
-  function switchWorkspace(next: boolean) {
-    if (next === atlas) return;
+  function switchWorkspace(next: Workspace) {
+    if (next === workspace) return;
     const url = new URL(window.location.href);
-    if (next) url.searchParams.set("view", "atlas");
-    else { url.searchParams.delete("view"); url.searchParams.delete("query"); }
+    if (next === "cities") url.searchParams.delete("view");
+    else url.searchParams.set("view", next);
+    if (next !== "atlas") url.searchParams.delete("query");
     history.pushState(null, "", url);
-    setAtlas(next);
+    setWorkspace(next);
   }
-  return atlas
+  if (workspace === "tsne") return <TsneWorkspace dark={loadInitialDarkMode()} onWorkspaceChange={switchWorkspace} />;
+  return workspace === "atlas"
     ? <RegionHeatmaps onWorkspaceChange={switchWorkspace} initialBasemap={loadInitialBasemapId()} initialDark={loadInitialDarkMode()} />
     : <PromptWorkspace onWorkspaceChange={switchWorkspace} />;
 }
 
-function PromptWorkspace({ onWorkspaceChange }: { onWorkspaceChange: (atlas: boolean) => void }) {
+function PromptWorkspace({ onWorkspaceChange }: { onWorkspaceChange: (workspace: Workspace) => void }) {
   const [data, setData] = useState<AppStateResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -889,7 +896,7 @@ function PromptWorkspace({ onWorkspaceChange }: { onWorkspaceChange: (atlas: boo
             <RefreshCw size={16} />
             Reload
           </GlassButton>
-          <GlassButton onClick={() => onWorkspaceChange(true)}>Region heatmaps</GlassButton>
+          <WorkspaceSelect value="cities" onChange={mode => { if (mode === "atlas" || mode === "tsne") onWorkspaceChange(mode); }} />
         </div>
       </div></SemanticGlassProvider>
     );
