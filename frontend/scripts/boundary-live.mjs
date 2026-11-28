@@ -4,7 +4,7 @@ import {promisify} from "node:util";
 const exec = promisify(execFile);
 const base = "/workspace/experiments/spatial_semantic_matching_20261127/boundary_live_20261127";
 const gpu = process.env.REGION_BOUNDARY_GPU_URL || "http://127.0.0.1:18771";
-const cpu = process.env.REGION_ATLAS_CPU_URL || "https://xrx27z6uoad5bq-8000.proxy.runpod.net/api/region-atlas";
+const cpu = process.env.REGION_ATLAS_CPU_URL || "https://rjkia0dgxlwugo-8000.proxy.runpod.net/api/region-atlas";
 
 // The independently versioned atlas lives on the CPU-mounted volume.
 // Read individual files only; no CPU daemon, deployment or local atlas copy.

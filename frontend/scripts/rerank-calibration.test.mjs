@@ -405,7 +405,7 @@ test('only a listed retired default is migrated and its token is never forwarded
     urlBackendOverride:()=>override,withCachedBackendCapabilities:config=>config,
     exhibitConfig:{lockRunpodUrl:false},normalizeBackendBaseUrl:url=>url.replace(/\/+$/,''),
     normalizeDatasetIds:value=>value??[],normaliseCityConfigs:value=>value??[],
-    runtimeConfig:{retiredBackendUrls:['https://retired.example'],remoteBackendEnabled:true},
+    runtimeConfig:{retiredBackendUrls:['https://retired.example'],redirectBackendUrls:['https://previous-cpu.example'],runpodToken:'',remoteBackendEnabled:true},
     DEFAULT_REMOTE_BACKEND_URL:'https://current.example',DEFAULT_REMOTE_DATASET_ID:'new',
     DEFAULT_REMOTE_DATASET_IDS:['new'],DEFAULT_REMOTE_DATASET_GROUP_ID:'four'});
   vm.runInContext(snippet,context);
@@ -416,4 +416,7 @@ test('only a listed retired default is migrated and its token is never forwarded
   assert.equal(context.loadRemoteBackendConfigSync().token,'custom-secret');
   override='https://retired.example';
   assert.equal(context.loadRemoteBackendConfigSync().baseUrl,'https://retired.example');
+  override='https://previous-cpu.example';
+  assert.equal(context.loadRemoteBackendConfigSync().baseUrl,'https://current.example');
+  assert.equal(context.loadRemoteBackendConfigSync().token,'');
 });

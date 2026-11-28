@@ -613,9 +613,10 @@ function loadRemoteBackendConfigSync(): RemoteBackendConfig {
   const raw = readJson<Partial<RemoteBackendConfig>>(REMOTE_BACKEND_KEY);
   const urlBaseUrl = urlBackendOverride();
   if (urlBaseUrl) {
+    const redirectToDefault = runtimeConfig.redirectBackendUrls.includes(urlBaseUrl);
     return withCachedBackendCapabilities({
-      baseUrl: urlBaseUrl,
-      token: typeof raw?.token === "string" ? raw.token : runtimeConfig.runpodToken,
+      baseUrl: redirectToDefault ? DEFAULT_REMOTE_BACKEND_URL : urlBaseUrl,
+      token: redirectToDefault || typeof raw?.token !== "string" ? runtimeConfig.runpodToken : raw.token,
       datasetId: String(raw?.datasetId || DEFAULT_REMOTE_DATASET_ID),
       datasetIds: normalizeDatasetIds(raw?.datasetIds).length ? normalizeDatasetIds(raw?.datasetIds) : DEFAULT_REMOTE_DATASET_IDS,
       datasetGroupId: typeof raw?.datasetGroupId === "string" ? raw.datasetGroupId : DEFAULT_REMOTE_DATASET_GROUP_ID,
