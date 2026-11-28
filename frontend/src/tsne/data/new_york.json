@@ -1,0 +1,41 @@
+{
+  "city": "New York",
+  "embedding": "SABER128B0",
+  "bounds": [
+    [
+      -74.1076382072,
+      40.5718568189
+    ],
+    [
+      -73.8560970326,
+      40.8790870906
+    ]
+  ],
+  "scales": [
+    {
+      "km": 2,
+      "count": 138469,
+      "boundaryMeters": 3600
+    },
+    {
+      "km": 4,
+      "count": 138729,
+      "boundaryMeters": 7200
+    },
+    {
+      "km": 8,
+      "count": 138756,
+      "boundaryMeters": 14400
+    },
+    {
+      "km": 16,
+      "count": 138882,
+      "boundaryMeters": 28800
+    },
+    {
+      "km": 32,
+      "count": 138882,
+      "boundaryMeters": 57600
+    }
+  ]
+}

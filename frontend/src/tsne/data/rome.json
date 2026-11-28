@@ -1,0 +1,41 @@
+{
+  "city": "Rome",
+  "embedding": "SABER128B0",
+  "bounds": [
+    [
+      12.373843024,
+      41.7942164424
+    ],
+    [
+      12.6156822788,
+      41.9908394237
+    ]
+  ],
+  "scales": [
+    {
+      "km": 2,
+      "count": 131500,
+      "boundaryMeters": 3600
+    },
+    {
+      "km": 4,
+      "count": 131588,
+      "boundaryMeters": 7200
+    },
+    {
+      "km": 8,
+      "count": 131515,
+      "boundaryMeters": 14400
+    },
+    {
+      "km": 16,
+      "count": 131495,
+      "boundaryMeters": 28800
+    },
+    {
+      "km": 32,
+      "count": 131644,
+      "boundaryMeters": 57600
+    }
+  ]
+}

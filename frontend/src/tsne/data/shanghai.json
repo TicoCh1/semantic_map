@@ -1,0 +1,41 @@
+{
+  "city": "Shanghai",
+  "embedding": "SABER128B0",
+  "bounds": [
+    [
+      121.342898001282,
+      31.1204628093972
+    ],
+    [
+      121.64318616125,
+      31.3787075998833
+    ]
+  ],
+  "scales": [
+    {
+      "km": 2,
+      "count": 173150,
+      "boundaryMeters": 3600
+    },
+    {
+      "km": 4,
+      "count": 173592,
+      "boundaryMeters": 7200
+    },
+    {
+      "km": 8,
+      "count": 173622,
+      "boundaryMeters": 14400
+    },
+    {
+      "km": 16,
+      "count": 173622,
+      "boundaryMeters": 28800
+    },
+    {
+      "km": 32,
+      "count": 173622,
+      "boundaryMeters": 57600
+    }
+  ]
+}
