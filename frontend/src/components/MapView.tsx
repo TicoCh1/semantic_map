@@ -41,7 +41,7 @@ import { copyStaticDeploymentContactEmail, STATIC_DEPLOYMENT_CONTACT_EMAIL, STAT
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
 
 export type MapViewProps = {
-  tsne?: { status: string; scaleControl: ReactNode; register: (map: MapLibreMap) => () => void };
+  tsne?: { cityId: CityId; onCityChange: (city: CityId) => void; status: string; scaleControl: ReactNode; register: (map: MapLibreMap) => () => void };
   onWorkspaceChange: (workspace: Workspace) => void;
   regionHeatmaps?: {
     selector: ReactNode;
@@ -183,14 +183,15 @@ export const MapView = memo(function MapView({
   const sceneCamera = useMemo(() => new MapSceneCamera(sharedGroundScale), [sharedGroundScale]);
   const sceneResources = useMemo(() => new SceneResources<FeatureCollection>(272, 500_000, 8, data => data.features.length), []);
   const [semanticLayerLoadingByCity, setSemanticLayerLoadingByCity] = useState<Partial<Record<CityId, boolean>>>({});
-  const singleCity = Boolean(tsne);
+  const tsneCityId = tsne?.cityId;
+  const singleCity = tsneCityId !== undefined;
   const desktopCities = useMemo(
-    () => singleCity ? cities : citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
-    [cities, citySelection, singleCity]
+    () => singleCity ? cities.filter(city => city.id === tsneCityId) : citySelection.map((cityId) => cities.find((city) => city.id === cityId)).filter((city): city is CityConfig => Boolean(city)),
+    [cities, citySelection, singleCity, tsneCityId]
   );
   const activeCities = useMemo(() => comparisonEnabled && comparisonCity
     ? (differenceEnabled ? [comparisonCity] : [comparisonCity, comparisonCity])
-    : singleCity ? cities : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
+    : singleCity ? desktopCities : compactViewport ? cities.filter((city) => city.id === mobileCityId) : desktopCities,
   [cities, compactViewport, comparisonCity, comparisonEnabled, desktopCities, differenceEnabled, mobileCityId, singleCity]);
   const visibleLayerCount = layers.filter((layer) => layer.visible).length;
   const allLayersHidden = !comparisonEnabled && layers.length > 0 && visibleLayerCount === 0;
@@ -317,7 +318,7 @@ export const MapView = memo(function MapView({
           </>}
         </div>
         {compactViewport && !comparisonEnabled && <div className="mobile-city-picker">
-          <ThemedSelect label="Map city" value={singleCity ? cities[0].id : mobileCityId} onValueChange={setMobileCityId}>
+          <ThemedSelect label="Map city" value={tsneCityId ?? mobileCityId} onValueChange={tsne?.onCityChange ?? setMobileCityId}>
             {cities.map(city => <option key={city.id} value={city.id}>{city.name}</option>)}
           </ThemedSelect>
         </div>}
@@ -337,7 +338,7 @@ export const MapView = memo(function MapView({
             {desktopCities.map((city, slot) => (
               <label className="city-toggle" key={`${slot}-${city.id}`}>
                 <span>{slot === 0 ? "L" : "R"}</span>
-                <ThemedSelect label={slot === 0 ? "Left city" : "Right city"} value={city.id} onValueChange={event => selectCitySlot(slot, event)}>
+                <ThemedSelect label={slot === 0 ? "Left city" : "Right city"} value={city.id} onValueChange={tsne?.onCityChange ?? (event => selectCitySlot(slot, event))}>
                   {cities.map((option) => (
                     <option key={option.id} value={option.id}>
                       {option.name}
