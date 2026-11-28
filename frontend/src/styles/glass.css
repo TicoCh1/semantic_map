@@ -1,7 +1,6 @@
 /* FORM owns every glass recipe and renderer. This file only adapts app layout,
    neutral control states, and the DOM owned by MapLibre / Photo Sphere Viewer. */
-.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; --map-static-glass: rgba(246, 246, 248, .94); }
-html.theme-dark-root .semantic-glass-app { --map-static-glass: rgba(35, 37, 42, .94); }
+.semantic-glass-app { min-height: 100dvh; --form-glass-layer: auto; }
 .semantic-glass-app .glass { color: var(--ui-text); }
 .semantic-glass-app .glass-button { gap: 7px; }
 .semantic-glass-app .glass-field { min-width: 0; }
@@ -106,13 +105,6 @@ html #root .map-action-capsule:enabled > .glass-switch-light { --switch-source-c
   font-size: 10px; letter-spacing: 0; text-transform: none; white-space: nowrap;
 }
 #root .map-toolbar > .glass-feather-defs { position: absolute; width: 0; height: 0; }
-/* On the mobile layout keep the same glass surface throughout a pan. */
-@media (min-width: 1024px), (prefers-reduced-transparency: reduce) {
-  html.is-map-interacting #root :is(.form-glass-ui, .map-shell) .glass-renderer { display: none; }
-  html.is-map-interacting #root :is(.map-toolbar, .sidebar-drawer, .controls-launcher, .map-refresh-overlay, .map-hidden-layers-overlay,
-    .map-progress-overlay, .map-max-detail-warning, .embedding-pane-label, .embedding-comparison-note, .street-view-panel,
-    .street-view-values, [data-vendor-glass], .glass-select-popover > [data-glass]) { background: var(--map-static-glass); }
-}
 .mobile-search-form { display: flex; align-items: center; gap: 8px; width: 100%; min-width: 0; }
 #root .mobile-map-search > .mobile-search-form { grid-column: 1 / -1; }
 .mobile-search-form > input { flex: 1; min-width: 0; }
@@ -288,20 +280,25 @@ html #root .glass-state-switch.detail-state-switch[aria-checked=true] > .glass-s
 /* A panel samples the scene once. Its rows use a flat tint; controls inside
    those rows inherit the surface. Standalone controls over imagery use the
    panel's bounded tone rather than the vendor's nested brightness boost. */
-.semantic-glass-app { --inset-glass-tint: rgba(45, 48, 52, .045); }
+.semantic-glass-app { --inset-glass-tint: rgba(45, 48, 52, .045); --map-glass-wash: rgba(245, 246, 244, .22); }
 html:not(.theme-dark-root) .semantic-glass-app,
 html:not(.theme-dark-root) .semantic-glass-app .split-pane { --ui-muted: #484848; }
-html.theme-dark-root .semantic-glass-app { --inset-glass-tint: rgba(255, 255, 255, .075); }
+html.theme-dark-root .semantic-glass-app { --inset-glass-tint: rgba(255, 255, 255, .075); --map-glass-wash: rgba(23, 25, 28, .28); }
 html #root .semantic-glass-app [data-glass-material="control"] > .glass-renderer {
   --glass-brightness: var(--glass-debug-brightness);
   --glass-contrast: var(--glass-debug-contrast);
+}
+/* Keep the tint on the same feathered layer as the frost, including menus. */
+#root .semantic-glass-app .glass-renderer:not([data-separate-fades]) > .glass-blur-layer:last-child,
+#root .semantic-glass-app .glass-renderer[data-separate-fades] > .glass-blur-layer:nth-child(6) {
+  background-color: var(--map-glass-wash);
 }
 /* FORM's final blur sample carries the feather mask. Skip intermediate blur
    samples; independently masked brightness/contrast channels may still paint. */
 html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glass-renderer > .glass-blur-layer:nth-child(-n+5):not(:last-child) {
   display: none;
 }
-#root :is([data-map-glass-surface], .street-view-values, .boundary-draw-tools, .exhibit-modal) [data-glass] > .glass-renderer {
+#root :is([data-map-glass-surface], .street-view-values, .boundary-draw-tools, .exhibit-modal) [data-glass]:not(.glass-select-menu, .saved-search-dropdown, .preset-menu) > .glass-renderer {
   display: none;
 }
 #root :is([data-map-glass-surface], .street-view-values, .boundary-draw-tools, .exhibit-modal) :where(.layer-row, .glass-button, .glass-field, .glass-select-trigger, .mobile-map-search) {
@@ -310,8 +307,16 @@ html[data-glass-blur-engine=lerp] #root .semantic-glass-app [data-glass] > .glas
 #root :is([data-map-glass-surface], .street-view-values, .exhibit-modal) [data-glass] :where(.glass-button, .glass-field, .glass-select-trigger) {
   background-color: transparent;
 }
-/* Menus cover other controls and require their own legible reading surface. */
-#root [data-map-glass-surface] :is(.saved-search-dropdown, .glass-select-menu, .preset-menu) { background-color: var(--map-static-glass); }
+/* Floating menus sample the scene beyond the panel. Their rows share that frost. */
+#root [data-map-glass-surface] :is(.saved-search-dropdown, .glass-select-menu, .preset-menu) { background: transparent; }
+@media (prefers-reduced-transparency: reduce) {
+  .semantic-glass-app { --map-solid-surface: #f6f6f8; }
+  html.theme-dark-root .semantic-glass-app { --map-solid-surface: #23252a; }
+  html #root .semantic-glass-app .glass-renderer { display: none; }
+  html #root .semantic-glass-app :is([data-glass-material="surface"], .saved-search-dropdown, .glass-select-menu, .preset-menu) {
+    background-color: var(--map-solid-surface);
+  }
+}
 #root .theme-dark .sidebar-content .visibility-button.is-hidden svg { color: #d6d6d6; }
 #root .layer-row .drag-icon { opacity: .85; }
 

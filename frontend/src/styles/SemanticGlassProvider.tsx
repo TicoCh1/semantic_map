@@ -5,13 +5,14 @@ import { getVendorGlass, subscribeVendorGlass } from "./glass";
 
 // FORM owns the material defaults and channel curves; app surfaces select edges.
 const values: Partial<GlassValues> = {
+  blur: 14,
   "fade-distance": 32,
   "brightness-fade-distance": 32,
   "contrast-fade-distance": 32
 };
 // Bound the glass core on white panoramas (dark UI) and black maps (light UI).
-const darkValues = { ...values, brightness: -64, contrast: 1 };
-const lightValues = { ...values, brightness: 85, contrast: .16 };
+const darkValues = { ...values, brightness: -55, contrast: .85 };
+const lightValues = { ...values, brightness: 72, contrast: .30 };
 function VendorGlassSurfaces() {
   const surfaces = useSyncExternalStore(subscribeVendorGlass, getVendorGlass);
   return <>{surfaces.map(surface => createPortal(

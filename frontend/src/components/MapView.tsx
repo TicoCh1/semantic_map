@@ -98,7 +98,6 @@ const STATIC_FALLBACK_TILE_RANGES: Partial<Record<CityId, { z: number; minX: num
 };
 
 let nextSemanticTileFrame = Promise.resolve();
-const movingMaps = new Set<MapLibreMap>();
 
 /** Share upload slots between panes so preparing two dense maps cannot run
  * all of MapLibre's worker serialization in one browser task. */
@@ -805,21 +804,12 @@ export const CityMapPane = memo(function CityMapPane({
     };
     publishViewport();
     let settleTimer: number | undefined;
-    const clearMotion = () => {
-      if (movingMaps.delete(map) && movingMaps.size === 0) document.documentElement.classList.remove("is-map-interacting");
-    };
-    map.on("movestart", () => {
-      if (applyingResizeRef.current || resizingRef.current || movingMaps.has(map)) return;
-      movingMaps.add(map);
-      if (movingMaps.size === 1) document.documentElement.classList.add("is-map-interacting");
-    });
     map.on("move", () => { viewportGenerationRef.current++; });
     map.on("moveend", () => {
       window.clearTimeout(settleTimer);
       settleTimer = window.setTimeout(() => {
         if (map.isMoving()) return;
         publishViewport();
-        clearMotion();
       }, 150);
     });
     const canvas = map.getCanvas();
@@ -872,7 +862,6 @@ export const CityMapPane = memo(function CityMapPane({
       unregisterLocalMap?.();
       clearHover();
       window.clearTimeout(settleTimer);
-      clearMotion();
       drawnLayerIds.current.clear();
       tiledViewports.current.clear();
       map.remove();
